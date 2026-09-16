@@ -10,6 +10,7 @@ filter from Task 1.1 guards this process (convention 1).
 
 import argparse
 import asyncio
+import re
 import uuid
 from pathlib import Path
 
@@ -54,6 +55,9 @@ async def run(args: argparse.Namespace) -> None:
     settings = get_settings()
     pdf_dir = Path(args.dir)
     pdfs = await asyncio.to_thread(lambda: sorted(pdf_dir.glob("**/*.pdf")))
+    if args.exclude:
+        patterns = [re.compile(p) for p in args.exclude]
+        pdfs = [p for p in pdfs if not any(rx.search(p.name) for rx in patterns)]
     if not pdfs:
         raise SystemExit(f"No PDFs found under {pdf_dir}")
     log.info("ingest_start", dir=str(pdf_dir), pdfs=len(pdfs), dry_run=args.dry_run)
@@ -73,11 +77,22 @@ async def run(args: argparse.Namespace) -> None:
             )
         return
 
-    settings.require_secrets("database_url", "openai_api_key")
-    oai = AsyncOpenAI(
-        api_key=settings.openai_api_key.get_secret_value(),
-        base_url=settings.zdr_embed_proxy or None,
-    )
+    settings.require_secrets("database_url")
+    # Embedding backend: ZDR proxy + OpenAI key is the design's primary path
+    # (HANDOFF.md 3); OpenRouter is the OpenAI-compatible fallback. NOTE
+    # (recorded, flagged to owner): OpenRouter is NOT a no-retention gateway;
+    # our own layer still persists only chunks + embeddings (ZDR convention 1)
+    # and never logs prompt bodies, but provider-side retention terms differ
+    # from the ZDR proxy the design assumes.
+    if settings.openai_api_key:
+        api_key = settings.openai_api_key.get_secret_value()
+        base_url = settings.zdr_embed_proxy or None
+    elif settings.openrouter_api_key:
+        api_key = settings.openrouter_api_key.get_secret_value()
+        base_url = "https://openrouter.ai/api/v1"
+    else:
+        raise SystemExit("No embedding credentials: set OPENAI_API_KEY or OPENROUTER_API_KEY")
+    oai = AsyncOpenAI(api_key=api_key, base_url=base_url)
     embedder: Embedder = ZdrProxyEmbedder(oai, settings.embed_model)
     sem = asyncio.Semaphore(args.concurrency)
 
@@ -111,6 +126,11 @@ def main() -> None:
     ap.add_argument("--tenant", required=True)
     ap.add_argument("--vault", required=True)
     ap.add_argument("--concurrency", type=int, default=4)
+    ap.add_argument(
+        "--exclude", action="append", default=[],
+        help="Regex on the PDF filename; repeatable. Matched files are skipped"
+        " (e.g. secondary summaries that must not pollute the corpus).",
+    )
     ap.add_argument("--dry-run", action="store_true")
     configure_logging(get_settings().log_level)
     asyncio.run(run(ap.parse_args()))

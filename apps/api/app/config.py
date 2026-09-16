@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     supabase_service_role: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None  # ZDR workspace key
     openai_api_key: SecretStr | None = None  # embeddings via ZDR proxy
+    openrouter_api_key: SecretStr | None = None  # OpenAI-compatible embeddings fallback
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
 
