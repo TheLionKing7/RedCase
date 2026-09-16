@@ -1,0 +1,38 @@
+[project]
+name = "redcase-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "GuardianoftheSeven", email = "97378693+TheLionKing7@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "anthropic>=1.6.0",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "openai>=3.14.1",
+    "pydantic-settings>=2.15.0",
+    "pymupdf>=1.28.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "slack-bolt>=1.30.0",
+    "sqlalchemy[asyncio]>=2.0.54",
+    "structlog>=26.1.0",
+    "tiktoken>=0.14.0",
+    "uvicorn[standard]>=0.53.0",
+]
+
+[project.scripts]
+redcase-api = "redcase_api:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.7",
+]
