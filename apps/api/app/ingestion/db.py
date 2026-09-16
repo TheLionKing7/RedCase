@@ -37,6 +37,17 @@ class Embedder(Protocol):
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
+class NullEmbedder:
+    """Backfill-deferred ingest: rows land with embedding = NULL so the rest
+    of the pipeline (chunks, page pins, metadata, RLS) is exercised live
+    against the real corpus while no embedding credential is usable. The
+    hnsw index skips NULLs, so retrieval stays correct on the pinned rows.
+    Vectors MUST be backfilled before the VECTOR_GATE calibration runs."""
+
+    async def embed(self, texts: list[str]) -> list[None]:
+        return [None for _ in texts]
+
+
 @dataclass(frozen=True)
 class IngestResult:
     document_id: uuid.UUID
@@ -55,7 +66,7 @@ async def ingest_pdf(
     tenant_id: uuid.UUID,
     vault_id: uuid.UUID,
     pdf_path: Path,
-    embedder: Embedder,
+    embedder: Embedder | None = None,
     source_pdf_path: str | None = None,
 ) -> IngestResult:
     raw = await asyncio.to_thread(Path(pdf_path).read_bytes)
@@ -81,14 +92,17 @@ async def ingest_pdf(
         meta = extract_metadata("\n".join(pages_text), Path(pdf_path).stem)
         chunks = chunk_pages(pages_text)
 
-        embeddings = await embedder.embed([c.text for c in chunks])
-        if len(embeddings) != len(chunks):
-            raise RuntimeError("embedder returned a mismatched batch size")
-        for vec in embeddings:
-            if len(vec) != EMBEDDING_DIMS:
-                raise RuntimeError(
-                    f"embedding has {len(vec)} dims; expected {EMBEDDING_DIMS}"
-                )
+        if embedder is None:
+            embeddings: list[list[float] | None] = [None] * len(chunks)
+        else:
+            embeddings = await embedder.embed([c.text for c in chunks])
+            if len(embeddings) != len(chunks):
+                raise RuntimeError("embedder returned a mismatched batch size")
+            for vec in embeddings:
+                if vec is not None and len(vec) != EMBEDDING_DIMS:
+                    raise RuntimeError(
+                        f"embedding has {len(vec)} dims; expected {EMBEDDING_DIMS}"
+                    )
 
         document_id = uuid.uuid4()
         inserted = await conn.fetchval(
@@ -125,7 +139,8 @@ async def ingest_pdf(
                 """,
                 uuid.uuid4(), tenant_id, document_id, chunk.chunk_index,
                 chunk.text, chunk.page_start, chunk.page_end,
-                chunk.paragraph_refs, chunk.is_ratio, _vec_literal(vec),
+                chunk.paragraph_refs, chunk.is_ratio,
+                _vec_literal(vec) if vec is not None else None,
             )
 
     log.info(

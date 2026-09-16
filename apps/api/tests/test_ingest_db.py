@@ -135,6 +135,35 @@ class TestIngestPdf:
         finally:
             await conn.close()
 
+    async def test_no_embed_persists_null_vectors(
+        self, app_db_url: str, seeded_pdf
+    ) -> None:
+        """Backfill-deferred path (owner-approved 2026-09-16): with no usable
+        embedding credential, ingest_pdf(embedder=None) must still persist
+        the document and page-pinned chunks, with embedding NULL so the hnsw
+        index skips them until backfill."""
+        pdf_path, _citation, _year = seeded_pdf
+        conn = await asyncpg.connect(app_db_url)
+        try:
+            result = await ingest_pdf(
+                conn, tenant_id=uuid.UUID(SEED_TENANT_AETOES),
+                vault_id=VAULT_JURIS_NG, pdf_path=pdf_path, embedder=None,
+            )
+            assert result.skipped is False
+            async with conn.transaction():
+                await conn.execute(
+                    "SELECT set_config('app.tenant_id', $1, true)",
+                    SEED_TENANT_AETOES,
+                )
+                rows = await conn.fetch(
+                    "SELECT embedding FROM document_chunks WHERE document_id = $1",
+                    result.document_id,
+                )
+                assert len(rows) == result.chunks
+                assert all(r["embedding"] is None for r in rows)
+        finally:
+            await conn.close()
+
 
 def chunk_pages_from_file(path):
     import pymupdf

@@ -19,7 +19,7 @@ from openai import AsyncOpenAI
 
 from app.config import get_settings
 from app.ingestion.chunker import chunk_pages, extract_pages
-from app.ingestion.db import Embedder, ingest_pdf
+from app.ingestion.db import Embedder, NullEmbedder, ingest_pdf
 from app.ingestion.metadata import extract_metadata
 from app.middleware.zdr import configure_logging, get_logger
 
@@ -78,22 +78,36 @@ async def run(args: argparse.Namespace) -> None:
         return
 
     settings.require_secrets("database_url")
-    # Embedding backend: ZDR proxy + OpenAI key is the design's primary path
-    # (HANDOFF.md 3); OpenRouter is the OpenAI-compatible fallback. NOTE
-    # (recorded, flagged to owner): OpenRouter is NOT a no-retention gateway;
-    # our own layer still persists only chunks + embeddings (ZDR convention 1)
-    # and never logs prompt bodies, but provider-side retention terms differ
-    # from the ZDR proxy the design assumes.
-    if settings.openai_api_key:
-        api_key = settings.openai_api_key.get_secret_value()
-        base_url = settings.zdr_embed_proxy or None
-    elif settings.openrouter_api_key:
-        api_key = settings.openrouter_api_key.get_secret_value()
-        base_url = "https://openrouter.ai/api/v1"
+    if args.no_embed:
+        # Backfill-deferred ingest (owner-approved 2026-09-16): every usable
+        # embedding credential failed — OpenRouter 402 (never purchased
+        # credits), three separate HF tokens rejected with 401 by HF's own
+        # whoami endpoint, DeepSeek has no embeddings endpoint. Rows land
+        # with NULL vectors; backfill before VECTOR_GATE calibration.
+        log.warning("ingest_no_embed", note="embeddings NULL; backfill required")
+        embedder: Embedder | None = NullEmbedder()
     else:
-        raise SystemExit("No embedding credentials: set OPENAI_API_KEY or OPENROUTER_API_KEY")
-    oai = AsyncOpenAI(api_key=api_key, base_url=base_url)
-    embedder: Embedder = ZdrProxyEmbedder(oai, settings.embed_model)
+        # Embedding backend: ZDR proxy + OpenAI key is the design's primary
+        # path (HANDOFF.md 3); OpenRouter is the OpenAI-compatible fallback.
+        # NOTE (recorded, flagged to owner): OpenRouter is NOT a
+        # no-retention gateway; our own layer still persists only chunks +
+        # embeddings (ZDR convention 1) and never logs prompt bodies, but
+        # provider-side retention terms differ from the ZDR proxy the design
+        # assumes.
+        if settings.openai_api_key:
+            api_key = settings.openai_api_key.get_secret_value()
+            base_url = settings.zdr_embed_proxy or None
+        elif settings.openrouter_api_key:
+            api_key = settings.openrouter_api_key.get_secret_value()
+            base_url = "https://openrouter.ai/api/v1"
+        else:
+            raise SystemExit(
+                "No embedding credentials: set OPENAI_API_KEY or"
+                " OPENROUTER_API_KEY, or pass --no-embed for backfill-deferred"
+                " ingest (Task 1.3 deferred-DoD path)."
+            )
+        oai = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        embedder = ZdrProxyEmbedder(oai, settings.embed_model)
     sem = asyncio.Semaphore(args.concurrency)
 
     pool = await asyncpg.create_pool(
@@ -132,6 +146,12 @@ def main() -> None:
         " (e.g. secondary summaries that must not pollute the corpus).",
     )
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--no-embed", action="store_true",
+        help="Insert chunks with NULL embeddings (backfill-deferred ingest)."
+        " Used when no embedding credential is usable; vectors must be"
+        " backfilled before retrieval calibration.",
+    )
     configure_logging(get_settings().log_level)
     asyncio.run(run(ap.parse_args()))
 
