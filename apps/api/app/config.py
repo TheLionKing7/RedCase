@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None  # ZDR workspace key
     openai_api_key: SecretStr | None = None  # embeddings via ZDR proxy
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
+    database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
 
     # Retrieval tuning — HANDOFF.md §3 env config
     embed_model: str = "text-embedding-3-large"
