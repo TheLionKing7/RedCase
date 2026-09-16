@@ -16,3 +16,7 @@ __pycache__/
 # OS
 Thumbs.db
 Desktop.ini
+
+.md/
+# Owner rule: markdown files are not committed
+*.md
