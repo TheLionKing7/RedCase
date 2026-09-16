@@ -1,4 +1,18 @@
-/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Env / secrets — never commit (HANDOFF.md §3: secrets live in AWS Secrets Manager)
 .env
-.env*
-.md
+.env.*
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+Thumbs.db
+Desktop.ini
