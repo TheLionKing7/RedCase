@@ -1,0 +1,150 @@
+"""Page-tracked, paragraph-aligned chunker for Nigerian judicial judgments.
+
+Implements Phase1-Design 2.2:
+  * Case header  -> one fixed chunk per document (``chunk_index = 0``),
+    always page 1, no paragraph refs.
+  * Body         -> paragraph-aligned 512-token windows with ~75-token
+    overlap (15%). Paragraphs are the atomic unit: a window never splits
+    mid-sentence; an oversized paragraph becomes its own chunk.
+  * Ratio        -> ``is_ratio = TRUE`` on passages matching the design's
+    heuristic ("ratio decidendi" / "i hold that"), boosted later in scoring.
+  * Pinning      -> ``page_start`` / ``page_end`` from PyMuPDF page data;
+    ``paragraph_refs`` carries the numbered paragraph identifiers.
+
+Deviation from design 4's illustrative code (recorded per HANDOFF rule 3):
+body chunk indices start at 1 because the header owns index 0 (2.2's stated
+contract); paragraph page ranges track paragraph *end* pages for paragraphs
+that span a page break, instead of attributing them to the start page only.
+"""
+
+import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+import pymupdf
+import tiktoken
+
+CHUNK_TOKENS = 512
+OVERLAP_TOKENS = 75
+HEADER_CHARS = 1500
+
+PARA_START_RE = re.compile(r"^(\d+)\.\s+(.*\S)\s*$")
+RATIO_MARKERS = ("ratio decidendi", "i hold that")
+
+_encode: Callable[[str], list[int]] = tiktoken.get_encoding("cl100k_base").encode
+
+
+@dataclass
+class Paragraph:
+    num: int
+    start_page: int
+    end_page: int
+    parts: list[str] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        return " ".join(self.parts)
+
+
+@dataclass
+class Chunk:
+    text: str
+    chunk_index: int
+    page_start: int
+    page_end: int
+    paragraph_refs: list[str]
+    is_ratio: bool = False
+
+
+def extract_pages(pdf: pymupdf.Document) -> list[str]:
+    """Per-page plain text, 1 page per entry (index 0 = page 1)."""
+    return [page.get_text("text") for page in pdf]
+
+
+def extract_paragraphs(pages: list[str]) -> list[Paragraph]:
+    """Numbered paragraphs with page pinning; continuations across a page
+    break extend the paragraph's end_page."""
+    paras: list[Paragraph] = []
+    cur: Paragraph | None = None
+    for i, text in enumerate(pages):
+        page_no = i + 1
+        for line in text.split("\n"):
+            m = PARA_START_RE.match(line.strip()) if line.strip() else None
+            if m:
+                cur = Paragraph(num=int(m.group(1)), start_page=page_no, end_page=page_no)
+                cur.parts.append(m.group(2))
+                paras.append(cur)
+            elif cur is not None and line.strip():
+                cur.parts.append(line.strip())
+                cur.end_page = page_no
+    return paras
+
+
+def _make_chunk(buf: list[Paragraph], index: int) -> Chunk:
+    text = "\n".join(f"{p.num}. {p.text}" for p in buf)
+    return Chunk(
+        text=text,
+        chunk_index=index,
+        page_start=min(p.start_page for p in buf),
+        page_end=max(p.end_page for p in buf),
+        paragraph_refs=[str(p.num) for p in buf],
+        is_ratio=any(marker in text.lower() for marker in RATIO_MARKERS),
+    )
+
+
+def chunk_paragraphs(
+    paras: list[Paragraph],
+    chunk_tokens: int = CHUNK_TOKENS,
+    overlap_tokens: int = OVERLAP_TOKENS,
+) -> list[Chunk]:
+    """Greedy paragraph packing into token windows with tail overlap.
+
+    A paragraph that alone exceeds ``chunk_tokens`` is emitted as its own
+    chunk (never split mid-sentence, 2.2)."""
+    chunks: list[Chunk] = []
+    buf: list[Paragraph] = []
+    buf_tokens = 0
+    for p in paras:
+        p_tokens = len(_encode(p.text))
+        if buf and buf_tokens + p_tokens > chunk_tokens:
+            chunks.append(_make_chunk(buf, len(chunks)))
+            carry: list[Paragraph] = []
+            carry_tokens = 0
+            for q in reversed(buf):
+                q_tokens = len(_encode(q.text))
+                if carry_tokens + q_tokens > overlap_tokens:
+                    break
+                carry.append(q)
+                carry_tokens += q_tokens
+            buf = list(reversed(carry))
+            buf_tokens = carry_tokens
+        buf.append(p)
+        buf_tokens += p_tokens
+    if buf:
+        chunks.append(_make_chunk(buf, len(chunks)))
+    return chunks
+
+
+def chunk_pages(pages: list[str]) -> list[Chunk]:
+    """Full chunking pipeline from extracted page texts: header chunk
+    (index 0) + body chunks."""
+    if not pages:
+        raise ValueError("PDF has no pages")
+    full_text = "\n".join(pages)
+    header = Chunk(
+        text=full_text[:HEADER_CHARS],
+        chunk_index=0,
+        page_start=1,
+        page_end=1,
+        paragraph_refs=[],
+        is_ratio=False,
+    )
+    body = chunk_paragraphs(extract_paragraphs(pages))
+    for c in body:
+        c.chunk_index += 1
+    return [header, *body]
+
+
+def chunk_document(pdf: pymupdf.Document) -> list[Chunk]:
+    """Convenience wrapper over an open PyMuPDF document."""
+    return chunk_pages(extract_pages(pdf))

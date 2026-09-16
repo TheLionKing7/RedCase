@@ -1,0 +1,61 @@
+"""Deterministic metadata extraction tests — Task 1.3."""
+
+import pytest
+
+from app.ingestion.metadata import extract_metadata
+
+FULL_TEXT = """
+IN THE SUPREME COURT OF NIGERIA
+HOLDEN AT ABUJA
+BETWEEN:
+ADESINA v. FEDERAL REPUBLIC
+NWLR CITATION: (2008) 5 NWLR (Pt. 1080) 227
+CORAM: Musdapher, JSC; Alooma, JSC; Kutigi, JSC
+1. This appeal borders on constitutional interpretation.
+"""
+
+
+class TestExtractMetadata:
+    def test_full_header_extracts_cleanly(self) -> None:
+        meta = extract_metadata(FULL_TEXT, "fallback")
+        assert meta.citation == "(2008) 5 NWLR (Pt. 1080) 227"
+        assert meta.year == 2008
+        assert meta.court_level == "SUPREME_COURT"
+        assert meta.case_title == "ADESINA v. FEDERAL REPUBLIC"
+        assert meta.justices == ["Musdapher, JSC", "Alooma, JSC", "Kutigi, JSC"]
+        assert meta.metadata_confidence == 1.0
+
+    def test_court_of_appeal_mapping(self) -> None:
+        text = FULL_TEXT.replace("SUPREME COURT OF NIGERIA", "COURT OF APPEAL")
+        assert extract_metadata(text, "x").court_level == "COURT_OF_APPEAL"
+
+    def test_missing_coram_lowers_confidence(self) -> None:
+        text = FULL_TEXT.replace(
+            "CORAM: Musdapher, JSC; Alooma, JSC; Kutigi, JSC\n", ""
+        )
+        meta = extract_metadata(text, "x")
+        assert meta.justices == []
+        assert meta.metadata_confidence == 0.75
+
+    def test_no_citation_falls_back_to_year_in_text(self) -> None:
+        text = (
+            "IN THE SUPREME COURT OF NIGERIA\nBETWEEN:\nX v. Y\n"
+            "1. This 1999 statute is clear.\n"
+        )
+        meta = extract_metadata(text, "Act-2004")
+        assert meta.citation == "Act-2004"
+        assert meta.year == 1999
+        assert meta.court_level == "SUPREME_COURT"
+
+    def test_undateable_document_rejected(self) -> None:
+        with pytest.raises(ValueError, match="undateable"):
+            extract_metadata("unstructured text with no dates at all", "x")
+
+    def test_no_title_falls_back_to_stem(self) -> None:
+        text = (
+            "IN THE SUPREME COURT OF NIGERIA\n(2001) 2 NWLR (Pt. 100) 1\n"
+            "CORAM: A, JSC\n1. text.\n"
+        )
+        meta = extract_metadata(text, "Stem Case")
+        assert meta.case_title == "Stem Case"
+        assert 0 < meta.metadata_confidence < 1

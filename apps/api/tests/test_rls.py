@@ -44,33 +44,40 @@ async def two_tenant_db(app_db_url: str):
         other, f"other-{other[:8]}",
     )
     marker = uuid.uuid4().hex[:8]
-    await _insert_doc(conn, SEED_TENANT_AETOES, f"(2008) 5 NWLR-{marker} 227")
-    await _insert_doc(conn, other, f"(2011) 3 NWLR-{marker} 1")
-    yield conn, SEED_TENANT_AETOES, other
+    aetoes_cite = f"(2008) 5 NWLR-{marker} 227"
+    other_cite = f"(2011) 3 NWLR-{marker} 1"
+    await _insert_doc(conn, SEED_TENANT_AETOES, aetoes_cite)
+    await _insert_doc(conn, other, other_cite)
+    yield conn, SEED_TENANT_AETOES, other, aetoes_cite, other_cite
     await conn.close()
 
 
 class TestTenantIsolation:
     async def test_tenant_sees_only_own_documents(
-        self, two_tenant_db: tuple[asyncpg.Connection, str, str]
+        self, two_tenant_db: tuple[asyncpg.Connection, str, str, str, str]
     ) -> None:
-        conn, aetoes, other = two_tenant_db
+        # NB: assertions filter by this fixture's unique citations — the
+        # session DB is shared with ingestion tests, so global row counts
+        # for the aetoes tenant are intentionally not asserted.
+        conn, aetoes, other, aetoes_cite, other_cite = two_tenant_db
         async with conn.transaction():
             await conn.execute("SELECT set_config('app.tenant_id', $1, true)", other)
-            rows = await conn.fetch("SELECT citation FROM documents")
-        assert len(rows) == 1
-        assert "(2011)" in rows[0]["citation"]
-
+            rows = await conn.fetch(
+                "SELECT citation FROM documents WHERE citation = $1", other_cite
+            )
+            assert len(rows) == 1
         async with conn.transaction():
             await conn.execute("SELECT set_config('app.tenant_id', $1, true)", aetoes)
-            rows = await conn.fetch("SELECT citation FROM documents")
-        assert len(rows) == 1
-        assert "(2008)" in rows[0]["citation"]
+            rows = await conn.fetch(
+                "SELECT citation FROM documents WHERE citation = $1", aetoes_cite
+            )
+            assert len(rows) == 1
+            assert "(2008)" in rows[0]["citation"]
 
     async def test_chunks_isolated_along_with_documents(
-        self, two_tenant_db: tuple[asyncpg.Connection, str, str]
+        self, two_tenant_db: tuple[asyncpg.Connection, str, str, str, str]
     ) -> None:
-        conn, aetoes, other = two_tenant_db
+        conn, aetoes, other, _ac, _oc = two_tenant_db
         doc_id = uuid.uuid4()
         chunk_id = uuid.uuid4()
         async with conn.transaction():
@@ -84,27 +91,33 @@ class TestTenantIsolation:
                 " chunk_text, page_start, page_end) VALUES ($1,$2,$3,0,'text',1,1)",
                 chunk_id, aetoes, doc_id,
             )
+        # Scoped to this fixture's document: the intruder sees 0 of its
+        # chunks; the owner sees exactly the 1 inserted here.
         async with conn.transaction():
             await conn.execute("SELECT set_config('app.tenant_id', $1, true)", other)
-            assert await conn.fetchval("SELECT count(*) FROM document_chunks") == 0
+            assert await conn.fetchval(
+                "SELECT count(*) FROM document_chunks WHERE document_id = $1", doc_id
+            ) == 0
         async with conn.transaction():
             await conn.execute("SELECT set_config('app.tenant_id', $1, true)", aetoes)
-            assert await conn.fetchval("SELECT count(*) FROM document_chunks") == 1
+            assert await conn.fetchval(
+                "SELECT count(*) FROM document_chunks WHERE document_id = $1", doc_id
+            ) == 1
 
     async def test_missing_tenant_guc_fails_closed(
-        self, two_tenant_db: tuple[asyncpg.Connection, str, str]
+        self, two_tenant_db: tuple[asyncpg.Connection, str, str, str, str]
     ) -> None:
         # No GUC set in this session: the placeholder default '' cannot cast
         # to UUID, so the query errors and the connection sees NOTHING rather
         # than defaulting to all rows.
-        conn, _aetoes, _other = two_tenant_db
+        conn, _aetoes, _other, _ac, _oc = two_tenant_db
         with pytest.raises((asyncpg.DataError, asyncpg.UndefinedObjectError)):
             await conn.fetch("SELECT * FROM documents")
 
     async def test_cross_tenant_update_invisible(
-        self, two_tenant_db: tuple[asyncpg.Connection, str, str]
+        self, two_tenant_db: tuple[asyncpg.Connection, str, str, str, str]
     ) -> None:
-        conn, aetoes, other = two_tenant_db
+        conn, aetoes, other, _ac, _oc = two_tenant_db
         async with conn.transaction():
             await conn.execute("SELECT set_config('app.tenant_id', $1, true)", other)
             # RLS USING policy makes tenant A's rows invisible: UPDATE touches 0.
