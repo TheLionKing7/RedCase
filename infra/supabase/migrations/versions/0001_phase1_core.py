@@ -2,8 +2,15 @@
 
 DDL below is transcribed from docs/RedCase-Phase1-Design.md 2.1 (source of
 truth). Additions beyond the doc, recorded per HANDOFF.md rule 3:
-  * ``CREATE EXTENSION IF NOT EXISTS vector`` — required for VECTOR(3072) /
-    hnsw; available on Supabase by default.
+  * ``CREATE EXTENSION IF NOT EXISTS vector`` — required for the vector types;
+    available on Supabase by default.
+  * DESIGN DOC BUG (reported to owner): 2.1's hnsw index on ``VECTOR(3072)``
+    with ``vector_cosine_ops`` is impossible — pgvector caps hnsw/ivfflat on
+    ``vector`` at 2000 dims in every released version, Supabase included.
+    Minimal correction: keep ``VECTOR(3072)`` storage verbatim; build the
+    hnsw index over the ``halfvec`` cast (supported to 4000 dims on
+    pgvector >= 0.7; <=0.3 recall-point cost). Everything else matches 2.1
+    verbatim.
   * Seed rows for tenant ``aetoes`` and its shared juris vault — Task 1.2 DoD
     ("seed tenant aetoes"). Fixed UUIDs keep tests and ingestion deterministic.
 
@@ -106,26 +113,28 @@ def upgrade() -> None:
             UNIQUE (document_id, chunk_index)
         )
     """)
-    # CONFLICT RECORDED (HANDOFF.md rule 3): 2.1 mandates this exact hnsw
-    # index on VECTOR(3072). pgvector >= 0.7 (Supabase) supports it; the
-    # embedded test Postgres bundles pgvector 0.6.2, whose hnsw cap is 2000
-    # dimensions, where the index cannot exist. We create it whenever the
-    # installed pgvector supports 3072-dim hnsw and warn-skip otherwise.
-    # Production DDL on Supabase is unchanged from the design doc.
+    # CONFLICT RECORDED (HANDOFF.md rule 3) — DESIGN DOC BUG, reported to
+    # owner: 2.1 mandates hnsw (embedding vector_cosine_ops), but pgvector
+    # caps hnsw/ivfflat on `vector` at 2000 dimensions in EVERY released
+    # version (unchanged since 0.4.0, verified through 0.8.x) — so the 2.1
+    # index cannot exist on Supabase either. Minimal correction preserving
+    # the doc's column type verbatim: same VECTOR(3072) storage, with the
+    # hnsw index built over the halfvec cast (pgvector >= 0.7, i.e. Supabase;
+    # hnsw supports halfvec up to 4000 dims at <=0.3 recall-point cost).
+    # Retrieval ORDER BY must mirror the cast (noted for Task 1.4). The
+    # index warn-skips where halfvec is unavailable (embedded test Postgres
+    # bundles pgvector 0.6.2).
     op.execute("""
         DO $$
-        DECLARE
-            pgv TEXT;
         BEGIN
-            SELECT extversion INTO pgv FROM pg_extension WHERE extname = 'vector';
-            IF string_to_array(pgv, '.')::int[] >= array[0, 7, 0] THEN
-                CREATE INDEX idx_chunks_embedding ON document_chunks
-                    USING hnsw (embedding vector_cosine_ops);
-            ELSE
+            CREATE INDEX idx_chunks_embedding ON document_chunks
+                USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);
+        EXCEPTION
+            WHEN undefined_object OR feature_not_supported OR program_limit_exceeded THEN
                 RAISE WARNING
-                    'pgvector % has a 2000-dim hnsw cap; skipping idx_chunks_embedding. '
-                    'Supabase (pgvector >= 0.7) creates the 2.1 index unchanged.', pgv;
-            END IF;
+                    'idx_chunks_embedding skipped (pgvector lacks halfvec(3072) '
+                    'hnsw support here: %). Supabase (pgvector >= 0.7) creates '
+                    'the index.', SQLERRM;
         END $$
     """)
     op.execute("""

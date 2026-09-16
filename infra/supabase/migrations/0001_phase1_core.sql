@@ -71,18 +71,15 @@ CREATE TABLE document_chunks (
         );
 
 DO $$
-        DECLARE
-            pgv TEXT;
         BEGIN
-            SELECT extversion INTO pgv FROM pg_extension WHERE extname = 'vector';
-            IF string_to_array(pgv, '.')::int[] >= array[0, 7, 0] THEN
-                CREATE INDEX idx_chunks_embedding ON document_chunks
-                    USING hnsw (embedding vector_cosine_ops);
-            ELSE
+            CREATE INDEX idx_chunks_embedding ON document_chunks
+                USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);
+        EXCEPTION
+            WHEN undefined_object OR feature_not_supported OR program_limit_exceeded THEN
                 RAISE WARNING
-                    'pgvector % has a 2000-dim hnsw cap; skipping idx_chunks_embedding. '
-                    'Supabase (pgvector >= 0.7) creates the 2.1 index unchanged.', pgv;
-            END IF;
+                    'idx_chunks_embedding skipped (pgvector lacks halfvec(3072) '
+                    'hnsw support here: %). Supabase (pgvector >= 0.7) creates '
+                    'the index.', SQLERRM;
         END $$;
 
 CREATE INDEX idx_chunks_fts ON document_chunks USING gin (fts);
