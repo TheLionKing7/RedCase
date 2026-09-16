@@ -81,7 +81,7 @@ DO $$
             ELSE
                 RAISE WARNING
                     'pgvector % has a 2000-dim hnsw cap; skipping idx_chunks_embedding. '
-                    'Supabase (pgvector >= 0.7) creates the §2.1 index unchanged.', pgv;
+                    'Supabase (pgvector >= 0.7) creates the 2.1 index unchanged.', pgv;
             END IF;
         END $$;
 

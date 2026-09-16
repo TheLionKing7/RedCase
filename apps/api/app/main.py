@@ -1,8 +1,8 @@
-"""FastAPI app factory (Task 1.1; HANDOFF.md §1, Phase1-Design §3.1).
+"""FastAPI app factory (Task 1.1; HANDOFF.md 1, Phase1-Design 3.1).
 
 Boot contract:
 - structlog with the mandatory ZDR redaction filter is configured exactly once,
-  before any route is served (HANDOFF.md §2.1).
+  before any route is served (HANDOFF.md 2.1).
 - The app mounts under /v1/* (and later /v1/slack/*, Phase 2). Task 1.1
   registers the API skeleton only; /v1/query lands in Task 1.4.
 - Secrets are NOT required to boot (see config.Settings); code paths that need

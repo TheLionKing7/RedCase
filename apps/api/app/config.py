@@ -1,6 +1,6 @@
 """RedCase configuration — pydantic-settings.
 
-HANDOFF.md §2/§3: NO secrets in code. Every secret is read from the
+HANDOFF.md 2/3: NO secrets in code. Every secret is read from the
 environment (backed by AWS Secrets Manager in deployment) and wrapped in
 SecretStr so it can never be rendered into logs or reprs accidentally.
 """
@@ -10,7 +10,7 @@ from functools import lru_cache
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Brand tokens (HANDOFF.md §2.6) — non-secret, safe to ship in config.
+# Brand tokens (HANDOFF.md 2.6) — non-secret, safe to ship in config.
 BRAND_CRIMSON = "#D0021B"
 BRAND_OBSIDIAN = "#0F1115"
 BRAND_VELLUM = "#E2C044"
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     env: str = "dev"  # dev | staging | prod
     log_level: str = "INFO"
 
-    # Secrets — HANDOFF.md §3 registry. Never hardcode; never log.
+    # Secrets — HANDOFF.md 3 registry. Never hardcode; never log.
     supabase_url: str | None = None
     supabase_service_role: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None  # ZDR workspace key
@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
 
-    # Retrieval tuning — HANDOFF.md §3 env config
+    # Retrieval tuning — HANDOFF.md 3 env config
     embed_model: str = "text-embedding-3-large"
-    vector_gate: float = 0.78  # SIMILARITY_THRESHOLD, calibrated in Phase 1 §5
+    vector_gate: float = 0.78  # SIMILARITY_THRESHOLD, calibrated in Phase 1 5
 
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         if missing:
             raise RuntimeError(
                 f"Missing required secrets/config: {', '.join(missing)}. "
-                "Provision them via AWS Secrets Manager (see HANDOFF.md §3)."
+                "Provision them via AWS Secrets Manager (see HANDOFF.md 3)."
             )
 
 

@@ -1,6 +1,6 @@
-"""Phase 1 core schema — Phase1-Design §2.1 DDL verbatim + tenant seed.
+"""Phase 1 core schema — Phase1-Design 2.1 DDL verbatim + tenant seed.
 
-DDL below is transcribed from docs/RedCase-Phase1-Design.md §2.1 (source of
+DDL below is transcribed from docs/RedCase-Phase1-Design.md 2.1 (source of
 truth). Additions beyond the doc, recorded per HANDOFF.md rule 3:
   * ``CREATE EXTENSION IF NOT EXISTS vector`` — required for VECTOR(3072) /
     hnsw; available on Supabase by default.
@@ -8,7 +8,7 @@ truth). Additions beyond the doc, recorded per HANDOFF.md rule 3:
     ("seed tenant aetoes"). Fixed UUIDs keep tests and ingestion deterministic.
 
 RLS note: policies use ``current_setting('app.tenant_id')`` with no default, so
-any query without the GUC set fails closed (HANDOFF.md §2.2).
+any query without the GUC set fails closed (HANDOFF.md 2.2).
 
 Revision ID: 0001
 Revises:
@@ -106,7 +106,7 @@ def upgrade() -> None:
             UNIQUE (document_id, chunk_index)
         )
     """)
-    # CONFLICT RECORDED (HANDOFF.md rule 3): §2.1 mandates this exact hnsw
+    # CONFLICT RECORDED (HANDOFF.md rule 3): 2.1 mandates this exact hnsw
     # index on VECTOR(3072). pgvector >= 0.7 (Supabase) supports it; the
     # embedded test Postgres bundles pgvector 0.6.2, whose hnsw cap is 2000
     # dimensions, where the index cannot exist. We create it whenever the
@@ -124,7 +124,7 @@ def upgrade() -> None:
             ELSE
                 RAISE WARNING
                     'pgvector % has a 2000-dim hnsw cap; skipping idx_chunks_embedding. '
-                    'Supabase (pgvector >= 0.7) creates the §2.1 index unchanged.', pgv;
+                    'Supabase (pgvector >= 0.7) creates the 2.1 index unchanged.', pgv;
             END IF;
         END $$
     """)

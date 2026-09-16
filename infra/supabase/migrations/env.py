@@ -1,6 +1,6 @@
 """Alembic environment — async engine, URL from DATABASE_URL env var only.
 
-Migration DDL lives in this directory per HANDOFF.md §1
+Migration DDL lives in this directory per HANDOFF.md 1
 (``infra/supabase/migrations`` = Alembic-managed DDL from the design docs).
 """
 
@@ -18,7 +18,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Never read a URL from the ini file: DATABASE_URL is the single source
-# (AWS Secrets Manager in deployment, env var locally/CI — HANDOFF.md §3).
+# (AWS Secrets Manager in deployment, env var locally/CI — HANDOFF.md 3).
 url = os.environ.get("DATABASE_URL")
 if not url:
     raise RuntimeError("DATABASE_URL env var is required for migrations")

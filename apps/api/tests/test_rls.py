@@ -1,6 +1,6 @@
-"""Row-Level Security policy tests — Task 1.2 DoD (Phase1-Design §2.1).
+"""Row-Level Security policy tests — Task 1.2 DoD (Phase1-Design 2.1).
 
-Contract under test (HANDOFF.md §2.2, §2.5):
+Contract under test (HANDOFF.md 2.2, 2.5):
   * every query runs with ``app.tenant_id`` set via SET LOCAL;
   * policies live in SQL, not Python;
   * the policy uses ``current_setting('app.tenant_id')`` with NO default, so a
@@ -24,7 +24,7 @@ INSERT_DOC = """
 
 
 async def _insert_doc(conn: asyncpg.Connection, tenant: str, citation: str) -> None:
-    # RLS USING policy doubles as the WITH CHECK on INSERT (Phase1 §2.1 as
+    # RLS USING policy doubles as the WITH CHECK on INSERT (Phase1 2.1 as
     # written): inserts must carry the tenant GUC inside the transaction.
     async with conn.transaction():
         await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant)

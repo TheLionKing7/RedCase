@@ -32,7 +32,7 @@ def app_db_url(tmp_path_factory: pytest.TempPathFactory) -> str:
 
     # Fresh database + non-superuser app role (RLS must actually apply).
     # Note: PG16 creates session placeholder GUCs only via set_config()
-    # (ALTER SYSTEM/SET on unknown dotted names error out) — HANDOFF.md §2.2
+    # (ALTER SYSTEM/SET on unknown dotted names error out) — HANDOFF.md 2.2
     # contract is SET LOCAL semantics per transaction, which set_config(...,
     # is_local=true) provides.
     srv.psql(f"CREATE DATABASE {APP_DB}")

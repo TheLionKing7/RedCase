@@ -1,4 +1,4 @@
-"""ZDR redaction filter unit tests — Task 1.1 DoD (HANDOFF.md §4, Phase1 §1.3).
+"""ZDR redaction filter unit tests — Task 1.1 DoD (HANDOFF.md 4, Phase1 1.3).
 
 Zero Data Retention discipline: no raw document text, prompt bodies, or LLM
 request/response payloads may appear in ANY log line. These tests pin that

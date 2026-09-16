@@ -4,7 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 
-# Env / secrets — never commit (HANDOFF.md §3: secrets live in AWS Secrets Manager)
+# Env / secrets — never commit (HANDOFF.md 3: secrets live in AWS Secrets Manager)
 .env
 .env.*
 

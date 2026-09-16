@@ -1,4 +1,4 @@
-"""App factory smoke tests — Task 1.1 DoD (pytest green; HANDOFF.md §4)."""
+"""App factory smoke tests — Task 1.1 DoD (pytest green; HANDOFF.md 4)."""
 
 from fastapi.testclient import TestClient
 
@@ -14,7 +14,7 @@ def test_health_endpoint() -> None:
 
 
 def test_app_boots_without_secrets() -> None:
-    # HANDOFF §3: secrets come from AWS Secrets Manager at deploy time; the
+    # HANDOFF 3: secrets come from AWS Secrets Manager at deploy time; the
     # app (and CI) must boot with none set.
     app = create_app(Settings())
     assert app.state.settings.supabase_service_role is None

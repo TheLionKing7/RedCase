@@ -1,4 +1,4 @@
-"""ZDR enforcement + log redaction (Phase 1 §1.3, HANDOFF.md §2.1).
+"""ZDR enforcement + log redaction (Phase 1 1.3, HANDOFF.md 2.1).
 
 Zero Data Retention discipline: no raw document text, prompt bodies, or LLM
 request/response payloads may appear in ANY log line. Structlog is wired with
@@ -79,7 +79,7 @@ def configure_logging(log_level: str = "INFO") -> None:
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
-            ZDRFilter(),  # non-negotiable: HANDOFF.md §2.1
+            ZDRFilter(),  # non-negotiable: HANDOFF.md 2.1
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
