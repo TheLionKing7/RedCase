@@ -56,7 +56,10 @@ export async function signInWithEmail(email: string): Promise<void> {
 }
 
 /** Step 2: exchange the OTP from the email for a JWT session. */
-export async function verifyOtp(email: string, token: string): Promise<AuthSession> {
+export async function verifyOtp(
+  email: string,
+  token: string,
+): Promise<AuthSession> {
   const { url, key } = requireConfig();
   const res = await fetch(`${url}/auth/v1/verify`, {
     method: "POST",
@@ -73,7 +76,9 @@ export async function verifyOtp(email: string, token: string): Promise<AuthSessi
   };
   if (!res.ok || !data.access_token) {
     throw new AuthError(
-      data.error_description ?? data.msg ?? `Sign-in failed (HTTP ${res.status})`,
+      data.error_description ??
+        data.msg ??
+        `Sign-in failed (HTTP ${res.status})`,
     );
   }
   const session: AuthSession = {
@@ -109,7 +114,8 @@ export function getAccessToken(): string | null {
 }
 
 export function signOut(): void {
-  if (typeof window !== "undefined") window.localStorage.removeItem(STORAGE_KEY);
+  if (typeof window !== "undefined")
+    window.localStorage.removeItem(STORAGE_KEY);
 }
 
 function persist(session: AuthSession): void {

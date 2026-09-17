@@ -35,7 +35,9 @@ export async function apiPost<TResponse, TRequest>(
   body: TRequest,
   opts: { signal?: AbortSignal } = {},
 ): Promise<TResponse> {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
   const token = getAccessToken();
   if (token) headers["authorization"] = `Bearer ${token}`;
 
@@ -45,6 +47,32 @@ export async function apiPost<TResponse, TRequest>(
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: opts.signal ?? null,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiError(0, "network unreachable — is the FastAPI backend up?");
+  }
+
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, text);
+  return JSON.parse(text) as TResponse;
+}
+
+/** GET variant for list endpoints (e.g. /v1/deadlines/events in Phase 3). */
+export async function apiGet<TResponse>(
+  path: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<TResponse> {
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token) headers["authorization"] = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: "GET",
+      headers,
       signal: opts.signal ?? null,
     });
   } catch (err) {

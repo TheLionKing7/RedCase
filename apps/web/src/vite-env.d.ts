@@ -8,6 +8,9 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   /** Supabase anon key — publishable, NOT a secret. */
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Set to "1" to route API calls through the schema-exact dev adapters
+   *  (lib/api/dev/*) while the Phase 3 endpoints are unbuilt. */
+  readonly VITE_API_DEV_ADAPTER?: string;
 }
 
 interface ImportMeta {
