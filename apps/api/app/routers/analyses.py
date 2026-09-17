@@ -1,0 +1,255 @@
+"""Legal Workbench analysis endpoints — Feature-Addendum §3.2, Step A.
+
+  POST /v1/documents/{id}/analyze   body {prompt_pack, matter_id?} → 202 {analysis_id}
+  GET  /v1/analyses/{id}            → status + battle-card output
+
+The worker runs the Phase 3 redteam engine (prompt_pack='ADVERSAL_BRIEF') as
+a FastAPI background task on a pooled connection with the RLS GUC set inside
+its own transaction. Audit integration (Step A req 4): exactly one
+query_audit row per completed analysis, metadata only per ZDR —
+question_hash is a SHA-256 of the analysis descriptor (never document text),
+filters carry {document_id, prompt_pack, status}, and analysis_id links the
+row. An audit-write failure HALTs the worker and marks the analysis FAILED
+(convention 3).
+"""
+
+import hashlib
+import json
+import time
+import uuid
+from typing import Any
+
+import asyncpg
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    status,
+)
+from pydantic import BaseModel
+
+from app.config import Settings
+from app.deps import TenantContext, get_tenant_context
+from app.middleware.audit import write_audit
+from app.middleware.zdr import get_logger
+from app.redteam.engine import run_redteam_analysis
+
+log = get_logger("redcase.analyses")
+
+router = APIRouter(prefix="/v1", tags=["analyses"])
+
+# Step A ships one pack; §3.3 packs land in Step C.
+ALLOWED_PACKS = ("ADVERSAL_BRIEF",)
+
+
+class AnalyzeRequest(BaseModel):
+    prompt_pack: str
+    matter_id: str | None = None
+
+
+class AnalyzeAccepted(BaseModel):
+    analysis_id: str
+
+
+class AnalysisStatus(BaseModel):
+    analysis_id: str
+    document_id: str
+    prompt_pack: str
+    status: str
+    output: dict[str, Any] | None = None
+    confidence: dict[str, Any] | None = None
+    error: str | None = None
+    created_by: str
+    created_at: str
+
+
+async def _run_analysis_worker(
+    settings: Settings,
+    pool: asyncpg.Pool,
+    analysis_id: str,
+    document_id: str,
+    tenant_id: str,
+    user_ref: str,
+    prompt_pack: str,
+) -> None:
+    """Background task: run the engine, persist output, write the audit row.
+    Never raises into the response path (the client already got 202); any
+    failure is recorded on the analysis row itself."""
+    started = time.monotonic()
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "SELECT set_config('app.tenant_id', $1, true)", tenant_id
+                )
+                card = await run_redteam_analysis(
+                    document_id, tenant_id, conn, settings=settings
+                )
+                output = card.model_dump(by_alias=True, mode="json")
+                await conn.execute(
+                    "UPDATE document_analyses SET status = 'COMPLETE', output = $2::jsonb"
+                    " WHERE id = $1",
+                    uuid.UUID(analysis_id),
+                    json.dumps(output),
+                )
+                await write_audit(
+                    conn,
+                    {
+                        "tenant_id": tenant_id,
+                        "user_ref": user_ref,
+                        "question_hash": hashlib.sha256(
+                            f"analyze:{document_id}:{prompt_pack}".encode()
+                        ).hexdigest(),
+                        "filters": {
+                            "document_id": document_id,
+                            "prompt_pack": prompt_pack,
+                            "status": "COMPLETE",
+                        },
+                        "threshold_passed": card.critic_verdict.pass_,
+                        "analysis_id": analysis_id,
+                        "latency_ms": int((time.monotonic() - started) * 1000),
+                    },
+                )
+        log.info(
+            "analysis_complete",
+            analysis_id=analysis_id,
+            document_id=document_id,
+            critic_pass=card.critic_verdict.pass_,
+        )
+    except Exception as exc:  # noqa: BLE001 — worker must record, not explode
+        log.warn("analysis_failed", analysis_id=analysis_id, error=str(exc))
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    "SELECT set_config('app.tenant_id', $1, true)", tenant_id
+                )
+                await conn.execute(
+                    "UPDATE document_analyses SET status = 'FAILED', error = $2"
+                    " WHERE id = $1",
+                    uuid.UUID(analysis_id),
+                    str(exc)[:500],
+                )
+                try:
+                    await write_audit(
+                        conn,
+                        {
+                            "tenant_id": tenant_id,
+                            "user_ref": user_ref,
+                            "question_hash": hashlib.sha256(
+                                f"analyze:{document_id}:{prompt_pack}".encode()
+                            ).hexdigest(),
+                            "filters": {
+                                "document_id": document_id,
+                                "prompt_pack": prompt_pack,
+                                "status": "FAILED",
+                            },
+                            "threshold_passed": False,
+                            "analysis_id": analysis_id,
+                            "latency_ms": int((time.monotonic() - started) * 1000),
+                        },
+                    )
+                except Exception:  # noqa: BLE001 — audit HALT already logged upstream
+                    log.warn("analysis_audit_halt", analysis_id=analysis_id)
+
+
+@router.post("/documents/{document_id}/analyze", status_code=202)
+async def start_analysis(
+    document_id: str,
+    body: AnalyzeRequest,
+    background: BackgroundTasks,
+    request: Request,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> AnalyzeAccepted:
+    if body.prompt_pack not in ALLOWED_PACKS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"prompt_pack must be one of {ALLOWED_PACKS} (Step A ships"
+            " ADVERSAL_BRIEF only; §3.3 packs land in Step C)",
+        )
+    doc = await ctx.db.fetchval(
+        "SELECT id FROM documents WHERE id = $1::uuid", document_id
+    )
+    if doc is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail="document not found in this tenant's vault",
+        )
+    analysis_id = str(uuid.uuid4())
+    # The analysis row must COMMIT before the 202 returns: the background
+    # worker updates this row by id, and the dependency transaction that
+    # owns ``ctx.db`` only commits after background tasks run — inserting
+    # there would race the worker (its UPDATE would hit 0 rows, and the
+    # audit row's FK would fail against the uncommitted analysis). A
+    # dedicated short transaction keeps the contract: 202 means the
+    # analysis exists and is RUNNING.
+    async with request.app.state.db_pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "SELECT set_config('app.tenant_id', $1, true)", ctx.tenant_id
+            )
+            await conn.execute(
+                "INSERT INTO document_analyses (id, tenant_id, document_id,"
+                " matter_id, prompt_pack, created_by)"
+                " VALUES ($1, $2, $3, $4, $5, $6)",
+                uuid.UUID(analysis_id),
+                uuid.UUID(ctx.tenant_id),
+                uuid.UUID(document_id),
+                uuid.UUID(body.matter_id) if body.matter_id else None,
+                body.prompt_pack,
+                ctx.user_ref,
+            )
+    settings: Settings = request.app.state.settings
+    background.add_task(
+        _run_analysis_worker,
+        settings,
+        request.app.state.db_pool,
+        analysis_id,
+        document_id,
+        ctx.tenant_id,
+        ctx.user_ref,
+        body.prompt_pack,
+    )
+    log.info(
+        "analysis_started",
+        analysis_id=analysis_id,
+        document_id=document_id,
+        prompt_pack=body.prompt_pack,
+    )
+    return AnalyzeAccepted(analysis_id=analysis_id)
+
+
+@router.get("/analyses/{analysis_id}", response_model=AnalysisStatus)
+async def get_analysis(
+    analysis_id: str,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> AnalysisStatus:
+    row = await ctx.db.fetchrow(
+        "SELECT id, document_id, prompt_pack, status, output, confidence,"
+        " error, created_by, created_at FROM document_analyses"
+        " WHERE id = $1::uuid",
+        analysis_id,
+    )
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, detail="analysis not found"
+        )
+    # asyncpg returns jsonb as str by default — decode for pydantic validation.
+    output = row["output"]
+    confidence = row["confidence"]
+    if isinstance(output, str):
+        output = json.loads(output)
+    if isinstance(confidence, str):
+        confidence = json.loads(confidence)
+    return AnalysisStatus(
+        analysis_id=str(row["id"]),
+        document_id=str(row["document_id"]),
+        prompt_pack=row["prompt_pack"],
+        status=row["status"],
+        output=output,
+        confidence=confidence,
+        error=row["error"],
+        created_by=row["created_by"],
+        created_at=row["created_at"].isoformat(),
+    )

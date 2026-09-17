@@ -79,17 +79,24 @@ def make_embedder(settings: Settings) -> Embedder:
             api_key=settings.openai_api_key.get_secret_value(),
             base_url=settings.zdr_embed_proxy or None,
         )
-    elif settings.openrouter_api_key:
+        return OpenAIEmbedder(oai, settings.embed_model)
+    if settings.nvidia_api_key:
+        # NVIDIA NIM — OpenAI-compatible embeddings API (owner 2026-09-17).
+        oai = AsyncOpenAI(
+            api_key=settings.nvidia_api_key.get_secret_value(),
+            base_url=settings.nvidia_base_url,
+        )
+        return OpenAIEmbedder(oai, settings.nvidia_embed_model)
+    if settings.openrouter_api_key:
         oai = AsyncOpenAI(
             api_key=settings.openrouter_api_key.get_secret_value(),
             base_url="https://openrouter.ai/api/v1",
         )
-    else:
-        raise RuntimeError(
-            "No embedding credentials provisioned (OPENAI_API_KEY or"
-            " OPENROUTER_API_KEY) — cannot embed queries."
-        )
-    return OpenAIEmbedder(oai, settings.embed_model)
+        return OpenAIEmbedder(oai, settings.embed_model)
+    raise RuntimeError(
+        "No embedding credentials provisioned (OPENAI_API_KEY, NVAPI_KEY or"
+        " OPENROUTER_API_KEY) — cannot embed queries."
+    )
 
 
 def make_llm(settings: Settings) -> AnswerLLM:

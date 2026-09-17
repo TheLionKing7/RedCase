@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None  # ZDR workspace key
     openai_api_key: SecretStr | None = None  # embeddings via ZDR proxy
     openrouter_api_key: SecretStr | None = None  # OpenAI-compatible embeddings fallback
+    nvidia_api_key: SecretStr | None = None  # NVIDIA NIM (build.nvidia.com) embeddings
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_embed_model: str = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
