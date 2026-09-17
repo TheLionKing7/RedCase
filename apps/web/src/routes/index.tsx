@@ -13,7 +13,7 @@ import { AppShell } from "@/components/AppShell";
 import { useVaultQuery } from "@/lib/api/query";
 import { ApiError } from "@/lib/api/client";
 import type { Citation } from "@/lib/api/types";
-import { COURT_LEVELS, RATIO_TAGS } from "@/lib/aetoes-data";
+import { COURT_LEVELS, RATIO_TAGS } from "@/lib/court-filters";
 
 export const Route = createFileRoute("/")({
   head: () => ({

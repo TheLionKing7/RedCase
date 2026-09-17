@@ -1,11 +1,27 @@
 import { Link } from "@tanstack/react-router";
-import { Scale, Search, ShieldAlert, CalendarClock, Circle } from "lucide-react";
+import {
+  Scale,
+  Search,
+  ShieldAlert,
+  CalendarClock,
+  Circle,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 const NAV = [
   { to: "/", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
-  { to: "/red-teamer", label: "Case Red-Teamer", sub: "Adversarial analysis", icon: ShieldAlert },
-  { to: "/tracker", label: "Statutory Tracker", sub: "Deadline computation", icon: CalendarClock },
+  {
+    to: "/red-teamer",
+    label: "Case Red-Teamer",
+    sub: "Adversarial analysis",
+    icon: ShieldAlert,
+  },
+  {
+    to: "/tracker",
+    label: "Statutory Tracker",
+    sub: "Deadline computation",
+    icon: CalendarClock,
+  },
 ] as const;
 
 export function AppShell({
@@ -25,7 +41,9 @@ export function AppShell({
             <Scale className="size-5 text-gold" />
           </div>
           <div>
-            <div className="font-display text-lg leading-none text-gradient-gold">Aetoes</div>
+            <div className="font-display text-lg leading-none text-gradient-gold">
+              Aetoes
+            </div>
             <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               Ops Hub
             </div>
@@ -48,7 +66,9 @@ export function AppShell({
                 <item.icon className="size-4 text-cyan" />
                 <span className="flex flex-col">
                   <span className="text-sm font-medium">{item.label}</span>
-                  <span className="text-[11px] text-muted-foreground">{item.sub}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {item.sub}
+                  </span>
                 </span>
               </span>
             </Link>
@@ -77,13 +97,17 @@ export function AppShell({
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-cyan">
                 {eyebrow}
               </div>
-              <h1 className="mt-1 text-2xl font-semibold lg:text-3xl">{title}</h1>
+              <h1 className="mt-1 text-2xl font-semibold lg:text-3xl">
+                {title}
+              </h1>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="rounded-full border border-gold/40 px-3 py-1 font-mono text-gold">
                 CONFIDENTIAL · PRIVILEGED
               </span>
-              <span className="hidden sm:inline">Tosin Adebayo · Managing Partner</span>
+              <span className="hidden sm:inline">
+                Tosin Adebayo · Managing Partner
+              </span>
             </div>
           </div>
           <nav className="mt-4 flex gap-2 lg:hidden">
