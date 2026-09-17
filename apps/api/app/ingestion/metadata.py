@@ -8,7 +8,31 @@ Deterministic-first (Phase1-Design 4): regex over the judgment text. The
 import re
 from dataclasses import dataclass
 
-CITATION_RE = re.compile(r"\((\d{4})\)\s+(\d+)\s+NWLR\s*\(Pt\.\s*([\d\w]+)\)\s*(\d+)")
+
+def _dotted(letters: str) -> str:
+    """Regex fragment matching a report-series abbreviation with optional
+    inter-letter dots/spaces: 'SCNLR' ~ 'S.C.N.L.R.' ~ 'SC. NLR'."""
+    return r"\s*\.?\s*".join(letters)
+
+
+# Citation series — Feature-Addendum §8 multi-series fallback (Judy Legal
+# lesson: corpora cite across report series; the extractor must normalize).
+# Priority order: NWLR first (the firm's canonical series), then SCNLR,
+# All N.L.R., ANLR, and NGSC neutral citations. First match wins; the
+# matched text is stored verbatim as documents.citation (citation_norm
+# upper-cases + collapses whitespace for dedupe).
+CITATION_SERIES: list[tuple[str, "re.Pattern[str]"]] = [
+    # (2008) 5 NWLR (Pt. 1080) 227
+    ("NWLR", re.compile(r"\((\d{4})\)\s+(\d+)\s+NWLR\s*\(Pt\.\s*([\d\w]+)\)\s*(\d+)")),
+    # (2007) 12 SCNLR 89 (dots optional: S.C.N.L.R.)
+    ("SCNLR", re.compile(rf"\((\d{{4}})\)\s+(\d+)\s+{_dotted('SCNLR')}\s*\.?\s*(\d+)")),
+    # (2005) 5 All N.L.R. 123 (dots/spaces optional)
+    ("All NLR", re.compile(rf"\((\d{{4}})\)\s+(\d+)\s+All\s+{_dotted('NLR')}\s*\.?\s*(\d+)")),
+    # (1966) 1 ANLR 45
+    ("ANLR", re.compile(r"\((\d{4})\)\s+(\d+)\s+ANLR\s*(\d+)")),
+    # [1961] NGSC 28 — neutral citation (NigeriaLII fixtures)
+    ("NGSC", re.compile(r"\[(\d{4})\]\s*NGSC\s*(\d+)")),
+]
 YEAR_FALLBACK_RE = re.compile(r"\b(19|20)\d{2}\b")
 CASE_TITLE_RE = re.compile(r"^([A-Z][A-Z&'.\-() ]+? v\. [A-Z][A-Z&'.\-() ]+?)$", re.M)
 CORAM_RE = re.compile(r"CORAM\s*[:\-]\s*([^\n]+)", re.I)
@@ -32,9 +56,10 @@ class DocumentMetadata:
 
 
 def _parse_citation(text: str, fallback_stem: str) -> tuple[str, int | None, bool]:
-    m = CITATION_RE.search(text)
-    if m:
-        return m.group(0), int(m.group(1)), True
+    for _series, pattern in CITATION_SERIES:
+        m = pattern.search(text)
+        if m:
+            return m.group(0), int(m.group(1)), True
     return fallback_stem, None, False
 
 

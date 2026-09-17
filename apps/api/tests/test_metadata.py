@@ -59,3 +59,55 @@ class TestExtractMetadata:
         meta = extract_metadata(text, "Stem Case")
         assert meta.case_title == "Stem Case"
         assert 0 < meta.metadata_confidence < 1
+
+
+class TestMultiSeriesCitation:
+    """Feature-Addendum §8 fallback: NWLR | SCNLR | All N.L.R. | ANLR | NGSC."""
+
+    HEADER = "IN THE SUPREME COURT OF NIGERIA\nBETWEEN:\nX v. Y\n"
+
+    def test_ngsc_neutral_citation(self) -> None:
+        meta = extract_metadata(
+            self.HEADER + "[1961] NGSC 28\nCORAM: A, JSC\n1. ratio.\n", "x"
+        )
+        assert meta.citation == "[1961] NGSC 28"
+        assert meta.year == 1961
+
+    def test_anlr(self) -> None:
+        meta = extract_metadata(
+            self.HEADER + "(1966) 1 ANLR 45\nCORAM: A, JSC\n1. ratio.\n", "x"
+        )
+        assert meta.citation == "(1966) 1 ANLR 45"
+        assert meta.year == 1966
+
+    def test_all_nlr_with_dots(self) -> None:
+        meta = extract_metadata(
+            self.HEADER + "(2005) 5 All N.L.R. 123\nCORAM: A, JSC\n1. ratio.\n", "x"
+        )
+        assert meta.citation == "(2005) 5 All N.L.R. 123"
+        assert meta.year == 2005
+
+    def test_scnlr(self) -> None:
+        meta = extract_metadata(
+            self.HEADER + "(2007) 12 SCNLR 89\nCORAM: A, JSC\n1. ratio.\n", "x"
+        )
+        assert meta.citation == "(2007) 12 SCNLR 89"
+        assert meta.year == 2007
+
+    def test_nwlr_wins_over_ngsc_when_both_present(self) -> None:
+        text = (
+            self.HEADER
+            + "NWLR CITATION: (2008) 5 NWLR (Pt. 1080) 227\n"
+            + "[1961] NGSC 28\nCORAM: A, JSC\n1. ratio.\n"
+        )
+        meta = extract_metadata(text, "x")
+        assert meta.citation == "(2008) 5 NWLR (Pt. 1080) 227"
+
+    def test_fallback_series_does_not_match_nwlr_text(self) -> None:
+        # A bare "(1961)" year must not be swallowed as a partial series
+        # citation; the year fallback still applies.
+        meta = extract_metadata(
+            self.HEADER + "Delivered in 1961.\nCORAM: A, JSC\n1. ratio.\n", "Stem"
+        )
+        assert meta.citation == "Stem"
+        assert meta.year == 1961
