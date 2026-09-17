@@ -84,6 +84,9 @@ export function AppShell({
           <div className="border-t border-sidebar-border pt-3 font-mono uppercase tracking-widest">
             Partner build v0.9
           </div>
+          <p className="font-mono text-[9px] normal-case tracking-[0.14em] text-muted-foreground/70">
+            The Intelligent Engine for Modern Law
+          </p>
         </div>
       </aside>
 

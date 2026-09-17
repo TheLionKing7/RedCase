@@ -6,8 +6,7 @@ import {
   Loader2,
   ShieldCheck,
   ShieldAlert,
-  Database,
-  Library,
+  ArrowUpRight,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useVaultQuery } from "@/lib/api/query";
@@ -37,9 +36,9 @@ export const Route = createFileRoute("/")({
 });
 
 // Owner ruling 1 (2026-09-16): no /v1/query vault param — Phase 1 is locked to
-// Vault B (Nigerian Juris OS); the Vault A tile renders disabled with a
-// PHASE 2 tag below. Phase 2 moves vault selection server-side and replaces
-// the toggle with per-citation vault badges (Phase2 §2.2).
+// Vault B (Nigerian Juris OS); Vault A renders disabled with a PHASE 2 tag.
+// Phase 2 moves vault selection server-side and replaces the toggle with
+// per-citation vault badges (Phase2 §2.2).
 
 // UI year ranges → QueryRequest year_from/year_to (Phase1-Design §3.5).
 function yearRange(label: string): { year_from?: number; year_to?: number } {
@@ -56,6 +55,16 @@ function yearRange(label: string): { year_from?: number; year_to?: number } {
       return {};
   }
 }
+
+// §2.1 CHECK enums → law-report court abbreviations (how counsel cites them).
+const COURT_BADGE: Record<string, string> = {
+  SUPREME_COURT: "SC",
+  COURT_OF_APPEAL: "CA",
+  FEDERAL_HIGH_COURT: "FHC",
+  STATE_HIGH_COURT: "SHC",
+  NICN: "NICN",
+  STATUTE: "STAT",
+};
 
 function VaultSearch() {
   const [query, setQuery] = useState(
@@ -82,34 +91,12 @@ function VaultSearch() {
   }
 
   return (
-    <AppShell eyebrow="Dual-Vault Engine" title="Vault Search">
+    <AppShell eyebrow="Nigerian Juris OS" title="Vault Search">
       <div className="mx-auto max-w-6xl space-y-6">
-        {/* Vault scope — Phase 1: locked to Vault B (owner ruling 1). */}
-        <div className="panel p-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <VaultTile
-              active={false}
-              disabled
-              icon={<Library className="size-4" />}
-              label="Vault A"
-              name="Internal Briefs"
-              meta="Phase 2 — internal briefs join the corpus server-side"
-              tag="PHASE 2"
-              tone="gold"
-            />
-            <VaultTile
-              active
-              icon={<Database className="size-4" />}
-              label="Vault B"
-              name="Nigerian Juris OS"
-              meta="41,902 judgments · SC, CA, FHC, NICN"
-              tag="ACTIVE"
-              tone="steel"
-            />
-          </div>
-        </div>
+        {/* Vault scope — Phase 1 locked to Vault B (owner ruling 1). */}
+        <VaultScopeBar />
 
-        {/* Query bar */}
+        {/* Command bar */}
         <div className="panel p-5">
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
@@ -118,21 +105,21 @@ function VaultSearch() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && run()}
-                placeholder="Ask a question or paste an issue statement…"
+                placeholder="State the issue — e.g. what test governs…"
                 className="w-full rounded-lg border border-input bg-background/60 py-3 pl-10 pr-4 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:glow-steel"
               />
             </div>
             <button
               onClick={run}
               disabled={!questionValid || vaultQuery.isPending}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-6 py-3 text-sm font-semibold text-gold-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {vaultQuery.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <Search className="size-4" />
               )}
-              Run RAG Query
+              Run Query
             </button>
           </div>
           {!questionValid && (
@@ -175,8 +162,8 @@ function VaultSearch() {
           <span className="font-mono uppercase tracking-widest">
             {vaultQuery.isPending
               ? "Retrieving…"
-              : data
-                ? `${data.citations.length} citations · re-ranked`
+              : data && !data.refusal
+                ? `${data.citations.length} authorit${data.citations.length === 1 ? "y" : "ies"} · verified`
                 : "Awaiting query"}
           </span>
           <span className="inline-flex items-center gap-1.5 text-success">
@@ -195,23 +182,25 @@ function VaultSearch() {
 
         {vaultQuery.isError && <QueryErrorState error={vaultQuery.error} />}
 
-        {data?.refusal && <RefusalState />}
+        {data?.refusal && <RefusalPanel />}
 
         {data && !data.refusal && (
-          <>
-            <AnswerPanel answer={data.answer} />
-            <div className="space-y-4">
-              {data.citations.map((c) => (
-                <CitationCard key={c.document_id} citation={c} />
-              ))}
-            </div>
-          </>
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_360px]">
+            <AnswerOpinion answer={data.answer} count={data.citations.length} />
+            <AuthoritiesRail citations={data.citations} />
+          </div>
         )}
 
         {!hasRun && !vaultQuery.isPending && (
-          <div className="panel p-10 text-center text-sm text-muted-foreground">
-            Run a query to retrieve grounded, page-pinned authority from the
-            Nigerian Juris OS.
+          <div className="panel p-10 text-center">
+            <p className="font-display text-xl text-foreground/90">
+              The Intelligent Engine for Modern Law
+            </p>
+            <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+              State an issue to retrieve grounded, page-pinned authority from
+              the Nigerian Juris OS — or run the example above. Every answer is
+              verified against the source or refused outright.
+            </p>
           </div>
         )}
       </div>
@@ -219,42 +208,148 @@ function VaultSearch() {
   );
 }
 
-/** Grounded answer — §3.4: rendered only when every citation verified. */
-function AnswerPanel({ answer }: { answer: string }) {
+/** Phase 1 vault scope: a segmented control, not two hero tiles. Vault
+ *  selection is server-side by ruling; the pills state the contract plainly. */
+function VaultScopeBar() {
   return (
-    <section className="panel glow-steel p-6">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="inline-flex rounded-lg border border-border bg-surface p-1">
+        <span className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+          Vault B · Nigerian Juris OS
+        </span>
+        <span
+          className="inline-flex cursor-not-allowed items-center gap-2 rounded-md px-4 py-2 text-sm text-muted-foreground/50"
+          title="Vault A joins the corpus server-side in Phase 2"
+        >
+          Vault A · Internal Briefs
+          <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+            Phase 2
+          </span>
+        </span>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        41,902 judgments · SC, CA, FHC, SHC, NICN — Vault A matter scoping
+        arrives server-side in Phase 2.
+      </p>
+    </div>
+  );
+}
+
+/** The grounded answer, set like an opinion excerpt: display serif for the
+ *  narrative, mono for the audit line. Rendered only when every citation
+ *  verified (§3.4). */
+function AnswerOpinion({ answer, count }: { answer: string; count: number }) {
+  return (
+    <section className="panel p-6 lg:p-8">
       <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
         Grounded Answer
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
+      <p className="mt-4 font-display text-lg leading-8 text-foreground/95 whitespace-pre-wrap">
         {answer}
       </p>
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 text-success">
+          <ShieldCheck className="size-3" /> Verified against retrieved passages
+        </span>
+        <span>
+          {count} {count === 1 ? "authority" : "authorities"} pinned
+        </span>
+        <span>Question audit-hashed · ZDR</span>
+      </div>
     </section>
   );
 }
 
 /**
- * Refusal state — §3.4 contract: best retrieved vsim below VECTOR_GATE (0.78)
- * or citation-integrity failure means NO answer is rendered, and a fabricated
- * citation is never shown to the user.
+ * Refusal — §3.4 contract verbatim. Below the 0.78 gate or on citation-
+ * integrity failure, no answer is rendered and no fabricated citation is
+ * ever shown. The refusal is the product's honesty, so it carries the
+ * crimson seal and the contract's own words.
  */
-function RefusalState() {
+function RefusalPanel() {
   return (
-    <section className="panel border-gold/40 p-8 text-center">
-      <ShieldAlert className="mx-auto size-8 text-gold" />
-      <h2 className="mt-3 text-lg font-semibold">
-        No verified authority found
+    <section className="panel border-l-4 border-l-primary p-8">
+      <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-primary">
+        Refused · citation integrity
+      </div>
+      <h2 className="mt-3 font-display text-2xl leading-snug">
+        “No binding precedent found in Vault B.”
       </h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-        RedCase could not ground an answer to this question in the retrieved
-        corpus at the required confidence threshold. Under the
-        citation-integrity contract, no answer is shown rather than an
-        unverified one.
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        The retrieved passages did not meet the verification gate for this
+        question. Under the citation-integrity contract, RedCase shows no answer
+        rather than an unverified one — a fabricated citation is never
+        displayed.
       </p>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        Tip: broaden the court-level or year filters, or rephrase the issue.
+        Broaden the court-level or year filters, or restate the issue with more
+        specific terms of art.
       </p>
     </section>
+  );
+}
+
+/** Table of Authorities — briefs list authorities; so does RedCase. Each row
+ *  is a law-report citation line: court badge, NWLR cite, pinpoint pages and
+ *  paragraph refs, and the seal linking the stored source PDF. */
+function AuthoritiesRail({ citations }: { citations: Citation[] }) {
+  return (
+    <aside className="space-y-3 lg:sticky lg:top-28">
+      <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
+        Table of Authorities · {citations.length}
+      </div>
+      {citations.map((c) => (
+        <AuthorityRow key={c.document_id} citation={c} />
+      ))}
+    </aside>
+  );
+}
+
+function AuthorityRow({ citation: c }: { citation: Citation }) {
+  const pages =
+    c.page_start === c.page_end
+      ? `p. ${c.page_start}`
+      : `pp. ${c.page_start}–${c.page_end}`;
+  const paras = c.paragraph_refs.length
+    ? ` · ¶ ${c.paragraph_refs.join(", ¶ ")}`
+    : "";
+  return (
+    <article className="panel border-l-2 border-l-gold/60 p-4 transition-colors hover:border-l-gold">
+      <div className="flex items-center gap-2">
+        <span className="rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-gold">
+          {COURT_BADGE[c.court_level] ?? c.court_level}
+        </span>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {c.year}
+        </span>
+        {c.verified ? (
+          <span className="ml-auto inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-success">
+            <ShieldCheck className="size-3" /> Verified
+          </span>
+        ) : (
+          <span className="ml-auto inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-warning">
+            <ShieldAlert className="size-3" /> Unverified
+          </span>
+        )}
+      </div>
+      <h3 className="mt-2 font-display text-base leading-snug">
+        {c.case_title}
+      </h3>
+      <p className="mt-1 font-mono text-xs text-gold">{c.citation}</p>
+      <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
+        <FileText className="mr-1 inline size-3" />
+        {pages}
+        {paras}
+      </p>
+      <a
+        href={c.source_pdf_url}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 inline-flex items-center gap-1 text-xs text-foreground/80 underline-offset-2 hover:text-gold hover:underline"
+      >
+        Source PDF <ArrowUpRight className="size-3" />
+      </a>
+    </article>
   );
 }
 
@@ -274,105 +369,6 @@ function QueryErrorState({ error }: { error: unknown }) {
             : "Unknown error — is the FastAPI backend running?"}
       </p>
     </section>
-  );
-}
-
-/** Citation card — the §3.4 rendering contract: case name, citation, court,
- *  year, p. X–Y, ¶ refs, "Verified against source PDF" linking the stored PDF. */
-function CitationCard({ citation: c }: { citation: Citation }) {
-  const pages =
-    c.page_start === c.page_end
-      ? `p. ${c.page_start}`
-      : `p. ${c.page_start}–${c.page_end}`;
-  return (
-    <article className="panel p-5 transition-colors hover:border-gold/40">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{c.case_title}</h2>
-          <p className="mt-0.5 font-mono text-xs text-gold">{c.citation}</p>
-        </div>
-        <div className="text-right">
-          <div className="text-[11px] text-muted-foreground">
-            {c.court_level} · {c.year}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px]">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-2.5 py-1 font-mono text-gold">
-          <FileText className="size-3" />
-          {pages} · {c.paragraph_refs.join(", ")}
-        </span>
-        {c.verified ? (
-          <a
-            href={c.source_pdf_url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-success underline-offset-2 hover:underline"
-          >
-            <ShieldCheck className="size-3" /> Verified against source PDF
-          </a>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-warning">
-            <ShieldAlert className="size-3" /> Unverified — treat with caution
-          </span>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function VaultTile({
-  active,
-  disabled,
-  icon,
-  label,
-  name,
-  meta,
-  tag,
-  tone,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  icon: React.ReactNode;
-  label: string;
-  name: string;
-  meta: string;
-  tag: string;
-  tone: "gold" | "steel";
-}) {
-  const activeRing = tone === "gold" ? "glow-gold" : "glow-steel";
-  const accent = tone === "gold" ? "text-gold" : "text-steel";
-  return (
-    <div
-      aria-disabled={disabled || undefined}
-      className={`rounded-lg px-5 py-4 text-left transition-all ${
-        disabled
-          ? "cursor-not-allowed opacity-50"
-          : active
-            ? `bg-surface-raised ${activeRing}`
-            : "bg-transparent opacity-60 hover:opacity-100"
-      }`}
-    >
-      <div
-        className={`flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] ${accent}`}
-      >
-        {icon}
-        {label}
-        {active && (
-          <span className="ml-auto rounded-full bg-success/15 px-2 py-0.5 text-success">
-            {tag}
-          </span>
-        )}
-        {disabled && (
-          <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
-            {tag}
-          </span>
-        )}
-      </div>
-      <div className="mt-2 text-base font-semibold">{name}</div>
-      <div className="mt-1 text-[11px] text-muted-foreground">{meta}</div>
-    </div>
   );
 }
 
