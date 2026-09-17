@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from app.config import Settings
 from app.deps import TenantContext, get_tenant_context
+from app.entitlements import require_feature
 from app.middleware.audit import write_audit
 from app.middleware.zdr import get_logger
 from app.redteam.engine import run_redteam_analysis
@@ -160,6 +161,7 @@ async def start_analysis(
     body: AnalyzeRequest,
     background: BackgroundTasks,
     request: Request,
+    _: None = Depends(require_feature("workbench.analyze")),  # noqa: B008
     ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
 ) -> AnalyzeAccepted:
     if body.prompt_pack not in ALLOWED_PACKS:
