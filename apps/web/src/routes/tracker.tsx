@@ -16,13 +16,13 @@ import type { DeadlineEvent } from "@/lib/api/deadlines";
 export const Route = createFileRoute("/tracker")({
   head: () => ({
     meta: [
-      { title: "Statutory Tracker — Aetoes Ops Hub" },
+      { title: "Statutory Tracker — RedCase" },
       {
         name: "description",
         content:
           "Automatic filing-deadline computation under Nigerian Court Rules with a live calendar of upcoming court dates and alert statuses.",
       },
-      { property: "og:title", content: "Statutory Tracker — Aetoes Ops Hub" },
+      { property: "og:title", content: "Statutory Tracker — RedCase" },
       {
         property: "og:description",
         content:
@@ -40,7 +40,7 @@ type Urgency =
 const URGENCY_STYLE: Record<Urgency, { label: string; cls: string }> = {
   overdue: { label: "Overdue", cls: "bg-destructive/15 text-destructive" },
   "due-soon": { label: "Due soon", cls: "bg-warning/15 text-warning" },
-  pending: { label: "Pending", cls: "bg-cyan/15 text-cyan" },
+  pending: { label: "Pending", cls: "bg-steel/15 text-steel" },
   notified: { label: "Notified", cls: "bg-success/15 text-success" },
   dismissed: { label: "Dismissed", cls: "bg-muted text-muted-foreground" },
   missed: { label: "Missed", cls: "bg-destructive/15 text-destructive" },
@@ -185,7 +185,11 @@ function Tracker() {
             value={String(due14)}
             tone="text-warning"
           />
-          <Stat label="Active events" value={String(active)} tone="text-cyan" />
+          <Stat
+            label="Active events"
+            value={String(active)}
+            tone="text-steel"
+          />
           <Stat
             label="Missed"
             value={String(missed)}
@@ -266,7 +270,7 @@ function Tracker() {
               driven server-side in Phase 3 (§3.1). */}
           <section className="panel p-6">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Calculator className="size-4 text-cyan" /> Deadline Calculator
+              <Calculator className="size-4 text-steel" /> Deadline Calculator
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Computes from the trigger date under the applicable Nigerian court
@@ -302,8 +306,8 @@ function Tracker() {
               </select>
             </label>
 
-            <div className="mt-5 rounded-lg bg-surface-raised p-5 glow-cyan">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan">
+            <div className="mt-5 rounded-lg bg-surface-raised p-5 glow-steel">
+              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-steel">
                 Computed filing deadline
               </div>
               <div className="mt-2 font-display text-2xl text-gradient-gold">

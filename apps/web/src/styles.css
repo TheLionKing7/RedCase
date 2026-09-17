@@ -5,8 +5,15 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Aetoes Ops Hub design system — deep navy / gold / cyan, dark-mode only.
- * All colors use oklch. Never hardcode colors in components.
+ * RedCase brand theme — RC-BrandTheme.md is the source of truth.
+ *
+ *   Crimson Signal  #D0021B  — primary actions, active states, alerts
+ *   Obsidian Ink    #0F1115  — backgrounds and high-contrast typography
+ *   Vellum Gold     #E2C044  — highlights, key data, high-priority badges
+ *
+ * Secondary accents use a steel tint of the obsidian family (#8E99A8) —
+ * the brand palette defines no cool accent; steel keeps two-tone hierarchy
+ * without inventing a hue. Never hardcode colors in components.
  */
 
 @theme inline {
@@ -35,8 +42,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
-  --color-cyan: var(--cyan);
-  --color-cyan-foreground: var(--cyan-foreground);
+  --color-steel: var(--steel);
+  --color-steel-foreground: var(--steel-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-destructive: var(--destructive);
@@ -66,62 +73,63 @@
 :root,
 .dark {
   --radius: 0.5rem;
-  --background: oklch(0.19 0.045 265);
-  --foreground: oklch(0.96 0.008 250);
-  --surface: oklch(0.235 0.045 265);
-  --surface-raised: oklch(0.275 0.045 265);
-  --card: oklch(0.235 0.045 265);
-  --card-foreground: oklch(0.96 0.008 250);
-  --popover: oklch(0.235 0.045 265);
-  --popover-foreground: oklch(0.96 0.008 250);
-  --primary: oklch(0.78 0.13 88);
-  --primary-foreground: oklch(0.19 0.045 265);
-  --secondary: oklch(0.3 0.04 265);
-  --secondary-foreground: oklch(0.96 0.008 250);
-  --muted: oklch(0.29 0.04 265);
-  --muted-foreground: oklch(0.72 0.03 250);
-  --accent: oklch(0.8 0.13 205);
-  --accent-foreground: oklch(0.19 0.045 265);
-  --gold: oklch(0.78 0.13 88);
-  --gold-foreground: oklch(0.19 0.045 265);
-  --cyan: oklch(0.82 0.13 200);
-  --cyan-foreground: oklch(0.19 0.045 265);
-  --success: oklch(0.75 0.15 155);
-  --warning: oklch(0.8 0.15 70);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0.005 250);
-  --border: oklch(0.34 0.04 265);
-  --input: oklch(0.34 0.04 265);
-  --ring: oklch(0.78 0.13 88);
-  --chart-1: oklch(0.78 0.13 88);
-  --chart-2: oklch(0.82 0.13 200);
-  --chart-3: oklch(0.65 0.2 25);
-  --chart-4: oklch(0.75 0.15 155);
-  --chart-5: oklch(0.6 0.12 300);
-  --sidebar: oklch(0.165 0.042 265);
-  --sidebar-foreground: oklch(0.9 0.01 250);
-  --sidebar-primary: oklch(0.78 0.13 88);
-  --sidebar-primary-foreground: oklch(0.19 0.045 265);
-  --sidebar-accent: oklch(0.26 0.045 265);
-  --sidebar-accent-foreground: oklch(0.96 0.008 250);
-  --sidebar-border: oklch(0.3 0.04 265);
-  --sidebar-ring: oklch(0.78 0.13 88);
+  /* Obsidian Ink ramp — backgrounds */
+  --background: #0f1115;
+  --foreground: #ecedf0;
+  --surface: #15181d;
+  --surface-raised: #1a1d23;
+  --card: #15181d;
+  --card-foreground: #ecedf0;
+  --popover: #15181d;
+  --popover-foreground: #ecedf0;
+  /* Crimson Signal — primary */
+  --primary: #d0021b;
+  --primary-foreground: #ffffff;
+  --secondary: #1f232b;
+  --secondary-foreground: #ecedf0;
+  --muted: #23272f;
+  --muted-foreground: #9ba1ab;
+  --accent: #23272f;
+  --accent-foreground: #ecedf0;
+  /* Vellum Gold — highlights */
+  --gold: #e2c044;
+  --gold-foreground: #0f1115;
+  /* Steel — secondary accent (obsidian-family tint) */
+  --steel: #8e99a8;
+  --steel-foreground: #0f1115;
+  /* Functional semantics (not brand colors) */
+  --success: #3ecf8e;
+  --warning: #e2a336;
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --border: #2a2f38;
+  --input: #2a2f38;
+  --ring: #e2c044;
+  --chart-1: #e2c044;
+  --chart-2: #d0021b;
+  --chart-3: #8e99a8;
+  --chart-4: #3ecf8e;
+  --chart-5: #c9a832;
+  --sidebar: #0c0e11;
+  --sidebar-foreground: #d6d9de;
+  --sidebar-primary: #e2c044;
+  --sidebar-primary-foreground: #0f1115;
+  --sidebar-accent: #1a1d23;
+  --sidebar-accent-foreground: #ecedf0;
+  --sidebar-border: #23272f;
+  --sidebar-ring: #e2c044;
 
-  --gradient-gold: linear-gradient(
-    100deg,
-    oklch(0.72 0.11 75),
-    oklch(0.88 0.14 95)
-  );
+  --gradient-gold: linear-gradient(100deg, #c9a832, #eed67a);
   --gradient-vault: radial-gradient(
     120% 120% at 0% 0%,
-    oklch(0.28 0.06 240) 0%,
-    oklch(0.19 0.045 265) 60%
+    #1a1f2a 0%,
+    #0f1115 60%
   );
-  --shadow-elevated: 0 24px 60px -24px oklch(0.05 0.03 265 / 0.9);
-  --glow-gold: 0 0 0 1px oklch(0.78 0.13 88 / 0.35),
-    0 12px 40px -16px oklch(0.78 0.13 88 / 0.45);
-  --glow-cyan: 0 0 0 1px oklch(0.82 0.13 200 / 0.35),
-    0 12px 40px -16px oklch(0.82 0.13 200 / 0.45);
+  --shadow-elevated: 0 24px 60px -24px rgb(0 0 0 / 0.9);
+  --glow-gold: 0 0 0 1px rgb(226 192 68 / 0.35),
+    0 12px 40px -16px rgb(226 192 68 / 0.45);
+  --glow-steel: 0 0 0 1px rgb(142 153 168 / 0.35),
+    0 12px 40px -16px rgb(142 153 168 / 0.45);
 }
 
 @layer base {
@@ -163,8 +171,8 @@
   box-shadow: var(--glow-gold);
 }
 
-@utility glow-cyan {
-  box-shadow: var(--glow-cyan);
+@utility glow-steel {
+  box-shadow: var(--glow-steel);
 }
 
 @utility hairline {
@@ -184,7 +192,7 @@
 @utility stream-caret {
   &::after {
     content: "▍";
-    color: var(--color-cyan);
+    color: var(--color-steel);
     animation: caret-blink 1s steps(1) infinite;
   }
 }

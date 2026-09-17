@@ -77,14 +77,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: "Aetoes Ops Hub" },
+        { title: "RedCase — The Intelligent Engine for Modern Law" },
         {
           name: "description",
           content:
-            "Executive operations hub for Aetoes Legal: dual-vault research, adversarial brief analysis and Nigerian court deadline tracking.",
+            "RedCase legal intelligence for Aetoes Legal: dual-vault research, adversarial brief analysis and Nigerian court deadline tracking.",
         },
         { name: "author", content: "Aetoes Legal" },
-        { property: "og:title", content: "Aetoes Ops Hub" },
+        {
+          property: "og:title",
+          content: "RedCase — The Intelligent Engine for Modern Law",
+        },
         {
           property: "og:description",
           content:
@@ -108,7 +111,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           rel: "stylesheet",
           href: "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
         },
-        { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+        {
+          rel: "icon",
+          href: "/brand/redcase-mark.svg",
+          type: "image/svg+xml",
+        },
       ],
     }),
 

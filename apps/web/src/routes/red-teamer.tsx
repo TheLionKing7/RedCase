@@ -20,13 +20,13 @@ import type { BattleCard, BattleSeverity } from "@/lib/api/redteam";
 export const Route = createFileRoute("/red-teamer")({
   head: () => ({
     meta: [
-      { title: "Case Red-Teamer — Aetoes Ops Hub" },
+      { title: "Case Red-Teamer — RedCase" },
       {
         name: "description",
         content:
           "Upload an opposing party's brief and generate a Battle Card of procedural flaws, argument strength ratings and binding counter-precedents.",
       },
-      { property: "og:title", content: "Case Red-Teamer — Aetoes Ops Hub" },
+      { property: "og:title", content: "Case Red-Teamer — RedCase" },
       {
         property: "og:description",
         content:
@@ -101,7 +101,7 @@ function RedTeamer() {
           }}
           onClick={() => inputRef.current?.click()}
           className={`panel flex cursor-pointer flex-col items-center justify-center gap-3 border-dashed px-6 py-14 text-center transition-all ${
-            dragging ? "glow-cyan border-cyan" : "hover:border-gold/50"
+            dragging ? "glow-steel border-steel" : "hover:border-gold/50"
           }`}
         >
           <input
@@ -110,7 +110,7 @@ function RedTeamer() {
             className="hidden"
             onChange={(e) => accept(e.target.files?.[0] ?? undefined)}
           />
-          <UploadCloud className="size-9 text-cyan" />
+          <UploadCloud className="size-9 text-steel" />
           <div className="text-base font-semibold">
             {phase === "idle"
               ? "Drop the opposing party's brief here"
@@ -192,7 +192,7 @@ function AuthorityChips({ authority }: { authority: string[] }) {
       {authority.map((a) => (
         <span
           key={a}
-          className="rounded-full border border-cyan/40 px-2 py-0.5 font-mono text-[10px] text-cyan"
+          className="rounded-full border border-steel/40 px-2 py-0.5 font-mono text-[10px] text-steel"
         >
           {a}
         </span>
@@ -262,7 +262,7 @@ function BattleCardView({ card }: { card: BattleCard }) {
                     </span>
                   )}
                 </p>
-                <span className="shrink-0 font-mono text-sm text-cyan">
+                <span className="shrink-0 font-mono text-sm text-steel">
                   {a.strength}/10
                 </span>
               </div>

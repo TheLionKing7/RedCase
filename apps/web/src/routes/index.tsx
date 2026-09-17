@@ -19,13 +19,13 @@ import type { FilterOption } from "@/lib/court-filters";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Vault Search — Aetoes Ops Hub" },
+      { title: "Vault Search — RedCase" },
       {
         name: "description",
         content:
           "Dual-vault legal retrieval across Aetoes internal briefs and the Nigerian Juris OS, with verified PDF page citations.",
       },
-      { property: "og:title", content: "Vault Search — Aetoes Ops Hub" },
+      { property: "og:title", content: "Vault Search — RedCase" },
       {
         property: "og:description",
         content:
@@ -104,7 +104,7 @@ function VaultSearch() {
               name="Nigerian Juris OS"
               meta="41,902 judgments · SC, CA, FHC, NICN"
               tag="ACTIVE"
-              tone="cyan"
+              tone="steel"
             />
           </div>
         </div>
@@ -119,7 +119,7 @@ function VaultSearch() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && run()}
                 placeholder="Ask a question or paste an issue statement…"
-                className="w-full rounded-lg border border-input bg-background/60 py-3 pl-10 pr-4 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:glow-cyan"
+                className="w-full rounded-lg border border-input bg-background/60 py-3 pl-10 pr-4 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:glow-steel"
               />
             </div>
             <button
@@ -222,8 +222,8 @@ function VaultSearch() {
 /** Grounded answer — §3.4: rendered only when every citation verified. */
 function AnswerPanel({ answer }: { answer: string }) {
   return (
-    <section className="panel glow-cyan p-6">
-      <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-cyan">
+    <section className="panel glow-steel p-6">
+      <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
         Grounded Answer
       </div>
       <p className="mt-3 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
@@ -339,10 +339,10 @@ function VaultTile({
   name: string;
   meta: string;
   tag: string;
-  tone: "gold" | "cyan";
+  tone: "gold" | "steel";
 }) {
-  const activeRing = tone === "gold" ? "glow-gold" : "glow-cyan";
-  const accent = tone === "gold" ? "text-gold" : "text-cyan";
+  const activeRing = tone === "gold" ? "glow-gold" : "glow-steel";
+  const accent = tone === "gold" ? "text-gold" : "text-steel";
   return (
     <div
       aria-disabled={disabled || undefined}
