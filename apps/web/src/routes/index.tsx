@@ -14,6 +14,7 @@ import { useVaultQuery } from "@/lib/api/query";
 import { ApiError } from "@/lib/api/client";
 import type { Citation } from "@/lib/api/types";
 import { COURT_LEVELS, RATIO_TAGS } from "@/lib/court-filters";
+import type { FilterOption } from "@/lib/court-filters";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -60,8 +61,8 @@ function VaultSearch() {
   const [query, setQuery] = useState(
     "condition precedent jurisdiction originating process",
   );
-  const [court, setCourt] = useState<string>("All Courts");
-  const [ratio, setRatio] = useState<string>("All Ratios");
+  const [court, setCourt] = useState<string>(""); // "" = All Courts (no filter)
+  const [ratio, setRatio] = useState<string>(""); // "" = All Ratios (no filter)
   const [year, setYear] = useState("Any year");
   const [hasRun, setHasRun] = useState(false);
 
@@ -74,8 +75,8 @@ function VaultSearch() {
     setHasRun(true);
     vaultQuery.mutate({
       question: query.trim(),
-      court_level: court === "All Courts" ? null : court,
-      ratio_decidendi: ratio === "All Ratios" ? null : ratio,
+      court_level: court || null,
+      ratio_decidendi: ratio || null,
       ...yearRange(year),
     });
   }
@@ -153,11 +154,11 @@ function VaultSearch() {
               value={year}
               onChange={setYear}
               options={[
-                "Any year",
-                "2020–2026",
-                "2010–2019",
-                "2000–2009",
-                "Pre-2000",
+                { label: "Any year", value: "Any year" },
+                { label: "2020–2026", value: "2020–2026" },
+                { label: "2010–2019", value: "2010–2019" },
+                { label: "2000–2009", value: "2000–2009" },
+                { label: "Pre-2000", value: "Pre-2000" },
               ]}
             />
             <Filter
@@ -384,7 +385,7 @@ function Filter({
   label: string;
   value: string;
   onChange: (v: string) => void;
-  options: readonly string[];
+  options: readonly FilterOption[];
 }) {
   return (
     <label className="block">
@@ -397,8 +398,8 @@ function Filter({
         className="mt-1.5 w-full rounded-lg border border-input bg-background/60 px-3 py-2.5 text-sm outline-none focus:border-gold"
       >
         {options.map((o) => (
-          <option key={o} value={o} className="bg-surface">
-            {o}
+          <option key={o.label} value={o.value} className="bg-surface">
+            {o.label}
           </option>
         ))}
       </select>
