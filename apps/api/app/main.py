@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
 from app.routers.analyses import router as analyses_router
+from app.routers.channels import router as channels_router
 from app.routers.query import router as query_router
 
 log = get_logger("redcase.boot")
@@ -69,6 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(_v1_router())
     app.include_router(query_router)
     app.include_router(analyses_router)
+    app.include_router(channels_router)
     return app
 
 

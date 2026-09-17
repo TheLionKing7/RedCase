@@ -59,6 +59,10 @@ def app_db_url(tmp_path_factory: pytest.TempPathFactory) -> str:
                 "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public "
                 f"TO {APP_ROLE}"
             )
+            await conn.execute(
+                "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public "
+                f"TO {APP_ROLE}"
+            )
         finally:
             await conn.close()
 
