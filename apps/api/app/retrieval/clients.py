@@ -23,7 +23,7 @@ log = get_logger("redcase.retrieval.clients")
 
 
 class Embedder(Protocol):
-    """texts -> one vector per text (3072-dim, EMBEDDING_DIMS)."""
+    """texts -> one vector per text (EMBEDDING_DIMS — 2048 platform-wide)."""
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
 
@@ -73,29 +73,34 @@ class AnthropicLLM:
 
 def make_embedder(settings: Settings) -> Embedder:
     """Resolve the embedding backend from config. Raises RuntimeError (to be
-    mapped to 503 by the caller) when no credential is provisioned."""
+    mapped to 503 by the caller) when no credential is provisioned.
+
+    Precedence: ZDR OpenAI proxy first (the design's primary path), then
+    OpenRouter (the provisioned path — owner 2026-09-17), NVIDIA NIM last:
+    the owner's NVAPI key was verified to 404 on integrate.api.nvidia.com
+    for the :free model id (that id is an OpenRouter identifier), so the
+    NIM branch is kept only for genuine NIM keys + NIM model ids."""
     if settings.openai_api_key:
         oai = AsyncOpenAI(
             api_key=settings.openai_api_key.get_secret_value(),
             base_url=settings.zdr_embed_proxy or None,
         )
         return OpenAIEmbedder(oai, settings.embed_model)
-    if settings.nvidia_api_key:
-        # NVIDIA NIM — OpenAI-compatible embeddings API (owner 2026-09-17).
-        oai = AsyncOpenAI(
-            api_key=settings.nvidia_api_key.get_secret_value(),
-            base_url=settings.nvidia_base_url,
-        )
-        return OpenAIEmbedder(oai, settings.nvidia_embed_model)
     if settings.openrouter_api_key:
         oai = AsyncOpenAI(
             api_key=settings.openrouter_api_key.get_secret_value(),
             base_url="https://openrouter.ai/api/v1",
         )
         return OpenAIEmbedder(oai, settings.embed_model)
+    if settings.nvidia_api_key:
+        oai = AsyncOpenAI(
+            api_key=settings.nvidia_api_key.get_secret_value(),
+            base_url=settings.nvidia_base_url,
+        )
+        return OpenAIEmbedder(oai, settings.nvidia_embed_model)
     raise RuntimeError(
-        "No embedding credentials provisioned (OPENAI_API_KEY, NVAPI_KEY or"
-        " OPENROUTER_API_KEY) — cannot embed queries."
+        "No embedding credentials provisioned (OPENAI_API_KEY,"
+        " OPENROUTER_API_KEY or NVAPI_KEY) — cannot embed queries."
     )
 
 
