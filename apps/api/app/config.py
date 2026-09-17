@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     openrouter_api_key: SecretStr | None = None  # OpenAI-compatible embeddings fallback
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
+    supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
+    storage_public_url: str | None = None  # public URL prefix for source_pdf_path
+
+    # Web
+    cors_origins: str = "http://localhost:7100,http://127.0.0.1:7100"
 
     # Retrieval tuning — HANDOFF.md 3 env config
     embed_model: str = "text-embedding-3-large"

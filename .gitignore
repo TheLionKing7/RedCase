@@ -26,3 +26,6 @@ node_modules/
 dist/
 .vite/
 !apps/web/.env.example
+
+# Owner-supplied benchmark corpus (copyrighted judgments) — never commit
+/fixtures/

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "B01",
+    "question": "What test did the Supreme Court lay down in Madukolu v. Nkemdilim for determining when a court is competent to hear a matter?",
+    "expect": "answer"
+  },
+  {
+    "id": "B02",
+    "question": "In Amaechi v. INEC, what was the Supreme Court's holding on whether a political party's candidate substitution after nomination required INEC's consent?",
+    "expect": "answer"
+  },
+  {
+    "id": "B03",
+    "question": "According to Adegoke Motors v. Adesanya, when does the doctrine of stare decisis permit a lower court to depart from a Supreme Court decision?",
+    "expect": "answer"
+  },
+  {
+    "id": "B04",
+    "question": "What did the Supreme Court hold in Abacha v. Fawehinmi regarding the domestic applicability of the African Charter in Nigerian courts?",
+    "expect": "answer"
+  },
+  {
+    "id": "B05",
+    "question": "In Senator Adesanya v. FRN, why did the Supreme Court hold that the plaintiff lacked locus standi to challenge the EFCC Act?",
+    "expect": "answer"
+  },
+  {
+    "id": "B06",
+    "question": "What did the Supreme Court decide in Obikoya v. Wema Bank about a banker's duty of care and verification of signatures?",
+    "expect": "answer"
+  },
+  {
+    "id": "B07",
+    "question": "What is the ratio in Ondo State Government v. Adewumi concerning the tenure of local government chairmen?",
+    "expect": "answer"
+  },
+  {
+    "id": "B08",
+    "question": "Has the Supreme Court of Nigeria ever held that a statute may be invalidated solely because it was enacted by a military decree? Cite the case.",
+    "expect": "answer"
+  },
+  {
+    "id": "B09",
+    "question": "What is the leading Nigerian Supreme Court authority on the tort of negligent misstatement by a public authority, and what did it hold?",
+    "expect": "refusal"
+  },
+  {
+    "id": "B10",
+    "question": "Under Nigerian Supreme Court precedent, may a party recover punitive damages for breach of a commercial contract of sale of goods? Cite the binding authority.",
+    "expect": "refusal"
+  }
+]

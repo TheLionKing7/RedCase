@@ -3,19 +3,22 @@
 Boot contract:
 - structlog with the mandatory ZDR redaction filter is configured exactly once,
   before any route is served (HANDOFF.md 2.1).
-- The app mounts under /v1/* (and later /v1/slack/*, Phase 2). Task 1.1
-  registers the API skeleton only; /v1/query lands in Task 1.4.
+- The app mounts under /v1/* (and later /v1/slack/*, Phase 2). /v1/query
+  landed in Task 1.4.
 - Secrets are NOT required to boot (see config.Settings); code paths that need
-  them call Settings.require_secrets() at use time.
+  them call Settings.require_secrets() or surface 503 at use time.
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import asyncpg
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
+from app.routers.query import router as query_router
 
 log = get_logger("redcase.boot")
 
@@ -29,7 +32,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app=settings.app_name,
         embed_model=settings.embed_model,
     )
+    pool: asyncpg.Pool | None = None
+    if settings.database_url:
+        pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=10)
+    else:
+        log.warn("api_no_database", note="database_url unset — /v1/query returns 503")
+    app.state.db_pool = pool
     yield
+    if pool is not None:
+        await pool.close()
     log.info("api_stopped")
 
 
@@ -45,12 +56,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    # Dev CORS for the apps/web vite dev server (7100). Locked down to the
+    # configured origin list; production serves the frontend same-origin.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
+        allow_methods=["POST", "GET"],
+        allow_headers=["authorization", "content-type"],
+    )
+
     app.include_router(_v1_router())
+    app.include_router(query_router)
     return app
 
 
 def _v1_router() -> APIRouter:
-    """API skeleton (Task 1.1). Endpoints are added per task from Task 1.4 on."""
     router = APIRouter(prefix="/v1")
 
     @router.get("/health")
