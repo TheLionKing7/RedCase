@@ -106,7 +106,7 @@ async def run(args: argparse.Namespace) -> None:
                 " OPENROUTER_API_KEY, or pass --no-embed for backfill-deferred"
                 " ingest (Task 1.3 deferred-DoD path)."
             )
-        oai = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        oai = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=180.0, max_retries=4)
         embedder = ZdrProxyEmbedder(oai, settings.embed_model)
     sem = asyncio.Semaphore(args.concurrency)
 
