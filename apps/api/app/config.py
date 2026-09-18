@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     # 205s-tail outliers recorded in query_audit (measuring first, then
     # capping, would report a defect already scheduled for removal).
     answer_timeout_s: float = 20.0
+    # Per-call completion cap. Bounds spend per answer (OpenRouter's
+    # affordability pre-check sizes against max_tokens), and grounded legal
+    # answers fit comfortably — the largest observed battery answer is
+    # <2k tokens; the old 16k+ row was a passage-echo artifact, now stripped.
+    answer_max_tokens: int = 4096
 
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""

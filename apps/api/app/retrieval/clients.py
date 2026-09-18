@@ -77,18 +77,21 @@ class AnthropicLLM:
 class OpenAICompatLLM:
     """OpenAI-compatible chat endpoint — the fallback answer LLM when no
     Anthropic key is provisioned. Used for DeepSeek (owner-offered) and,
-    failing that, any model served through the already-provisioned
-    OpenRouter key (``settings.llm_model``). Same behavioural contract as
-    AnthropicLLM: no body logging, deterministic temperature."""
+    per owner ruling 2026-09-18, OpenRouter gpt-4o (the platform primary).
+    Same behavioural contract as AnthropicLLM: no body logging, deterministic
+    temperature, and a construction-time completion cap (bounds spend per
+    answer and satisfies OpenRouter's affordability pre-check)."""
 
-    def __init__(self, client: AsyncOpenAI, model: str) -> None:
+    def __init__(self, client: AsyncOpenAI, model: str, max_tokens: int = 4096) -> None:
         self._client = client
         self._model = model
+        self._max_tokens = max_tokens
 
     async def answer(self, system: str, user: str) -> str:
         r = await self._client.chat.completions.create(
             model=self._model,
             temperature=0,
+            max_tokens=self._max_tokens,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -149,6 +152,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     provider's credential is not provisioned. All providers below are
     OpenAI-compatible except anthropic, so this stays config-only."""
     key: SecretStr | None = {
+        "cerebras": settings.cerebras_api_key,
         "groq": settings.groq_api_key,
         "deepseek": settings.deepseek_api_key,
         "openrouter": settings.openrouter_api_key,
@@ -159,6 +163,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     if name == "anthropic":
         return AnthropicLLM(AsyncAnthropic(api_key=key.get_secret_value()))
     base_url, model = {
+        "cerebras": (settings.cerebras_base_url, settings.cerebras_model),
         "groq": (settings.groq_base_url, settings.groq_model),
         "deepseek": (settings.deepseek_base_url, settings.deepseek_model),
         "openrouter": ("https://openrouter.ai/api/v1", settings.llm_model),
@@ -169,7 +174,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
         timeout=180.0,
         max_retries=4,
     )
-    return OpenAICompatLLM(client, model)
+    return OpenAICompatLLM(client, model, max_tokens=settings.answer_max_tokens)
 
 
 def make_llm(settings: Settings) -> AnswerLLM:
