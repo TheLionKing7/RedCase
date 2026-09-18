@@ -18,6 +18,7 @@ stay deferred-pending-credentials per owner instruction; they live in
 test_citation_battery.py and pytest.skip when unprovisioned.
 """
 
+import asyncio
 import hashlib
 import json
 import re
@@ -350,6 +351,41 @@ class TestAnswerQuestion:
                     settings=Settings(_env_file=None),
                     embedder=ConstantEmbedder(), llm=GoodLLM(),
                 )
+        finally:
+            await conn.close()
+
+    async def test_answer_timeout_ceiling_refuses_and_audits_both_attempts(
+        self, app_db_url: str, tmp_path, question: str
+    ) -> None:
+        """answer_timeout_s ceiling: an answer call that overruns is logged
+        as a refusal for that attempt, the one-retry policy fires once, and
+        BOTH attempts land in query_audit (append-only, insertion-ordered)."""
+
+        class SlowLLM:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def answer(self, system: str, user: str) -> str:
+                self.calls += 1
+                await asyncio.sleep(30)
+                return "never reached"
+
+        await _ingest_doc(app_db_url, tmp_path)
+        conn = await connect_scoped(app_db_url)
+        llm = SlowLLM()
+        try:
+            result = await answer_question(
+                question, {}, conn, SEED_TENANT_AETOES, "user-1",
+                settings=Settings(_env_file=None, answer_timeout_s=0.1),
+                embedder=ConstantEmbedder(), llm=llm,
+            )
+            assert result["refusal"] is True
+            assert result["citations"] == []
+            assert llm.calls == 2  # ceiling per attempt; retry policy applies
+            rows = await _audit_rows(conn, _qhash(question))
+            assert len(rows) == 2  # one append-only row per attempt
+            assert all(r["threshold_passed"] is True for r in rows)
+            assert all(r["answer_text"] is None for r in rows)
         finally:
             await conn.close()
 

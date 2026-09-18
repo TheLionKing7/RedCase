@@ -18,6 +18,7 @@ Adaptations from the design pseudocode, each recorded (HANDOFF.md rule 3):
 ZDR: no document text or question bodies in log lines — ids, counts, hashes.
 """
 
+import asyncio
 import hashlib
 import re
 import time
@@ -299,9 +300,12 @@ async def answer_question(
         persisted."""
         system = GROUNDED_SYSTEM
         for regeneration in range(2):
-            msg = await llm.answer(
-                system,
-                GROUNDED_USER.format(question=question, filters=filters, passages=passages),
+            msg = await asyncio.wait_for(
+                llm.answer(
+                    system,
+                    GROUNDED_USER.format(question=question, filters=filters, passages=passages),
+                ),
+                timeout=settings.answer_timeout_s,
             )
             try:
                 citations = verify_citations(
@@ -323,6 +327,22 @@ async def answer_question(
     # one regeneration inside _answer_once). EVERY attempt writes its own
     # query_audit row (attempt 1 and, when reached, attempt 2), so per-attempt
     # refusal outcomes stay auditable.
+    async def _audit_refusal(attempt: int, reason: str) -> None:
+        """Log + audit ONE failed attempt. Refusal reasons are observability
+        metadata in the structlog event only — the audit table deliberately
+        stores refusal rows identically (answer_text NULL), keeping the
+        append-only contract free of in-place-mutable columns."""
+        await write_audit(
+            db,
+            _with_latency(dict(base_audit, answer_text=None, citations=[])),
+        )
+        log.info(
+            "query_refused",
+            reason=reason,
+            attempt=attempt,
+            question_hash=base_audit["question_hash"],
+        )
+
     for attempt in (1, 2):
         try:
             answer, citations, regenerations = await _answer_once()
@@ -352,27 +372,16 @@ async def answer_question(
                 "citations": [],
                 "refusal": True,
             }
+        except TimeoutError:
+            # answer_timeout_s ceiling: this attempt's answer call overran.
+            # Logged as a refusal; the retry policy gets the one retry.
+            await _audit_refusal(attempt, "answer_timeout")
+            continue
         if not citations:
             # GROUNDED_SYSTEM rule 3 (§3.2): the LLM found the passages
             # unsupported and answered with the exact no-precedence sentence
             # and no <citations> block. Audit THIS attempt, then retry once.
-            await write_audit(
-                db,
-                _with_latency(
-                    dict(
-                        base_audit,
-                        answer_text=None,
-                        citations=[],
-                        grounding_refusal=True,
-                    )
-                ),
-            )
-            log.info(
-                "query_refused",
-                reason="insufficient_grounding",
-                attempt=attempt,
-                question_hash=base_audit["question_hash"],
-            )
+            await _audit_refusal(attempt, "insufficient_grounding")
             continue
         await write_audit(
             db,

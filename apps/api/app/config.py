@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     # Chat model served through OpenRouter when no Anthropic/DeepSeek key
     # is provisioned (the citation battery's answer LLM).
     llm_model: str = "deepseek/deepseek-chat-v3-1217"
+    # Answer-call ceiling (Task 1.7 step 2, owner-approved 2026-09-18): a
+    # single answer LLM call exceeding this is logged as a refusal for that
+    # attempt and the one-retry-on-refusal policy applies. Removes the
+    # 205s-tail outliers recorded in query_audit (measuring first, then
+    # capping, would report a defect already scheduled for removal).
+    answer_timeout_s: float = 20.0
 
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""
