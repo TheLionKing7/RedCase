@@ -59,7 +59,10 @@ def _parse_citation(text: str, fallback_stem: str) -> tuple[str, int | None, boo
     for _series, pattern in CITATION_SERIES:
         m = pattern.search(text)
         if m:
-            return m.group(0), int(m.group(1)), True
+            # PDFs break citations across lines and \s matches newlines —
+            # store the match single-lined so citation cards render clean
+            # (citation_norm collapses whitespace for dedupe regardless).
+            return " ".join(m.group(0).split()), int(m.group(1)), True
     return fallback_stem, None, False
 
 

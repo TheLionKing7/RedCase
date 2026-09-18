@@ -111,3 +111,13 @@ class TestMultiSeriesCitation:
         )
         assert meta.citation == "Stem"
         assert meta.year == 1961
+
+    def test_citation_broken_across_lines_is_stored_single_line(self) -> None:
+        """PDFs split citations at line breaks and \s matches newlines —
+        the stored citation must be whitespace-normalized, not raw."""
+        meta = extract_metadata(
+            self.HEADER + "(1984)\n1 SCNLR 192\nCORAM: A, JSC\n1. ratio.\n", "x"
+        )
+        assert meta.citation == "(1984) 1 SCNLR 192"
+        assert "\n" not in meta.citation
+        assert meta.year == 1984
