@@ -1,15 +1,16 @@
-"""Legal Workbench analysis endpoints — Feature-Addendum §3.2, Step A.
+"""Legal Workbench analysis endpoints — Feature-Addendum §3.2, Steps A + C.
 
   POST /v1/documents/{id}/analyze   body {prompt_pack, matter_id?} → 202 {analysis_id}
-  GET  /v1/analyses/{id}            → status + battle-card output
+  GET  /v1/analyses/{id}            → status + tabbed pack output
 
-The worker runs the Phase 3 redteam engine (prompt_pack='ADVERSAL_BRIEF') as
-a FastAPI background task on a pooled connection with the RLS GUC set inside
-its own transaction. Audit integration (Step A req 4): exactly one
-query_audit row per completed analysis, metadata only per ZDR —
-question_hash is a SHA-256 of the analysis descriptor (never document text),
-filters carry {document_id, prompt_pack, status}, and analysis_id links the
-row. An audit-write failure HALTs the worker and marks the analysis FAILED
+The worker runs the §2.1 four-agent chain through the §3.3 prompt-pack
+registry (ADVERSAL_BRIEF / SUMMONS_RESPONSE / CONTRACT_REVIEW) as a FastAPI
+background task on a pooled connection with the RLS GUC set inside its own
+transaction. Audit integration (Step A req 4): exactly one query_audit row
+per completed analysis, metadata only per ZDR — question_hash is a SHA-256
+of the analysis descriptor (never document text), filters carry
+{document_id, prompt_pack, status}, and analysis_id links the row. An
+audit-write failure HALTs the worker and marks the analysis FAILED
 (convention 3).
 """
 
@@ -35,14 +36,16 @@ from app.deps import TenantContext, get_tenant_context
 from app.entitlements import require_feature
 from app.middleware.audit import write_audit
 from app.middleware.zdr import get_logger
-from app.redteam.engine import run_redteam_analysis
+from app.redteam.engine import run_pack_analysis
+from app.redteam.packs import PACKS
 
 log = get_logger("redcase.analyses")
 
 router = APIRouter(prefix="/v1", tags=["analyses"])
 
-# Step A ships one pack; §3.3 packs land in Step C.
-ALLOWED_PACKS = ("ADVERSAL_BRIEF",)
+# §3.3 pack registry (Step C) — the endpoint validates prompt_pack against
+# this; ADVERSAL_BRIEF is the Step A pack.
+ALLOWED_PACKS = tuple(PACKS)
 
 
 class AnalyzeRequest(BaseModel):
@@ -80,20 +83,21 @@ async def _run_analysis_worker(
     failure is recorded on the analysis row itself."""
     started = time.monotonic()
     try:
+        pack = PACKS[prompt_pack]
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(
                     "SELECT set_config('app.tenant_id', $1, true)", tenant_id
                 )
-                card = await run_redteam_analysis(
-                    document_id, tenant_id, conn, settings=settings
+                output = await run_pack_analysis(
+                    pack, document_id, tenant_id, conn, settings=settings
                 )
-                output = card.model_dump(by_alias=True, mode="json")
+                output_json = output.model_dump(by_alias=True, mode="json")
                 await conn.execute(
                     "UPDATE document_analyses SET status = 'COMPLETE', output = $2::jsonb"
                     " WHERE id = $1",
                     uuid.UUID(analysis_id),
-                    json.dumps(output),
+                    json.dumps(output_json),
                 )
                 await write_audit(
                     conn,
@@ -108,7 +112,7 @@ async def _run_analysis_worker(
                             "prompt_pack": prompt_pack,
                             "status": "COMPLETE",
                         },
-                        "threshold_passed": card.critic_verdict.pass_,
+                        "threshold_passed": output.critic_verdict.pass_,
                         "analysis_id": analysis_id,
                         "latency_ms": int((time.monotonic() - started) * 1000),
                     },
@@ -117,7 +121,8 @@ async def _run_analysis_worker(
             "analysis_complete",
             analysis_id=analysis_id,
             document_id=document_id,
-            critic_pass=card.critic_verdict.pass_,
+            prompt_pack=prompt_pack,
+            critic_pass=output.critic_verdict.pass_,
         )
     except Exception as exc:  # noqa: BLE001 — worker must record, not explode
         log.warn("analysis_failed", analysis_id=analysis_id, error=str(exc))
@@ -167,8 +172,8 @@ async def start_analysis(
     if body.prompt_pack not in ALLOWED_PACKS:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"prompt_pack must be one of {ALLOWED_PACKS} (Step A ships"
-            " ADVERSAL_BRIEF only; §3.3 packs land in Step C)",
+            detail=f"prompt_pack must be one of {ALLOWED_PACKS} (Addendum"
+            " 3.3 registry: ADVERSAL_BRIEF, SUMMONS_RESPONSE, CONTRACT_REVIEW)",
         )
     doc = await ctx.db.fetchval(
         "SELECT id FROM documents WHERE id = $1::uuid", document_id

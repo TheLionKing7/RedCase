@@ -69,3 +69,115 @@ class BattleCard(BaseModel):
     critic_verdict: CriticVerdict = Field(
         default_factory=lambda: CriticVerdict(**{"pass": False})
     )
+
+
+# ---------------------------------------------------------------------------
+# Prompt-pack schemas — Feature-Addendum §3.3 (Step C). Both packs emit the
+# §3.3 tab mapping "Overview, Arguments, Law" as ``sections``; the engine
+# composes the same envelope (document pin, timestamp, critic verdict) as the
+# battle card, so the /v1/analyses/{id} wire shape is uniform across packs.
+# ---------------------------------------------------------------------------
+
+
+class SummonsGraph(BaseModel):
+    """Extractor output for SUMMONS_RESPONSE (§3.3: claims served)."""
+
+    parties: dict[str, str] = Field(default_factory=dict)
+    court: str = ""
+    case_number: str = ""
+    served_on: str = ""
+    return_date: str = ""
+    claims: list[Claim] = Field(default_factory=list)
+    document_type: Literal["SUMMONS"]
+
+
+class ServedClaim(BaseModel):
+    """One served claim -> response deadline & strategy (§3.3)."""
+
+    claim: str
+    response_deadline: str = ""
+    strategy: str = ""
+    authority: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    manual_review: bool = False
+
+
+class SummonsOverview(BaseModel):
+    court: str = ""
+    case_number: str = ""
+    served_on: str = ""
+    return_date: str = ""
+    claimant: str = ""
+    defendant: str = ""
+    claims_served: int = 0
+    headline_risks: list[str] = Field(default_factory=list)
+
+
+class LawPoint(BaseModel):
+    point: str
+    authority: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+
+
+class SummonsSections(BaseModel):
+    overview: SummonsOverview
+    arguments: list[ServedClaim] = Field(default_factory=list)
+    law: list[LawPoint] = Field(default_factory=list)
+
+
+class SummonsResponseOutput(BaseModel):
+    matter_id: str | None = None
+    source_document_id: str = ""
+    generated_at: str = ""
+    sections: SummonsSections
+    critic_verdict: CriticVerdict = Field(
+        default_factory=lambda: CriticVerdict(**{"pass": False})
+    )
+
+
+class ContractGraph(BaseModel):
+    """Extractor output for CONTRACT_REVIEW (§3.3: clause extraction).
+
+    Clauses reuse the Claim shape so the engine's per-claim retrieval loop
+    is pack-agnostic; clause text carries the clause number and heading."""
+
+    parties: dict[str, str] = Field(default_factory=dict)
+    agreement_date: str = ""
+    clauses: list[Claim] = Field(default_factory=list)
+    document_type: Literal["CONTRACT"]
+
+
+class ClauseFinding(BaseModel):
+    """One clause -> risk flag + deviation note (§3.3)."""
+
+    clause: str
+    risk: Literal["LOW", "MED", "HIGH"]
+    rationale: str
+    deviation: str = ""  # vs firm standard template; Phase 2 Vault A router
+    authority: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    manual_review: bool = False
+
+
+class ContractOverview(BaseModel):
+    parties: dict[str, str] = Field(default_factory=dict)
+    agreement_date: str = ""
+    clause_count: int = 0
+    overall_risk: Literal["LOW", "MED", "HIGH"] = "LOW"
+    headline_flags: list[str] = Field(default_factory=list)
+
+
+class ContractSections(BaseModel):
+    overview: ContractOverview
+    arguments: list[ClauseFinding] = Field(default_factory=list)
+    law: list[LawPoint] = Field(default_factory=list)
+
+
+class ContractReviewOutput(BaseModel):
+    matter_id: str | None = None
+    source_document_id: str = ""
+    generated_at: str = ""
+    sections: ContractSections
+    critic_verdict: CriticVerdict = Field(
+        default_factory=lambda: CriticVerdict(**{"pass": False})
+    )

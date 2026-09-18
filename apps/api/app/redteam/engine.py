@@ -16,24 +16,32 @@ Each adaptation is recorded (HANDOFF.md rule 3):
     the matcher then drops anything that cannot be verified, and the critic
     decides pass/downgrade. Refusal contracts stay reserved for /v1/query
     and (later) Expert Chat.
+  * §3.3 prompt packs (Step C): the chain is pack-parameterized via
+    ``run_pack_analysis(pack, ...)``; ``run_redteam_analysis`` is the
+    ADVERSAL_BRIEF registration, kept for existing callers/tests.
 
 ZDR: no document text, prompt bodies, or card content in log lines — ids,
 counts, and agent-stage names only.
 """
 
+from __future__ import annotations
+
 import json
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
 from pydantic import BaseModel
 
 from app.config import Settings
 from app.middleware.zdr import get_logger
-from app.redteam.schemas import BattleCard, ClaimGraph, CriticVerdict
+from app.redteam.schemas import BattleCard, CriticVerdict
 from app.retrieval.clients import AnswerLLM, Embedder, make_embedder, make_llm
 from app.retrieval.service import RetrievalService
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids import cycle
+    from app.redteam.packs import PromptPack
 
 log = get_logger("redcase.redteam")
 
@@ -119,34 +127,52 @@ async def _load_document_text(db: asyncpg.Connection, document_id: str) -> str:
     return "\n\n".join(r["chunk_text"] for r in rows)
 
 
-def drop_invalid_citations(card: BattleCard, match: dict[str, Any]) -> int:
+def drop_invalid_citations(
+    card: BaseModel, match: dict[str, Any], match_sections: tuple[str, ...]
+) -> int:
     """Matcher enforcement: citations not in ``invalid`` stay; invalid UUIDs
     are removed from every authority list. Items left with no authority go to
-    manual review (they could not be verified)."""
-    invalid = {m["uuid"] for m in match.get("invalid", []) if "uuid" in m}
+    manual review (they could not be verified). Pack-agnostic: the caller
+    names the ``sections`` attributes whose items carry ``authority``."""
+    invalid = set()
+    for m in match.get("invalid", []):
+        if "uuid" not in m:
+            continue
+        u = m["uuid"]
+        # The matcher's echo format is not contractual (a production LLM may
+        # return the bare uuid or the B:-prefixed citation form), so compare
+        # against both representations.
+        invalid.add(u)
+        invalid.add(u[2:] if u.startswith("B:") else f"B:{u}")
     dropped = 0
-    for section_name in ("procedural_flaws", "opposing_arguments"):
-        for item in getattr(card.sections, section_name):
+    sections = card.sections
+    for section_name in match_sections:
+        for item in getattr(sections, section_name):
+            if not hasattr(item, "authority"):
+                continue
             kept = [a for a in item.authority if a not in invalid]
             dropped += len(item.authority) - len(kept)
             item.authority = kept
-            if section_name == "opposing_arguments" and not kept:
+            if not kept and hasattr(item, "manual_review"):
                 item.manual_review = True
     return dropped
 
 
-def downgrade_sections(card: BattleCard, downgrade: list[str]) -> None:
+def downgrade_sections(card: BaseModel, downgrade: list[str]) -> None:
     """Critic downgrade: mark affected items for manual review so the UI can
-    badge them [MANUAL REVIEW] (Phase3 §2.2)."""
+    badge them [MANUAL REVIEW] (Phase3 §2.2). HIGH->LOW remap applies only to
+    battle-card flaws (severity field); other packs get manual_review only."""
     if "procedural_flaws" in downgrade:
-        for f in card.sections.procedural_flaws:
+        for f in card.sections.procedural_flaws:  # type: ignore[attr-defined]
             f.severity = "LOW"
-    if "opposing_arguments" in downgrade:
-        for a in card.sections.opposing_arguments:
-            a.manual_review = True
+    for name in downgrade:
+        for item in getattr(card.sections, name, []):
+            if hasattr(item, "manual_review"):
+                item.manual_review = True
 
 
-async def run_redteam_analysis(
+async def run_pack_analysis(
+    pack: PromptPack,
     document_id: str,
     tenant_id: str,
     db: asyncpg.Connection,
@@ -154,26 +180,34 @@ async def run_redteam_analysis(
     settings: Settings,
     llm: AnswerLLM | None = None,
     embedder: Embedder | None = None,
-) -> BattleCard:
-    """The §2.1 chain: Extractor -> per-claim Vault B retrieval -> Strategist
-    -> Matcher -> Critic (one regeneration cap). Returns a schema-valid
-    BattleCard; authority UUIDs are matcher-verified against retrieved
+) -> BaseModel:
+    """The §2.1 chain, pack-parameterized (§3.3, Step C): pack Extractor ->
+    per-claim Vault B retrieval -> pack Specialist -> Matcher -> Critic
+    (one regeneration cap). Returns a schema-valid pack output (BattleCard
+    for ADVERSAL_BRIEF, SummonsResponseOutput / ContractReviewOutput for
+    the §3.3 packs); authority UUIDs are matcher-verified against retrieved
     context."""
     llm = llm or make_llm(settings)
     embedder = embedder or make_embedder(settings)
-    log.info("redteam_start", document_id=document_id)
+    log.info("pack_analysis_start", pack=pack.name, document_id=document_id)
 
     text = await _load_document_text(db, document_id)
-    claims: ClaimGraph = await run_agent(  # type: ignore[assignment]
-        llm, EXTRACTOR, {"document_text": text}, ClaimGraph
+    graph: BaseModel = await run_agent(  # type: ignore[assignment]
+        llm, pack.extractor_prompt, {"document_text": text}, pack.extractor_schema
     )
-    log.info("redteam_extracted", document_id=document_id, claims=len(claims.claims))
+    # Every pack extractor exposes its claim-shaped items under a section
+    # list: `claims` (ADVERSAL_BRIEF, SUMMONS_RESPONSE) or `clauses`
+    # (CONTRACT_REVIEW).
+    claims = getattr(graph, "claims", None) or graph.clauses
+    log.info(
+        "pack_extracted", pack=pack.name, document_id=document_id, claims=len(claims)
+    )
 
     # Per-claim retrieval (§2.1): LEGAL claims each get a query; PROCEDURAL
     # claims share one combined query.
     svc = RetrievalService(db, tenant_id)
-    legal = [c for c in claims.claims if c.type == "LEGAL"]
-    proc = [c for c in claims.claims if c.type == "PROCEDURAL"]
+    legal = [c for c in claims if c.type == "LEGAL"]
+    proc = [c for c in claims if c.type == "PROCEDURAL"]
     queries = [c.text for c in legal]
     keys: list[Any] = [*legal]
     if proc:
@@ -192,31 +226,31 @@ async def run_redteam_analysis(
         for r in rows or []:
             uuids.add(f"B:{r['document_id']}")
 
-    card: BattleCard | None = None
+    output: BaseModel | None = None
     critic_feedback = ""
     for attempt in range(MAX_REGENERATIONS + 1):
-        strategist = STRATEGIST + (
+        specialist = pack.specialist_prompt + (
             f"\n<critic_feedback>{critic_feedback}</critic_feedback>"
             if critic_feedback
             else ""
         )
-        card = await run_agent(  # type: ignore[assignment]
+        output = await run_agent(  # type: ignore[assignment]
             llm,
-            strategist,
+            specialist,
             {
-                "claims": claims.model_dump(),
+                "extracted": graph.model_dump(),
                 "contexts": contexts,
                 "context_uuids": sorted(uuids),
             },
-            BattleCard,
+            pack.output_schema,
         )
-        card.source_document_id = document_id
-        card.generated_at = datetime.now(UTC).isoformat()
+        output.source_document_id = document_id
+        output.generated_at = datetime.now(UTC).isoformat()
 
-        card_json = card.model_dump(by_alias=True, mode="json")
+        output_json = output.model_dump(by_alias=True, mode="json")
         match_payload = json.dumps(
             {
-                "card": card_json,
+                "output": output_json,
                 "context_uuids": sorted(uuids),
                 "passages": contexts,
             },
@@ -225,13 +259,15 @@ async def run_redteam_analysis(
         raw_match = await llm.answer(
             MATCHER, f"<payload>\n{match_payload}\n</payload>"
         )
-        dropped = drop_invalid_citations(card, _extract_json(raw_match))
-        log.info("redteam_matched", document_id=document_id, dropped=dropped)
+        dropped = drop_invalid_citations(
+            output, _extract_json(raw_match), pack.match_sections
+        )
+        log.info("pack_matched", pack=pack.name, document_id=document_id, dropped=dropped)
 
         verdict_payload = json.dumps(
             {
-                "card": card_json,
-                "claims": claims.model_dump(),
+                "output": output_json,
+                "extracted": graph.model_dump(),
                 "passages": contexts,
             },
             ensure_ascii=False,
@@ -245,20 +281,21 @@ async def run_redteam_analysis(
         passed = bool(critic_json.get("pass"))
         downgrade = list(critic_json.get("downgrade") or [])
         log.info(
-            "redteam_critic",
+            "pack_critic",
+            pack=pack.name,
             document_id=document_id,
             attempt=attempt,
             passed=passed,
             downgrade=downgrade,
         )
         if passed:
-            card.critic_verdict = CriticVerdict(
+            output.critic_verdict = CriticVerdict(
                 **{"pass": True, "regenerations": attempt, "downgraded_sections": []}
             )
             break
         if attempt == MAX_REGENERATIONS:
-            downgrade_sections(card, downgrade)
-            card.critic_verdict = CriticVerdict(
+            downgrade_sections(output, downgrade)
+            output.critic_verdict = CriticVerdict(
                 **{
                     "pass": False,
                     "regenerations": attempt,
@@ -268,12 +305,38 @@ async def run_redteam_analysis(
         else:
             critic_feedback = json.dumps(critic_json.get("section_feedback") or {})
 
-    if card is None:  # pragma: no cover — loop always assigns; guard for mypy
-        raise RuntimeError("redteam loop produced no battle card")
+    if output is None:  # pragma: no cover — loop always assigns; guard for mypy
+        raise RuntimeError("pack loop produced no output")
     log.info(
-        "redteam_complete",
+        "pack_complete",
+        pack=pack.name,
         document_id=document_id,
-        passed=card.critic_verdict.pass_,
-        regenerations=card.critic_verdict.regenerations,
+        passed=output.critic_verdict.pass_,
+        regenerations=output.critic_verdict.regenerations,
     )
-    return card
+    return output
+
+
+async def run_redteam_analysis(
+    document_id: str,
+    tenant_id: str,
+    db: asyncpg.Connection,
+    *,
+    settings: Settings,
+    llm: AnswerLLM | None = None,
+    embedder: Embedder | None = None,
+) -> BattleCard:
+    """ADVERSAL_BRIEF registration of the §2.1 chain — kept verbatim for
+    existing callers (Step A worker contract, seeded-brief tests)."""
+    from app.redteam.packs import PACKS
+
+    card = await run_pack_analysis(
+        PACKS["ADVERSAL_BRIEF"],
+        document_id,
+        tenant_id,
+        db,
+        settings=settings,
+        llm=llm,
+        embedder=embedder,
+    )
+    return card  # type: ignore[no-any-return]
