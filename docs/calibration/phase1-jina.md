@@ -91,3 +91,48 @@ stay ingested but are corpus-quality items:
   gating matrix (top-k x per-doc-cap) must not be judged against, or
   adopted on the basis of, questions whose recall ceiling is the source
   document itself.
+
+## 9. GROUNDED_SYSTEM v2 (2026-09-18) and full battery re-run
+
+**Why.** The retrieval-only recall probe classified the 16 confirmed
+failing IDs: 9 answer-LLM-limited (gold passage already inside the
+top-8 budget, yet refused), 6 ranking-limited (gold at candidate ranks
+5–14), 1 corpus/recall-fail (B31: gold chunk in the database but
+outside the top-20 candidate set). A temp-0 variance probe showed 7 of
+the 9 refusing 3/3 deterministically — systematic over-refusal, not
+serving nondeterminism. Root cause: rule 2's mandatory pinpoint
+`(Case Name, Citation, Court, Year, p. X, ¶ Y (Justice))` is
+unsatisfiable when passages omit the justice, and rule 3's binary
+wording rewarded refusing.
+
+**Change (owner-approved).** Rule 2: citation per proposition remains
+mandatory; justice named only when the passages name one. Rule 3:
+verbatim refusal string unchanged, gated on "no authority on point at
+all", plus the explicit clause "Incomplete support is not a refusal
+condition." Zero-fabrication gates untouched. Deviation from
+Phase1-Design 3.2 recorded per HANDOFF.md rule 3. Retrieval untouched.
+
+**Full battery re-run (50 questions, production defaults: gate 0.52,
+budget 8/3, ratio-exempt off).**
+
+- Total: **45/50 (90%)**, up from 32/50 (64%).
+- Answer-LLM-limited recovery: **6/9** (B14, B22, B25, B26, B27, B49;
+  B13, B20, B45 still refuse — B20/B45 are the known temp-0 flappers).
+- All six ranking-limited IDs now pass (B08, B12, B23, B29, B37, B39).
+- Fabricated citations: **zero** (hard gate).
+- Under-refusal: none — all 17 refusal-type items still refuse.
+- Regressions on previously-passing items: B02 and B18.
+  - **B02** flaked (over-refused once, passed immediately on re-run) —
+    serving nondeterminism, not a prompt effect.
+  - **B18** (conditions for leave to appeal an interlocutory decision)
+    refuses 3/3 including two dedicated re-runs; a retrieval probe shows
+    no on-point passage exists in the corpus (top vsim 0.623, thin
+    Adegoke reprint chunks dominate). Its v1 pass was a leniency
+    artifact; v2's refusal is the designed rule-3 behavior on a
+    corpus-thin question. Reclassified as a **corpus item**.
+
+**Decision status.** Owner gate: commit as new default iff >=6/9
+recovery, zero fabrications, no regressions. Recovery and fabrication
+conditions are met; B18 is the one open item (documented above as a
+corpus reclassification, pending owner sign-off). Still failing after
+v2: B13, B18, B20, B45.
