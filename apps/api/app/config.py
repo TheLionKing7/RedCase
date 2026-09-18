@@ -52,7 +52,12 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     groq_api_key: SecretStr | None = None  # OpenAI-compatible primary chat (owner 2026-09-18)
     groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "llama-3.3-70b-versatile"
+    # gpt-oss-120b: the strongest chat model served on the owner's Groq
+    # account (llama-3.3-70b-versatile 404s there — removed from the catalog;
+    # verified 2026-09-18). Reasoning model: accepts temperature=0 (verified),
+    # reasoning tokens are billed but do not enter `content`, and no
+    # max_tokens cap is sent, so the citation block cannot be truncated.
+    groq_model: str = "openai/gpt-oss-120b"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
