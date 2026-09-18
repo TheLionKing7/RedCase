@@ -40,7 +40,13 @@ log = get_logger("redcase.retrieval")
 SIMILARITY_THRESHOLD = 0.78  # calibrated in Phase 1 testing; Phase1-Design §3.3
 
 CITATION_BLOCK = re.compile(r"<citations>(.*?)</citations>", re.S)
-DOC_ID = re.compile(r'doc_id="([^"]+)"')
+# The §3.2 prompt (rule 5) requires a <citations> block "listing every cited
+# source document ID" but does not fix the list format; observed LLM outputs
+# (DeepSeek, 2026-09-18) use bare UUID lines and <doc id="..."/> elements,
+# never doc_id="..." attributes. Accept any UUID inside the block.
+UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I
+)
 
 
 class CitationIntegrityError(RuntimeError):
@@ -96,7 +102,7 @@ class RetrievalService:
     def __init__(self, db: asyncpg.Connection, tenant_id: str) -> None:
         self.db, self.tenant_id = db, tenant_id
 
-    async def retrieve(
+    async def candidates(
         self,
         question: str,
         qvec: list[float],
@@ -104,6 +110,11 @@ class RetrievalService:
         *,
         threshold: float | None = None,
     ) -> list[dict[str, Any]] | None:
+        """Hybrid candidate fetch + the §3.4 refusal gate. Returns the raw
+        hybrid-score-ordered rows, or None on refusal. Split from
+        ``retrieve`` so gate calibration (scripts/calibrate_gate.py) can
+        read the exact gate metric — the vsim of the top-hybrid-score row —
+        without the presentation re-ordering below changing rows[0]."""
         rows = [
             dict(r)
             for r in await self.db.fetch(
@@ -128,7 +139,41 @@ class RetrievalService:
         gate = SIMILARITY_THRESHOLD if threshold is None else threshold
         if best is None or best < gate:
             return None
-        return rows[:5]
+        return rows
+
+    async def retrieve(
+        self,
+        question: str,
+        qvec: list[float],
+        filters: dict[str, Any],
+        *,
+        threshold: float | None = None,
+    ) -> list[dict[str, Any]] | None:
+        rows = await self.candidates(question, qvec, filters, threshold=threshold)
+        if rows is None:
+            return None
+        # Presentation budget (recorded adaptation, 2026-09-18): up to 8
+        # passages, at most 3 per document. The old fixed top-5 let one
+        # document's near-duplicate header chunks crowd out its own holding
+        # chunk (found via B11: two Madukolu caption chunks ranked 1-2 while
+        # the competence-dictum chunk sat 6th, and the answer LLM refused).
+        # Passages are presented in vsim (semantic) order, not hybrid score
+        # order: the hybrid weighting (0.35*fsim + ratio x1.3, §3.3) is a
+        # recall-oriented SELECTOR, but as presentation order it buries the
+        # on-point chunk. The gate metric (candidates' hybrid-top vsim) is
+        # unaffected. NULL-vsim rows sort last.
+        top: list[dict[str, Any]] = []
+        per_doc: dict[Any, int] = {}
+        for r in rows:
+            n = per_doc.get(r["document_id"], 0)
+            if n >= 3:
+                continue
+            per_doc[r["document_id"]] = n + 1
+            top.append(r)
+            if len(top) >= 8:
+                break
+        top.sort(key=lambda r: (r["vsim"] is not None, r["vsim"] or 0.0), reverse=True)
+        return top
 
     @staticmethod
     def build_passages(rows: list[dict[str, Any]]) -> str:
@@ -149,7 +194,10 @@ def verify_citations(
     the caller regenerates once, then refuses."""
     valid_ids = {str(r["document_id"]) for r in rows}
     row_by_doc = {str(r["document_id"]): r for r in rows}
-    cited = DOC_ID.findall(answer)
+    block = CITATION_BLOCK.search(answer)
+    # UUIDs anywhere inside the <citations> block: doc_id="..." attributes,
+    # <doc id="..."/> elements, and bare UUID lines are all accepted.
+    cited = UUID_RE.findall(block.group(1)) if block else []
     citations = []
     for doc_id in dict.fromkeys(cited):  # dedupe, preserve order
         if doc_id not in valid_ids:
@@ -256,6 +304,30 @@ async def answer_question(
                     "refusal": True,
                 }
             system = GROUNDED_SYSTEM + REGENERATION_SUFFIX
+
+    if not citations:
+        # GROUNDED_SYSTEM rule 3 (§3.2): the LLM found the passages
+        # unsupported and answered with the exact no-precedence sentence and
+        # no <citations> block. That output IS a refusal under the §3.4
+        # contract — surfacing it as an answer with empty citations would
+        # both mislead the caller and bypass the zero-fabrication gate.
+        audit.update(
+            threshold_passed=True,
+            answer_text=None,
+            citations=[],
+            grounding_refusal=True,
+        )
+        await write_audit(db, _with_latency(audit))
+        log.info(
+            "query_refused",
+            reason="insufficient_grounding",
+            question_hash=audit["question_hash"],
+        )
+        return {
+            "answer": "No binding precedent found in Vault B.",
+            "citations": [],
+            "refusal": True,
+        }
 
     audit.update(
         threshold_passed=True,
