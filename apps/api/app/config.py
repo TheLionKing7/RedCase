@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     # tops out at 43/50. Phase1-Design's 0.78 was calibrated for
     # text-embedding-3-large and refuses every question under Jina (verified).
     vector_gate: float = 0.52
+    # Presentation budget (retrieval.service.retrieve): how many passages are
+    # shown to the answer LLM, and how many of one document at most. The
+    # gating matrix (owner 2026-09-18) varies these without code edits.
+    retrieval_top_k: int = 8
+    retrieval_per_doc_cap: int = 3
     # Chat model served through OpenRouter when no Anthropic/DeepSeek key
     # is provisioned (the citation battery's answer LLM).
     llm_model: str = "deepseek/deepseek-chat-v3-1217"

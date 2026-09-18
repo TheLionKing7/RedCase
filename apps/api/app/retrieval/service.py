@@ -38,6 +38,8 @@ from app.retrieval.prompts import (
 log = get_logger("redcase.retrieval")
 
 SIMILARITY_THRESHOLD = 0.78  # calibrated in Phase 1 testing; Phase1-Design §3.3
+DEFAULT_TOP_K = 8  # presentation budget defaults; Settings overrides
+DEFAULT_PER_DOC_CAP = 3
 
 CITATION_BLOCK = re.compile(r"<citations>(.*?)</citations>", re.S)
 # The §3.2 prompt (rule 5) requires a <citations> block "listing every cited
@@ -148,6 +150,8 @@ class RetrievalService:
         filters: dict[str, Any],
         *,
         threshold: float | None = None,
+        top_k: int | None = None,
+        per_doc_cap: int | None = None,
     ) -> list[dict[str, Any]] | None:
         rows = await self.candidates(question, qvec, filters, threshold=threshold)
         if rows is None:
@@ -162,15 +166,22 @@ class RetrievalService:
         # recall-oriented SELECTOR, but as presentation order it buries the
         # on-point chunk. The gate metric (candidates' hybrid-top vsim) is
         # unaffected. NULL-vsim rows sort last.
+        #
+        # Budget knobs are config-driven (Settings.retrieval_top_k /
+        # retrieval_per_doc_cap, passed in by answer_question); direct
+        # callers get the module defaults. The 2026-09-18 gating matrix
+        # sweeps these without code edits.
+        budget_k = DEFAULT_TOP_K if top_k is None else top_k
+        cap = DEFAULT_PER_DOC_CAP if per_doc_cap is None else per_doc_cap
         top: list[dict[str, Any]] = []
         per_doc: dict[Any, int] = {}
         for r in rows:
             n = per_doc.get(r["document_id"], 0)
-            if n >= 3:
+            if n >= cap:
                 continue
             per_doc[r["document_id"]] = n + 1
             top.append(r)
-            if len(top) >= 8:
+            if len(top) >= budget_k:
                 break
         top.sort(key=lambda r: (r["vsim"] is not None, r["vsim"] or 0.0), reverse=True)
         return top
@@ -245,7 +256,14 @@ async def answer_question(
 
     svc = RetrievalService(db, tenant_id)
     qvec = (await embedder.embed([question]))[0]
-    rows = await svc.retrieve(question, qvec, filters, threshold=settings.vector_gate)
+    rows = await svc.retrieve(
+        question,
+        qvec,
+        filters,
+        threshold=settings.vector_gate,
+        top_k=settings.retrieval_top_k,
+        per_doc_cap=settings.retrieval_per_doc_cap,
+    )
 
     audit: dict[str, Any] = {
         "tenant_id": tenant_id,
