@@ -283,3 +283,25 @@ Decision surfaced (not made): per-call latency and flapping rate both
 point at the model tier, not the pipeline. The design primary (Anthropic
 Claude via the ZDR workspace key) is provisioned in code but has no key;
 DeepSeek-direct is serving. This is the step-3 decision point.
+
+## Answer-provider configuration (Task 1.7 step 1, 2026-09-18)
+
+Owner ruling applied: env-selectable provider chain for every answer call
+(retrieval, analyses/redteam — all share make_llm; no standalone
+classifier client exists in Phase 1).
+
+- `ANSWER_MODEL_PRIMARY` / `ANSWER_MODEL_FALLBACK` (comma-separated chain,
+  first provisioned credential wins), then implicit anthropic -> openrouter.
+- **groq = platform primary** (llama-3.3-70b-versatile via the existing
+  OpenAI-compatible client — config only, no new integration code).
+- **deepseek = EXPERIMENTAL FALLBACK.** Evidence: per-call latency 4-10s
+  (answer-path p95 10.8s vs the <8s bar, 2026-09-18 step-2 measurement) and
+  ~50% first-attempt flapping across the 50-question battery.
+- **anthropic (claude-3-5-sonnet-20241022) remains the design-doc ZDR
+  primary**: used automatically the moment ANTHROPIC_API_KEY is
+  provisioned. The live default (Groq, then DeepSeek) deviates from
+  Phase1-Design §3.3 — recorded per HANDOFF.md rule 3; the deviation is
+  credential-driven, not a design change.
+- OWNER VERIFICATION ITEM (not an agent task): zero-data retention must be
+  enabled in the Groq console (Data Controls) for the ZDR bar to hold with
+  Groq primary. Carried into the deploy runbook's pre-flight checklist.
