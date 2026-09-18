@@ -418,3 +418,62 @@ class TestPassages:
         assert 'doc_id="11111111-1111-4111-8111-111111111111"' in block
         assert 'pages="1-2"' in block and 'paras="1,2"' in block
         assert 'pages="3-3"' in block and 'ratio="True"' in block
+
+
+class TestBudget:
+    """Presentation-budget unit tests (gating-matrix groundwork, 2026-09-18).
+
+    ``candidates`` is stubbed so no database is needed: the budget logic in
+    ``retrieve`` is the unit under test.
+    """
+
+    def _rows(self) -> list[dict]:
+        doc_a = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        doc_b = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        # B11 shape: document A's caption chunks rank above A's own holding
+        # chunk; the ratio lands last in hybrid order.
+        return [
+            {"id": 1, "document_id": doc_a, "is_ratio": False, "vsim": 0.90},
+            {"id": 2, "document_id": doc_a, "is_ratio": False, "vsim": 0.85},
+            {"id": 3, "document_id": doc_a, "is_ratio": False, "vsim": 0.80},
+            {"id": 4, "document_id": doc_b, "is_ratio": False, "vsim": 0.75},
+            {"id": 5, "document_id": doc_a, "is_ratio": True, "vsim": 0.70},
+        ]
+
+    async def _svc(self, monkeypatch: pytest.MonkeyPatch) -> RetrievalService:
+        svc = RetrievalService(None, SEED_TENANT_AETOES)  # type: ignore[arg-type]
+
+        async def fake_candidates(*args: object, **kwargs: object) -> list[dict]:
+            return self._rows()
+
+        monkeypatch.setattr(svc, "candidates", fake_candidates)
+        return svc
+
+    async def test_ratio_chunk_crowded_out_at_cap(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        svc = await self._svc(monkeypatch)
+        rows = await svc.retrieve("q", [0.1], {}, per_doc_cap=2, top_k=8)
+        assert rows is not None
+        assert 5 not in {r["id"] for r in rows}  # A's ratio excluded at cap
+
+    async def test_ratio_exemption_keeps_holding_chunk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        svc = await self._svc(monkeypatch)
+        rows = await svc.retrieve(
+            "q", [0.1], {}, per_doc_cap=2, top_k=8, ratio_exempt=True
+        )
+        assert rows is not None
+        ids = {r["id"] for r in rows}
+        assert 5 in ids  # ratio exempt from the per-doc cap
+        assert 3 not in ids  # third caption still capped
+        assert len(rows) <= 8  # top-k budget still enforced
+
+    async def test_top_k_budget_enforced(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        svc = await self._svc(monkeypatch)
+        rows = await svc.retrieve("q", [0.1], {}, per_doc_cap=5, top_k=3)
+        assert rows is not None
+        assert len(rows) == 3

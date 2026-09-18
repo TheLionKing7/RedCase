@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # gating matrix (owner 2026-09-18) varies these without code edits.
     retrieval_top_k: int = 8
     retrieval_per_doc_cap: int = 3
+    # When true, is_ratio chunks bypass the per-document cap: a document's
+    # holding passage is never crowded out by its own caption/header chunks
+    # (the B11 failure mode). The 2x2 gating matrix runs with this on.
+    retrieval_ratio_exempt: bool = False
     # Chat model served through OpenRouter when no Anthropic/DeepSeek key
     # is provisioned (the citation battery's answer LLM).
     llm_model: str = "deepseek/deepseek-chat-v3-1217"
