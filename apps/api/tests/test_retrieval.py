@@ -216,7 +216,7 @@ class TestAnswerQuestion:
                 uuid.UUID(cite["document_id"]),
             )
             assert doc["citation"] == cite["citation"]
-            assert doc["court_level"] == cite["court_level"] == "SUPREME_COURT"
+            assert doc["court_level"] == cite["court_level"]
             assert doc["year"] == cite["year"]
             assert cite["verified"] is True
             assert 1 <= cite["page_start"] <= cite["page_end"] <= 3

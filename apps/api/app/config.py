@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Default is a genuine NIM model id: the nemotron :free id is an
     # OpenRouter identifier and 404s on NIM (verified 2026-09-17).
     nvidia_embed_model: str = "nvidia/nv-embedqa-e5-v5"
+    deepseek_api_key: SecretStr | None = None  # OpenAI-compatible chat fallback
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_model: str = "deepseek-chat"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
@@ -59,7 +62,10 @@ class Settings(BaseSettings):
     # ZDR OpenAI proxy path is provisioned instead, embed_model MUST be set
     # to a 2048-dim model — ingest validates EMBEDDING_DIMS per batch.
     embed_model: str = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
-    vector_gate: float = 0.78  # SIMILARITY_THRESHOLD, calibrated in Phase 1 5
+    vector_gate: float = 0.78  # SIMILARITY_THRESHOLD; calibrated vs the battery
+    # Chat model served through OpenRouter when no Anthropic/DeepSeek key
+    # is provisioned (the citation battery's answer LLM).
+    llm_model: str = "deepseek/deepseek-chat-v3-1217"
 
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""

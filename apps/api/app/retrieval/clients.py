@@ -71,6 +71,35 @@ class AnthropicLLM:
         return msg.content[0].text
 
 
+class OpenAICompatLLM:
+    """OpenAI-compatible chat endpoint — the fallback answer LLM when no
+    Anthropic key is provisioned. Used for DeepSeek (owner-offered) and,
+    failing that, any model served through the already-provisioned
+    OpenRouter key (``settings.llm_model``). Same behavioural contract as
+    AnthropicLLM: no body logging, deterministic temperature."""
+
+    def __init__(self, client: AsyncOpenAI, model: str) -> None:
+        self._client = client
+        self._model = model
+
+    async def answer(self, system: str, user: str) -> str:
+        r = await self._client.chat.completions.create(
+            model=self._model,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        log.info(
+            "llm_answer",
+            model=self._model,
+            output_tokens=r.usage.completion_tokens if r.usage else None,
+            stop_reason=r.choices[0].finish_reason,
+        )
+        return r.choices[0].message.content
+
+
 def make_embedder(settings: Settings) -> Embedder:
     """Resolve the embedding backend from config. Raises RuntimeError (to be
     mapped to 503 by the caller) when no credential is provisioned.
@@ -105,8 +134,28 @@ def make_embedder(settings: Settings) -> Embedder:
 
 
 def make_llm(settings: Settings) -> AnswerLLM:
-    if not settings.anthropic_api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not provisioned — cannot generate grounded answers."
+    """Resolve the answer LLM. Anthropic (design primary) first; otherwise
+    DeepSeek direct (owner-offered); otherwise OpenRouter chat with
+    ``settings.llm_model``. Raises when nothing is provisioned."""
+    if settings.anthropic_api_key:
+        return AnthropicLLM(AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()))
+    if settings.deepseek_api_key:
+        client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key.get_secret_value(),
+            base_url=settings.deepseek_base_url,
+            timeout=180.0,
+            max_retries=4,
         )
-    return AnthropicLLM(AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()))
+        return OpenAICompatLLM(client, settings.deepseek_model)
+    if settings.openrouter_api_key:
+        client = AsyncOpenAI(
+            api_key=settings.openrouter_api_key.get_secret_value(),
+            base_url="https://openrouter.ai/api/v1",
+            timeout=180.0,
+            max_retries=4,
+        )
+        return OpenAICompatLLM(client, settings.llm_model)
+    raise RuntimeError(
+        "No answer-LLM credential provisioned (ANTHROPIC_API_KEY,"
+        " DEEPSEEK_API_KEY or OPENROUTER_API_KEY) — cannot generate answers."
+    )

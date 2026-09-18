@@ -5,20 +5,15 @@ DoD contract (HANDOFF.md 4 / Phase1-Design 3.4): run the battery against the
 allowed — every returned citation must be page-pinned to a retrieved chunk,
 and out-of-corpus questions must produce refusals, not confabulation.
 
-STATUS: DEFERRED-PENDING-CREDENTIALS (owner-approved path, 2026-09-16).
-The corpus is live in Supabase (Task 1.3) but embeddings are NOT backfilled
-(OpenRouter 402 / HF 401 / no OpenAI or Anthropic key), and the answer LLM
-is unprovisioned — so this module SKIPS unless both exist. When provisioned:
+STATUS: RUNNABLE (owner 2026-09-18). Embeddings are backfilled at 2048
+dims (nemotron via OpenRouter, migration 0006) and the answer LLM
+resolves from DeepSeek (DEEPSEEK_API_KEY) or OpenRouter chat
+(settings.llm_model). Settings load from the real .env via
+get_settings() — this module is the one test suite that REQUIRES live
+credentials, so keep every other test on Settings(_env_file=None).
 
-  1. Backfill embeddings:  python -m scripts.ingest --fixtures-dir <dir>
-     (re-run WITHOUT --no-embed; idempotent sha256 dedup skips text rows and
-     fills only the NULL embeddings)
-  2. Calibrate VECTOR_GATE against the battery, then
-  3. Run:  pytest tests/test_citation_battery.py -v
-
-The starter question set below is a DRAFT (10 of 50) written against the 8
-judgments confirmed live; it must be reviewed and expanded to the full 50
-when the battery is first run for real.
+Run:  pytest tests/test_citation_battery.py -v
+(after VECTOR_GATE calibration — see scripts/ingest.py for the corpus)
 """
 
 import json
@@ -27,31 +22,36 @@ from pathlib import Path
 import asyncpg
 import pytest
 
-from app.config import Settings
+from app.config import get_settings
 from app.retrieval.service import answer_question
 
 BATTERY_PATH = Path(__file__).parent / "fixtures" / "citation_battery.json"
 SEED_TENANT = "a0000001-0000-4000-8000-000000000001"
 
-# Judgments confirmed ingested in the live vault (Task 1.3 commit 7fc0037).
+# Party tokens of the judgments live in the vault (verified 2026-09-18
+# against extracted case_titles). Fabrication check: a citation is valid
+# only if its case_title contains at least one of these tokens.
 LIVE_CORPUS = [
-    "Amaechi v. INEC",
-    "Madukolu v. Nkemdilim",
-    "Adegoke Motors v. Adesanya",
-    "Abacha v. Fawehinmi",
-    "Adesanya v. FRN",
-    "Obikoya v. Wema Bank",
-    "Azubuike",
-    "Ondo State Gov v. Adewumi",
+    "AMAECHI",
+    "MADUKOLU",
+    "ADEGOKE MOTORS",
+    "ABACHA",
+    "ADESANYA",
+    "OBIKOYA",
+    "AZUBUIKE",
+    "ADEWUMI",
+    "CHIKE OBI",
+    "PABIEKUN",
+    "ALIMI",
 ]
 
 
 def _provisioned() -> tuple[bool, str]:
-    s = Settings(_env_file=None)
-    if not s.anthropic_api_key:
-        return False, "ANTHROPIC_API_KEY not provisioned (answer LLM)"
-    if not (s.openai_api_key or s.openrouter_api_key):
-        return False, "no embedding credential (OPENAI_API_KEY / OPENROUTER_API_KEY)"
+    s = get_settings()
+    if not (s.anthropic_api_key or s.deepseek_api_key or s.openrouter_api_key):
+        return False, "no answer-LLM credential (ANTHROPIC/DEEPSEEK/OPENROUTER)"
+    if not (s.openai_api_key or s.openrouter_api_key or s.nvidia_api_key):
+        return False, "no embedding credential (OPENAI / OPENROUTER / NVAPI)"
     if not s.database_url:
         return False, "DATABASE_URL not set"
     return True, ""
@@ -69,7 +69,7 @@ def _load_battery() -> list[dict]:
 async def test_battery(item: dict) -> None:
     """One battery entry: in-corpus questions must answer with verified,
     corpus-internal citations; out-of-corpus questions must refuse."""
-    settings = Settings(_env_file=None)
+    settings = get_settings()
     conn = await asyncpg.connect(settings.database_url)
     try:
         await conn.execute(
@@ -95,7 +95,6 @@ async def test_battery(item: dict) -> None:
             # Fabrication = a citation to anything outside the live corpus.
             assert cite["verified"] is True
             assert any(
-                cite["case_title"].startswith(name.split(" v. ")[0])
-                for name in LIVE_CORPUS
+                token in cite["case_title"].upper() for token in LIVE_CORPUS
             ), f"{item['id']}: fabricated citation {cite['case_title']!r}"
             assert cite["page_start"] >= 1 and cite["page_end"] >= cite["page_start"]

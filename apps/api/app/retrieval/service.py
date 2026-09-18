@@ -97,7 +97,12 @@ class RetrievalService:
         self.db, self.tenant_id = db, tenant_id
 
     async def retrieve(
-        self, question: str, qvec: list[float], filters: dict[str, Any]
+        self,
+        question: str,
+        qvec: list[float],
+        filters: dict[str, Any],
+        *,
+        threshold: float | None = None,
     ) -> list[dict[str, Any]] | None:
         rows = [
             dict(r)
@@ -114,10 +119,14 @@ class RetrievalService:
         ]
         # §3.4 refusal: no rows, or best vsim below the gate. NULL vsim
         # (deferred-embed chunks) is a threshold failure, not a crash.
+        # The gate is settings-driven (Settings.vector_gate, calibrated
+        # against the citation battery); the module constant is the
+        # design-doc default for direct callers (tests) and the fallback.
         if not rows:
             return None
         best = rows[0]["vsim"]
-        if best is None or best < SIMILARITY_THRESHOLD:
+        gate = SIMILARITY_THRESHOLD if threshold is None else threshold
+        if best is None or best < gate:
             return None
         return rows[:5]
 
@@ -188,7 +197,7 @@ async def answer_question(
 
     svc = RetrievalService(db, tenant_id)
     qvec = (await embedder.embed([question]))[0]
-    rows = await svc.retrieve(question, qvec, filters)
+    rows = await svc.retrieve(question, qvec, filters, threshold=settings.vector_gate)
 
     audit: dict[str, Any] = {
         "tenant_id": tenant_id,
