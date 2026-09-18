@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     deepseek_api_key: SecretStr | None = None  # OpenAI-compatible chat fallback
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     deepseek_model: str = "deepseek-chat"
-    groq_api_key: SecretStr | None = None  # OpenAI-compatible primary chat (owner 2026-09-18)
+    groq_api_key: SecretStr | None = None  # OpenAI-compatible chat (owner 2026-09-18)
     groq_base_url: str = "https://api.groq.com/openai/v1"
     # gpt-oss-120b: the strongest chat model served on the owner's Groq
     # account (llama-3.3-70b-versatile 404s there — removed from the catalog;
@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # reasoning tokens are billed but do not enter `content`, and no
     # max_tokens cap is sent, so the citation block cannot be truncated.
     groq_model: str = "openai/gpt-oss-120b"
+    cerebras_api_key: SecretStr | None = None  # OpenAI-compatible chat (owner 2026-09-18)
+    cerebras_base_url: str = "https://api.cerebras.ai/v1"
+    # Cerebras' catalog id drops the openai/ prefix (verified against
+    # GET /v1/models 2026-09-18). Same model class as the Groq entry.
+    cerebras_model: str = "gpt-oss-120b"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
@@ -100,16 +105,22 @@ class Settings(BaseSettings):
     # Answer-model provider selection (owner ruling 2026-09-18, Task 1.7
     # step 3/1): env-selectable primary + fallback chain, names only.
     # Resolution order: ANSWER_MODEL_PRIMARY, then ANSWER_MODEL_FALLBACK
-    # (comma-separated chain, first provisioned credential wins). Groq is the
-    # platform primary; DeepSeek is explicitly EXPERIMENTAL-FALLBACK (latency
-    # + flapping evidence in docs/calibration/phase1-jina.md); Anthropic
+    # (comma-separated chain, first provisioned credential wins). OpenRouter
+    # (gpt-4o) is the platform primary — Groq's free-tier 8k ITPM ceiling
+    # rejects battery-size prompts and Cerebras 402s with no account quota
+    # (both verified 2026-09-18). DeepSeek is explicitly EXPERIMENTAL
+    # FALLBACK (latency + flapping evidence below). Anthropic
     # (claude-3-5-sonnet-20241022) remains the design-doc ZDR primary and is
     # used automatically when an Anthropic key is provisioned.
-    answer_model_primary: str = "groq"
-    answer_model_fallback: str = "deepseek"
-    # Chat model served through OpenRouter when no Anthropic/DeepSeek key
-    # is provisioned (the citation battery's answer LLM).
-    llm_model: str = "deepseek/deepseek-chat-v3-1217"
+    answer_model_primary: str = "openrouter"
+    answer_model_fallback: str = "cerebras,groq,deepseek"
+    # Chat model served through OpenRouter (the platform answer model,
+    # owner 2026-09-18: gpt-4o — verified temperature=0 accepted, ~10k-token
+    # grounded prompts served in ~3s). gpt-4o is not a ZDR-class endpoint:
+    # OpenAI API default retention applies (no training; 30-day abuse-
+    # monitoring retention unless a ZDR agreement is in place) — same
+    # verification-item class as Groq/Cerebras console zero-retention.
+    llm_model: str = "openai/gpt-4o"
     # Answer-call ceiling (Task 1.7 step 2, owner-approved 2026-09-18): a
     # single answer LLM call exceeding this is logged as a refusal for that
     # attempt and the one-retry-on-refusal policy applies. Removes the
