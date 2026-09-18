@@ -289,80 +289,112 @@ async def answer_question(
         }
 
     passages = svc.build_passages(rows)
-    system = GROUNDED_SYSTEM
-    answer: str | None = None
-    citations: list[dict[str, Any]] = []
-    regenerations = 0
-    while True:
-        msg = await llm.answer(
-            system,
-            GROUNDED_USER.format(question=question, filters=filters, passages=passages),
-        )
-        try:
-            citations = verify_citations(
-                msg, rows, storage_public_url=settings.storage_public_url
+    base_audit: dict[str, Any] = dict(audit, threshold_passed=True)
+
+    async def _answer_once() -> tuple[str, list[dict[str, Any]], int]:
+        """One answer call with the §3.4 citation-integrity regeneration cap.
+        Returns (answer_text, citations, regenerations_used). Raises
+        CitationIntegrityError only when both passes fabricate a doc id —
+        the caller then refuses, and the fabricated text is never shown or
+        persisted."""
+        system = GROUNDED_SYSTEM
+        for regeneration in range(2):
+            msg = await llm.answer(
+                system,
+                GROUNDED_USER.format(question=question, filters=filters, passages=passages),
             )
-            answer = CITATION_BLOCK.sub("", msg).strip()
-            break
+            try:
+                citations = verify_citations(
+                    msg, rows, storage_public_url=settings.storage_public_url
+                )
+            except CitationIntegrityError:
+                if regeneration == 0:
+                    system = GROUNDED_SYSTEM + REGENERATION_SUFFIX
+                    continue
+                raise
+            return CITATION_BLOCK.sub("", msg).strip(), citations, regeneration
+        raise AssertionError("unreachable")  # noqa: EM101 (loop always returns/raises)
+
+    # One-retry-on-refusal policy (owner-approved 2026-09-18, Task 1.7 step 1):
+    # a grounding refusal triggers ONE retry of the same prompt. All
+    # configured clients already answer at temperature 0, so the retry is an
+    # identical deterministic call — the flapping it absorbs is server-side.
+    # Integrity refusals do NOT retry here (that path already consumed its
+    # one regeneration inside _answer_once). EVERY attempt writes its own
+    # query_audit row (attempt 1 and, when reached, attempt 2), so per-attempt
+    # refusal outcomes stay auditable.
+    for attempt in (1, 2):
+        try:
+            answer, citations, regenerations = await _answer_once()
         except CitationIntegrityError as exc:
-            regenerations += 1
-            if regenerations > 1:
-                # §3.4: second failure -> refusal. A fabricated citation is
-                # never shown to the user.
-                audit.update(
-                    threshold_passed=True,
-                    answer_text=None,
-                    citations=[],
-                    integrity_refusal=True,
+            # §3.4: second integrity failure -> refusal. A fabricated
+            # citation is never shown to the user.
+            await write_audit(
+                db,
+                _with_latency(
+                    dict(
+                        base_audit,
+                        answer_text=None,
+                        citations=[],
+                        integrity_refusal=True,
+                    )
+                ),
+            )
+            log.warn(
+                "query_refused",
+                reason="citation_integrity",
+                foreign_doc_id=str(exc),
+                attempt=attempt,
+                question_hash=base_audit["question_hash"],
+            )
+            return {
+                "answer": "No binding precedent found in Vault B.",
+                "citations": [],
+                "refusal": True,
+            }
+        if not citations:
+            # GROUNDED_SYSTEM rule 3 (§3.2): the LLM found the passages
+            # unsupported and answered with the exact no-precedence sentence
+            # and no <citations> block. Audit THIS attempt, then retry once.
+            await write_audit(
+                db,
+                _with_latency(
+                    dict(
+                        base_audit,
+                        answer_text=None,
+                        citations=[],
+                        grounding_refusal=True,
+                    )
+                ),
+            )
+            log.info(
+                "query_refused",
+                reason="insufficient_grounding",
+                attempt=attempt,
+                question_hash=base_audit["question_hash"],
+            )
+            continue
+        await write_audit(
+            db,
+            _with_latency(
+                dict(
+                    base_audit,
+                    answer_text=answer,
+                    citations=citations,
+                    retrieved_chunk_ids=[r["id"] for r in rows],
+                    # NULL-vsim rows (deferred-embed chunks that rode along in
+                    # the top-5 of an otherwise embedded corpus) contribute no
+                    # score — skip them rather than float(None).
+                    similarity_scores=[float(r["vsim"]) for r in rows if r["vsim"] is not None],
+                    regenerations=regenerations,
                 )
-                await write_audit(db, _with_latency(audit))
-                log.warn(
-                    "query_refused",
-                    reason="citation_integrity",
-                    foreign_doc_id=str(exc),
-                    question_hash=audit["question_hash"],
-                )
-                return {
-                    "answer": "No binding precedent found in Vault B.",
-                    "citations": [],
-                    "refusal": True,
-                }
-            system = GROUNDED_SYSTEM + REGENERATION_SUFFIX
-
-    if not citations:
-        # GROUNDED_SYSTEM rule 3 (§3.2): the LLM found the passages
-        # unsupported and answered with the exact no-precedence sentence and
-        # no <citations> block. That output IS a refusal under the §3.4
-        # contract — surfacing it as an answer with empty citations would
-        # both mislead the caller and bypass the zero-fabrication gate.
-        audit.update(
-            threshold_passed=True,
-            answer_text=None,
-            citations=[],
-            grounding_refusal=True,
+            ),
         )
-        await write_audit(db, _with_latency(audit))
-        log.info(
-            "query_refused",
-            reason="insufficient_grounding",
-            question_hash=audit["question_hash"],
-        )
-        return {
-            "answer": "No binding precedent found in Vault B.",
-            "citations": [],
-            "refusal": True,
-        }
+        return {"answer": answer, "citations": citations, "refusal": False}
 
-    audit.update(
-        threshold_passed=True,
-        answer_text=answer,
-        citations=citations,
-        retrieved_chunk_ids=[r["id"] for r in rows],
-        # NULL-vsim rows (deferred-embed chunks that rode along in the top-5
-        # of an otherwise embedded corpus) contribute no score — skip them
-        # rather than float(None).
-        similarity_scores=[float(r["vsim"]) for r in rows if r["vsim"] is not None],
-        regenerations=regenerations,
-    )
-    await write_audit(db, _with_latency(audit))
-    return {"answer": answer, "citations": citations, "refusal": False}
+    # Both attempts refused on grounding.
+    return {
+        "answer": "No binding precedent found in Vault B.",
+        "citations": [],
+        "refusal": True,
+    }

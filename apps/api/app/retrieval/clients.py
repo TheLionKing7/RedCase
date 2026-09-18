@@ -60,6 +60,7 @@ class AnthropicLLM:
         msg = await self._client.messages.create(
             model=self.MODEL,
             max_tokens=2048,
+            temperature=0,
             system=system,
             messages=[{"role": "user", "content": user}],
         )

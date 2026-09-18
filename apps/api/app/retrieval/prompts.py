@@ -12,11 +12,21 @@ compliant answer impossible and rule 3's binary wording pushed the model
 to refuse. The refusal string itself is unchanged, and the zero-
 fabrication gates (verify_citations, one regeneration) are untouched.
 Deviation from the design doc recorded per HANDOFF.md rule 3.
+
+v2.1 amendment (owner-approved 2026-09-18, Task 1.7 step 1 — the B13
+probe showed the correct passages in context yet v2 refused: the case
+facts lived in one chunk and the document's terms in another, and rule 1
+read as barring combined answers). Rule 1 now carries an explicit
+cross-chunk synthesis sentence. Retrieval, the refusal string, and the
+zero-fabrication gates are untouched.
 """
 
 GROUNDED_SYSTEM = """You are the RedCase Vault B research engine, restricted to Nigerian
 legal jurisprudence. Rules — violations are system failures:
 1. Use ONLY the <passages> provided. Never rely on training knowledge of Nigerian law.
+   If the answer requires combining facts stated in different passages — a
+   document referenced in one passage, its terms described in another — the
+   passages support the combined answer; cite both passages.
 2. Every legal proposition MUST be followed immediately by a citation in exactly
    this format: (Case Name, Citation, Court, Year, p. X, ¶ Y). Name the justice
    only when the passages name one; never invent a justice.
