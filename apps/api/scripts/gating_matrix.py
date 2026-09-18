@@ -143,7 +143,6 @@ async def run_cell(
             "reason": reason,
             "refusal": result["refusal"],
             "cited_titles": [c["case_title"] for c in result["citations"]],
-            "passages_in_prompt": len(result.get("retrieved_chunk_ids") or []),
             "prompt_chars": llm.prompt_chars[0] if llm.prompt_chars else None,
             "prompt_calls": len(llm.prompt_chars),
         })
@@ -176,6 +175,9 @@ async def main() -> None:
 
     settings = get_settings()
     print(f"gate={settings.vector_gate} (fixed) | ids={ids}")
+    REPORT_DIR.mkdir(exist_ok=True)  # noqa: ASYNC240
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    out = REPORT_DIR / f"gating_matrix_{stamp}.json"
     conn = await asyncpg.connect(settings.database_url)
     try:
         embedder = make_embedder(settings)
@@ -190,23 +192,23 @@ async def main() -> None:
                 f"top_k={top_k:>2} cap={cap} ratio_exempt=True -> "
                 f"{cell['pass']}/{cell['total']} "
                 f"mean_tok~{cell['mean_input_tokens_est']} "
-                f"({cell['wall_s']}s)"
+                f"({cell['wall_s']}s)",
+                flush=True,
+            )
+            # Crash-safe: rewrite the report after every cell so a mid-run
+            # interruption (or the operator's shell timeout) keeps results.
+            out.write_text(  # noqa: ASYNC240
+                json.dumps({
+                    "run_at": stamp,
+                    "gate": settings.vector_gate,
+                    "ids": ids,
+                    "cells": cells,
+                }, indent=1),
+                encoding="utf-8",
             )
     finally:
         await conn.close()
 
-    REPORT_DIR.mkdir(exist_ok=True)  # noqa: ASYNC240
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    out = REPORT_DIR / f"gating_matrix_{stamp}.json"
-    out.write_text(
-        json.dumps({
-            "run_at": stamp,
-            "gate": settings.vector_gate,
-            "ids": ids,
-            "cells": cells,
-        }, indent=1),
-        encoding="utf-8",
-    )
     print(f"report: {out}")
 
 
