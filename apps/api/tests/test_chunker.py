@@ -27,7 +27,20 @@ def _p(num: int, start: int, end: int | None = None, text: str = "") -> Paragrap
 class TestExtractParagraphs:
     def test_numbering_and_pages(self) -> None:
         paras = extract_paragraphs(synthetic_judgment_texts())
-        assert [p.num for p in paras] == [1, 2, 3, 4, 5, 6]
+        # num=0 entries are the captured unnumbered caption block (u-refs).
+        assert [p.num for p in paras] == [0, 1, 2, 3, 4, 5, 6]
+
+    def test_unnumbered_prologue_captured(self) -> None:
+        # Regression (2026-09-18): Madukolu pages 2-13 — all judgment prose
+        # before the first numbered paragraph — existed in no chunk because
+        # extract only walked numbered paragraphs. The page-1 caption lines
+        # of the synthetic judgment must now appear as a u-block.
+        paras = extract_paragraphs(synthetic_judgment_texts())
+        u = [p for p in paras if p.ref]
+        assert len(u) == 1
+        assert u[0].ref == "u1"
+        assert (u[0].start_page, u[0].end_page) == (1, 1)
+        assert "SUPREME COURT" in u[0].text
 
     def test_cross_page_paragraph_tracks_end_page(self) -> None:
         paras = extract_paragraphs(synthetic_judgment_texts())
@@ -107,6 +120,8 @@ class TestChunkDocument:
         body = chunks[1:]
         for c in body:
             for ref in c.paragraph_refs:
+                if not ref.isdigit():
+                    continue  # unnumbered u-blocks have no Paragraph entry
                 p = paras[int(ref)]
                 assert c.page_start <= p.start_page, f"chunk {c.chunk_index} misses p{ref} start"
                 assert c.page_end >= p.end_page, f"chunk {c.chunk_index} misses p{ref} end"
