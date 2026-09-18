@@ -87,22 +87,28 @@ async def run(args: argparse.Namespace) -> None:
         log.warning("ingest_no_embed", note="embeddings NULL; backfill required")
         embedder: Embedder | None = NullEmbedder()
     else:
-        # Embedding backend: ZDR proxy + OpenAI key is the design's primary
-        # path (HANDOFF.md 3); OpenRouter is the OpenAI-compatible fallback.
-        # NOTE (recorded, flagged to owner): OpenRouter is NOT a
-        # no-retention gateway; our own layer still persists only chunks +
+        # Embedding backend precedence mirrors app.retrieval.clients.make_embedder:
+        # ZDR proxy + OpenAI key is the design's primary path (HANDOFF.md 3);
+        # Jina is the premium provisioned path (owner ruling 2026-09-18);
+        # OpenRouter is the OpenAI-compatible fallback (free tier — rate
+        # capped, never the platform default).
+        # NOTE (recorded, flagged to owner): OpenRouter/Jina are NOT
+        # no-retention gateways; our own layer still persists only chunks +
         # embeddings (ZDR convention 1) and never logs prompt bodies, but
         # provider-side retention terms differ from the ZDR proxy the design
         # assumes.
         if settings.openai_api_key:
             api_key = settings.openai_api_key.get_secret_value()
             base_url = settings.zdr_embed_proxy or None
+        elif settings.jina_api_key:
+            api_key = settings.jina_api_key.get_secret_value()
+            base_url = settings.jina_base_url
         elif settings.openrouter_api_key:
             api_key = settings.openrouter_api_key.get_secret_value()
             base_url = "https://openrouter.ai/api/v1"
         else:
             raise SystemExit(
-                "No embedding credentials: set OPENAI_API_KEY or"
+                "No embedding credentials: set OPENAI_API_KEY, JINA_API_KEY or"
                 " OPENROUTER_API_KEY, or pass --no-embed for backfill-deferred"
                 " ingest (Task 1.3 deferred-DoD path)."
             )

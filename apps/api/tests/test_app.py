@@ -18,4 +18,7 @@ def test_app_boots_without_secrets() -> None:
     # app (and CI) must boot with none set.
     app = create_app(Settings())
     assert app.state.settings.supabase_service_role is None
-    assert app.state.settings.vector_gate == 0.78
+    # 0.52 = VECTOR_GATE calibrated 2026-09-18 against the 50-question
+    # citation battery (jina-embeddings-v3 platform model). Phase1-Design's
+    # 0.78 was calibrated for text-embedding-3-large — see app/config.py.
+    assert app.state.settings.vector_gate == 0.52

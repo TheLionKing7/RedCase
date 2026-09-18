@@ -4,8 +4,9 @@ Chunks ingested under the deferred-embed path (scripts/ingest.py
 --no-embed) land with embedding = NULL and refuse retrieval. This script
 finds every NULL-embedding chunk (optionally scoped to one tenant/vault),
 embeds the chunk text in batches via the configured platform embedder
-(app.retrieval.clients.make_embedder — OpenAI ZDR proxy -> OpenRouter ->
-NVIDIA NIM precedence), and UPDATEs each row.
+(app.retrieval.clients.make_embedder — OpenAI ZDR proxy -> Jina (premium,
+owner 2026-09-18) -> OpenRouter -> NVIDIA NIM precedence), and UPDATEs
+each row.
 
 Idempotent: already-embedded chunks are skipped, so reruns only cover new
 rows. ZDR: no chunk text in logs — ids and counts only.

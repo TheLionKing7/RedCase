@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Default is a genuine NIM model id: the nemotron :free id is an
     # OpenRouter identifier and 404s on NIM (verified 2026-09-17).
     nvidia_embed_model: str = "nvidia/nv-embedqa-e5-v5"
+    jina_api_key: SecretStr | None = None  # premium embeddings (owner 2026-09-18)
+    jina_embed_model: str = "jina-embeddings-v3"  # 1024 dims
+    jina_base_url: str = "https://api.jina.ai/v1"  # OpenAI-compatible
     deepseek_api_key: SecretStr | None = None  # OpenAI-compatible chat fallback
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     deepseek_model: str = "deepseek-chat"
@@ -56,13 +59,27 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:7100,http://127.0.0.1:7100"
 
     # Retrieval tuning — HANDOFF.md 3 env config
-    # Platform embedding model (owner 2026-09-17): nvidia nemotron via
-    # OpenRouter (2048 dims — the only provisioned credential path; the
-    # :free model id is an OpenRouter identifier, NOT a NIM model). If the
-    # ZDR OpenAI proxy path is provisioned instead, embed_model MUST be set
-    # to a 2048-dim model — ingest validates EMBEDDING_DIMS per batch.
-    embed_model: str = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
-    vector_gate: float = 0.78  # SIMILARITY_THRESHOLD; calibrated vs the battery
+    # Platform embedding model (owner ruling 2026-09-18, superseding the
+    # 2026-09-17 nemotron/OpenRouter ruling): Jina v3 via the premium
+    # JINA_API_KEY — 1024 dims (migration 0007). The OpenRouter free tier
+    # (20 embeds/min + 50 free-model requests/day, daily cap exhausted
+    # mid-calibration 2026-09-18) is demoted to fallback credential path;
+    # DeepSeek serves chat models only and has no embeddings API. If the
+    # ZDR OpenAI proxy path is provisioned instead, embed_model MUST be
+    # set to a 1024-dim model — ingest validates EMBEDDING_DIMS per batch.
+    embed_model: str = "jina-embeddings-v3"
+    # Calibrated 2026-09-18 via scripts/calibrate_gate against the 50-question
+    # citation battery with the platform embedder (jina-embeddings-v3, 1024d),
+    # measuring the EXACT runtime metric via RetrievalService.candidates()
+    # (vsim of the top-hybrid-score chunk — see the script docstring):
+    # answer-class 0.526-0.761, refusal-class 0.415-0.694. Gate 0.52 sits
+    # just below the lowest answer-class score so every answerable question
+    # enters the grounding pipeline; the corpus-adjacent refusal questions
+    # above the gate are caught by the rule-3 insufficient-grounding
+    # refusal (service.py), not by similarity alone — pure vsim separation
+    # tops out at 43/50. Phase1-Design's 0.78 was calibrated for
+    # text-embedding-3-large and refuses every question under Jina (verified).
+    vector_gate: float = 0.52
     # Chat model served through OpenRouter when no Anthropic/DeepSeek key
     # is provisioned (the citation battery's answer LLM).
     llm_model: str = "deepseek/deepseek-chat-v3-1217"

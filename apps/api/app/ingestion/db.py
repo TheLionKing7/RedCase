@@ -28,13 +28,15 @@ from app.middleware.zdr import get_logger
 log = get_logger("redcase.ingest")
 
 # Platform embedding size — the platform's canonical embedding model
-# (nvidia/llama-nemotron-embed-vl-1b-v2 via OpenRouter) emits 2048 dims.
-# CONFLICT RECORDED (HANDOFF.md rule 3, owner ruling 2026-09-17): Phase1-
-# Design 2.1 mandates VECTOR(3072) for text-embedding-3-large; the only
-# provisioned credential path serves 2048 dims, and migration 0006 moved
-# the column to VECTOR(2048). Any provider configured for this platform
-# must serve EMBEDDING_DIMS (ingest validates per batch).
-EMBEDDING_DIMS = 2048
+# (jina-embeddings-v3 via the premium JINA_API_KEY, owner ruling 2026-09-18
+# superseding the 2026-09-17 nemotron/OpenRouter ruling whose free tier
+# proved operationally unusable: 20 embeds/min + 50 free-model requests/day)
+# emits 1024 dims, and migration 0007 moved the column to VECTOR(1024).
+# CONFLICT RECORDED (HANDOFF.md rule 3): Phase1-Design 2.1 mandates
+# VECTOR(3072) for text-embedding-3-large; the provisioned premium
+# credential path serves 1024 dims. Any provider configured for this
+# platform must serve EMBEDDING_DIMS (ingest validates per batch).
+EMBEDDING_DIMS = 1024
 
 
 class Embedder(Protocol):

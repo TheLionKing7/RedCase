@@ -23,7 +23,8 @@ log = get_logger("redcase.retrieval.clients")
 
 
 class Embedder(Protocol):
-    """texts -> one vector per text (EMBEDDING_DIMS — 2048 platform-wide)."""
+    """texts -> one vector per text (EMBEDDING_DIMS — 1024 platform-wide,
+    Jina v3 per owner ruling 2026-09-18 / migration 0007)."""
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
 
@@ -105,16 +106,24 @@ def make_embedder(settings: Settings) -> Embedder:
     mapped to 503 by the caller) when no credential is provisioned.
 
     Precedence: ZDR OpenAI proxy first (the design's primary path), then
-    OpenRouter (the provisioned path — owner 2026-09-17), NVIDIA NIM last:
-    the owner's NVAPI key was verified to 404 on integrate.api.nvidia.com
-    for the :free model id (that id is an OpenRouter identifier), so the
-    NIM branch is kept only for genuine NIM keys + NIM model ids."""
+    Jina (premium, provisioned — owner ruling 2026-09-18), then OpenRouter
+    (fallback credential path; its free tier is rate-capped per-minute AND
+    per-day, so it must not be the platform default), NVIDIA NIM last: the
+    owner's NVAPI key was verified to 404 on integrate.api.nvidia.com for
+    the :free model id (that id is an OpenRouter identifier), so the NIM
+    branch is kept only for genuine NIM keys + NIM model ids."""
     if settings.openai_api_key:
         oai = AsyncOpenAI(
             api_key=settings.openai_api_key.get_secret_value(),
             base_url=settings.zdr_embed_proxy or None,
         )
         return OpenAIEmbedder(oai, settings.embed_model)
+    if settings.jina_api_key:
+        jina = AsyncOpenAI(
+            api_key=settings.jina_api_key.get_secret_value(),
+            base_url=settings.jina_base_url,
+        )
+        return OpenAIEmbedder(jina, settings.jina_embed_model)
     if settings.openrouter_api_key:
         oai = AsyncOpenAI(
             api_key=settings.openrouter_api_key.get_secret_value(),
@@ -128,7 +137,7 @@ def make_embedder(settings: Settings) -> Embedder:
         )
         return OpenAIEmbedder(oai, settings.nvidia_embed_model)
     raise RuntimeError(
-        "No embedding credentials provisioned (OPENAI_API_KEY,"
+        "No embedding credentials provisioned (OPENAI_API_KEY, JINA_API_KEY,"
         " OPENROUTER_API_KEY or NVAPI_KEY) — cannot embed queries."
     )
 
