@@ -305,3 +305,22 @@ classifier client exists in Phase 1).
 - OWNER VERIFICATION ITEM (not an agent task): zero-data retention must be
   enabled in the Groq console (Data Controls) for the ZDR bar to hold with
   Groq primary. Carried into the deploy runbook's pre-flight checklist.
+
+## Groq battery attempt — blocked by account tier (Task 1.7 step 2, 2026-09-18)
+
+- `llama-3.3-70b-versatile` 404s on the owner's Groq account (removed from
+  the catalog). Per the owner's anticipated-branch note, the default
+  switched to `openai/gpt-oss-120b` — verified: accepts temperature=0,
+  answers via `content` with reasoning tokens separate, 1.6s for a probe
+  call.
+- **Blocker: the account is on the on-demand (free) tier with per-model
+  ITPM ceilings below the battery prompt size.** gpt-oss-120b rejects a
+  ~10.3k-token request (limit 8,000 TPM); qwen/qwen3.8-27b and
+  groq/compound-mini also 413 on the same prompt. Retrieval config is
+  calibrated at top-8/cap-3 (battery-comparable), so shrinking the prompt
+  would invalidate comparisons — not done.
+- Status: battery-vs-Groq is deferred pending owner decision: upgrade the
+  Groq account to Dev Tier (billing), or run the battery on DeepSeek
+  (experimental fallback) until then. Code default remains
+  gpt-oss-120b — one config line already in place; it activates the
+  moment the tier allows.
