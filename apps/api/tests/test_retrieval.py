@@ -76,6 +76,25 @@ class GoodLLM:
         )
 
 
+class EchoingLLM:
+    """Wraps GoodLLM output in an echoed <passages> scaffold block — the
+    DeepSeek misbehaviour observed on battery runs (2026-09-18). The
+    service must strip the echo before verification/persistence."""
+
+    def __init__(self) -> None:
+        self.inner = GoodLLM()
+        self.calls = 0
+
+    async def answer(self, system: str, user: str) -> str:
+        self.calls += 1
+        body = await self.inner.answer(system, user)
+        return (
+            "<passages><passage doc_id=\"x\">echoed scaffold</passage></passages>"
+            f"<question>{user[:20]}</question>"
+            f"<filters>{{}}</filters>{body}"
+        )
+
+
 class FabricatingLLM:
     """Always cites a doc_id that was never retrieved."""
 
@@ -351,6 +370,32 @@ class TestAnswerQuestion:
                     settings=Settings(_env_file=None),
                     embedder=ConstantEmbedder(), llm=GoodLLM(),
                 )
+        finally:
+            await conn.close()
+
+    async def test_echoed_prompt_scaffold_stripped_before_persist(
+        self, app_db_url: str, tmp_path, question: str
+    ) -> None:
+        """ZDR: an answer LLM that echoes <passages>/<question>/<filters>
+        scaffold into its output must never reach the audit trail — the
+        scaffold is prompt body, not answer."""
+        await _ingest_doc(app_db_url, tmp_path)
+        conn = await connect_scoped(app_db_url)
+        llm = EchoingLLM()
+        try:
+            result = await answer_question(
+                question, {}, conn, SEED_TENANT_AETOES, "user-1",
+                settings=Settings(_env_file=None),
+                embedder=ConstantEmbedder(), llm=llm,
+            )
+            assert result["refusal"] is False
+            assert "<passages>" not in result["answer"]
+            assert "<question>" not in result["answer"]
+            assert "echoed scaffold" not in result["answer"]
+            rows = await _audit_rows(conn, _qhash(question))
+            assert len(rows) == 1
+            assert "<passages>" not in rows[0]["answer_text"]
+            assert "echoed scaffold" not in rows[0]["answer_text"]
         finally:
             await conn.close()
 

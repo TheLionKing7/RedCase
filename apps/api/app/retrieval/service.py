@@ -39,6 +39,20 @@ from app.retrieval.prompts import (
 log = get_logger("redcase.retrieval")
 
 SIMILARITY_THRESHOLD = 0.78  # calibrated in Phase 1 testing; Phase1-Design §3.3
+
+# The answer LLM occasionally echoes prompt scaffolding (<passages> /
+# <question> / <filters> blocks) into its output — observed on DeepSeek
+# battery runs 2026-09-18 (docs/calibration/phase1-jina.md, ZDR section).
+# The scaffold is prompt body, not answer: strip any echoed block before
+# verification and persistence. Deterministic, model-independent.
+ECHO_BLOCK = re.compile(
+    r"<(passages|question|filters)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL
+)
+
+
+def strip_echoed_blocks(text: str) -> str:
+    """Remove echoed prompt-scaffold blocks from model output."""
+    return ECHO_BLOCK.sub("", text).strip()
 DEFAULT_TOP_K = 8  # presentation budget defaults; Settings overrides
 DEFAULT_PER_DOC_CAP = 3
 DEFAULT_RATIO_EXEMPT = False
@@ -300,12 +314,14 @@ async def answer_question(
         persisted."""
         system = GROUNDED_SYSTEM
         for regeneration in range(2):
-            msg = await asyncio.wait_for(
-                llm.answer(
-                    system,
-                    GROUNDED_USER.format(question=question, filters=filters, passages=passages),
-                ),
-                timeout=settings.answer_timeout_s,
+            msg = strip_echoed_blocks(
+                await asyncio.wait_for(
+                    llm.answer(
+                        system,
+                        GROUNDED_USER.format(question=question, filters=filters, passages=passages),
+                    ),
+                    timeout=settings.answer_timeout_s,
+                )
             )
             try:
                 citations = verify_citations(
