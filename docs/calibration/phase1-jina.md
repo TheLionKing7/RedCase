@@ -247,3 +247,39 @@ Effective battery state: persistent failures B08, B18, B20, B23, B31;
 flaky B02, B16, B25 (each passed in at least one of two runs); 43/50 on
 the strictest single-run count. Committed as the new default per owner
 ruling.
+
+## Latency measurement with v2.1 + retry + 20s ceiling (Task 1.7 step 2, 2026-09-18)
+
+Ceiling implemented first (`answer_timeout_s`, default 20s, env-tunable):
+an answer call exceeding it is logged as a refusal for that attempt and the
+one-retry policy applies. Fresh full battery (39/50, zero fabrications) then
+measured via query_audit, paths reported separately:
+
+| Path | n | p50 | p95 | max |
+|---|---|---|---|---|
+| answer (success) | 22 | 4.7s | 10.8s | 11.6s |
+| refusal-with-retry | 22 | 4.8s | 22.3s | 22.5s |
+| threshold-refusal (no LLM call) | 6 | 1.7s | 5.5s | 5.5s |
+| blended | 44 | 5.0s | 11.6s | 22.5s |
+
+Reading against the proposed amended bars (answer <8s, refusal <15s, hard
+ceiling 20s):
+
+- The 205s-tail defect is eliminated — the ceiling works as designed, and
+  the amended-bar arithmetic holds (worst observed request 22.5s = ~2s
+  retrieval + 2 sequential capped calls).
+- The threshold rows bound the retrieval stack at <=5.5s (p50 1.7s), so
+  the LLM call dominates every path: answer-path p95 ~= 2s + ~9s call;
+  refusal-path ~= 2s + 2 x ~10s calls.
+- Answer-path p95 10.8s MISSES the <8s bar; refusal-path p95 22.3s misses
+  <15s. This is not a bar-amendment case: the system is genuinely over bar
+  on the answer path, and the cause is DeepSeek-direct per-call latency
+  (4-10s observed), not measurement artifact.
+- Notable: 25 of 50 requests (50%) needed the retry to reach an outcome —
+  first-attempt refusal/flapping at half the corpus is far above the
+  occasional-flake estimate, and it doubles answer-path LLM spend.
+
+Decision surfaced (not made): per-call latency and flapping rate both
+point at the model tier, not the pipeline. The design primary (Anthropic
+Claude via the ZDR workspace key) is provisioned in code but has no key;
+DeepSeek-direct is serving. This is the step-3 decision point.
