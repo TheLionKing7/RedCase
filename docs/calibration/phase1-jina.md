@@ -74,6 +74,20 @@ A pure vector-similarity baseline (no candidates() plumbing) scored 43/50.
 
 - **BGE reranker**: next calibration step; requires owner confirmation
   before starting (owner instruction, 2026-09-18).
-- **Adegoke Motors / Adesanya title-stubs**: short-title citation forms the
-  ingestion regex cannot resolve; deferred to Phase 1.5 LLM-assist per the
-  multi-series citation fallback work.
+
+## 8. Corpus-quality backlog (owner ruling, 2026-09-18)
+
+Two benchmark fixtures — Adegoke Motors v. Adesanya (1989) and Adesanya
+v. President (1981) — are LawGlobal Hub web reprints (7 and 5 pages,
+~10k/~6k chars), not full-text judgments. They have complete native text
+layers (verified: zero image-only pages), so OCR recovers nothing; the
+reprints are simply thin next to the full judgments (27–35k chars). They
+stay ingested but are corpus-quality items:
+
+- Backlog: replace both reprints with full-text judgment PDFs when
+  sourced, then re-ingest and re-run the affected battery items.
+- Analysis rule: battery failures that specifically need Adegoke/
+  Adesanya content count as **corpus items, not gating items** — the
+  gating matrix (top-k x per-doc-cap) must not be judged against, or
+  adopted on the basis of, questions whose recall ceiling is the source
+  document itself.
