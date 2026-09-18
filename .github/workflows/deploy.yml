@@ -1,0 +1,113 @@
+name: Deploy
+
+# Pipeline: verify (lint+test) -> migrate -> deploy. Deployment itself is
+# held behind the `production` GitHub Environment (required reviewers) until
+# the owner confirms GCP/Vercel/Cloudflare credentials (Task 1.7 step 6).
+# Vercel (frontend) deploys via its own GitHub integration on push to main;
+# this workflow covers the API image + migration job only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "infra/supabase/migrations/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      run_migrate:
+        description: "Execute redcase-migrate job before deploying"
+        type: boolean
+        default: true
+      run_reingest:
+        description: "Execute redcase-reingest job after deploy (fresh env / DR only)"
+        type: boolean
+        default: false
+
+env:
+  # Set per target project (see docs/deploy-runbook.md).
+  REGION: europe-west1
+  GCP_PROJECT_ID: PROJECT_ID
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked --dev
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  migrate:
+    needs: verify
+    if: ${{ github.event_name == 'push' || inputs.run_migrate }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: beta
+      # The jobs file is multi-document; split on '---' and replace each.
+      - name: Apply job definitions
+        run: |
+          awk '/^---$/{n++;next} {print > ("apps/api/deploy/.job-" n ".yaml")}' \
+            apps/api/deploy/cloudrun-jobs.yaml
+          for f in apps/api/deploy/.job-*.yaml; do
+            sed -e "s/REGION/${{ env.REGION }}/g" \
+                -e "s/PROJECT/${{ env.GCP_PROJECT_ID }}/g" "$f" | \
+            gcloud run jobs replace --region ${{ env.REGION }}
+          done
+          rm -f apps/api/deploy/.job-*.yaml
+      - name: Execute redcase-migrate
+        run: gcloud run jobs execute redcase-migrate --region ${{ env.REGION }} --wait
+
+  deploy:
+    needs: [verify, migrate]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and push image
+        run: |
+          gcloud builds submit \
+            --tag "${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/redcase/api:${{ github.sha }}" \
+            --dockerfile apps/api/Dockerfile .
+      - name: Deploy service
+        run: |
+          gcloud run deploy redcase-api \
+            --image "${{ env.REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/redcase/api:${{ github.sha }}" \
+            --region ${{ env.REGION }} \
+            --service-account "redcase-api@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com"
+      - name: Smoke test
+        run: |
+          URL=$(gcloud run services describe redcase-api --region ${{ env.REGION }} --format 'value(status.url)')
+          curl -fsS "$URL/v1/health"
+
+  reingest:
+    needs: deploy
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_reingest }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Execute redcase-reingest
+        run: gcloud run jobs execute redcase-reingest --region ${{ env.REGION }} --wait

@@ -30,3 +30,42 @@ jobs:
 
       - name: Test (pytest)
         run: uv run pytest -q
+
+  # Citation-battery gate (owner ruling, Task 1.7): PRs that touch
+  # retrieval or the answer prompt must keep the 50-question battery green.
+  # The test file self-skips without live credentials, so this job is a
+  # no-op until the CI secrets below exist — at which point it hard-gates.
+  citation-battery:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            gated:
+              - 'apps/api/app/retrieval/**'
+              - 'apps/api/app/config.py'
+
+      - uses: astral-sh/setup-uv@v5
+        if: ${{ steps.filter.outputs.gated == 'true' }}
+        with:
+          enable-cache: true
+
+      - name: Battery (gated on retrieval/prompt changes)
+        if: ${{ steps.filter.outputs.gated == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.BATTERY_DATABASE_URL }}
+          JINA_API_KEY: ${{ secrets.JINA_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+        run: |
+          uv python install 3.12
+          uv sync --locked --dev
+          uv run pytest tests/test_citation_battery.py -q

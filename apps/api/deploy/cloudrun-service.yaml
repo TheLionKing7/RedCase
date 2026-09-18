@@ -1,0 +1,106 @@
+# RedCase API — Cloud Run service definition (Task 1.7 step 5).
+# Applied by .github/workflows/deploy.yml (gcloud run deploy) or manually:
+#   gcloud run services replace apps/api/deploy/cloudrun-service.yaml --region REGION
+# Substitute PROJECT/REGION/tags per target before applying, or let the CI
+# pipeline inject them. Secrets appear as secretKeyRef NAMES only — GCP
+# Secret Manager holds the values (HANDOFF.md 3: never print/log/commit).
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: redcase-api
+  labels:
+    app: redcase
+    component: api
+spec:
+  template:
+    metadata:
+      annotations:
+        # Scale-to-zero is the cost model (owner decision, Task 1.7):
+        # cpu-throttling true + minScale 0. The Cloudflare every-10-min
+        # /v1/health cron doubles as the cold-start keep-alive.
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT/redcase/api:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /v1/health
+              port: 8080
+          # --- Non-secret configuration (calibrated defaults live in
+          # app/config.py; only deploy-target specifics are set here) ---
+          env:
+            - name: ENV
+              value: "prod"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: CORS_ORIGINS
+              value: "https://app.redcase.example"
+            - name: STORAGE_PUBLIC_URL
+              value: "https://PROJECT.supabase.co/storage/v1/object/public"
+            # Provider selection (names only; keys below). Per the Task 1.7
+            # ruling these follow docs/calibration/phase1-jina.md — update
+            # there first, then here.
+            - name: ANSWER_MODEL_PRIMARY
+              value: "openrouter"
+            - name: ANSWER_MODEL_FALLBACK
+              value: "cerebras,groq,deepseek"
+            - name: LLM_MODEL
+              value: "openai/gpt-4o"
+            - name: EMBED_MODEL
+              value: "jina-embeddings-v3"
+            # --- Secrets: names only, values in GCP Secret Manager ---
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-database-url
+                  key: latest
+            - name: SUPABASE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-supabase-jwt-secret
+                  key: latest
+            - name: SUPABASE_SERVICE_ROLE
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-supabase-service-role
+                  key: latest
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-supabase-url
+                  key: latest
+            - name: INTERNAL_SWEEP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-internal-sweep-token
+                  key: latest
+            - name: JINA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-jina-api-key
+                  key: latest
+            # Provisioned on demand; the provider chain skips unprovisioned
+            # entries (first provisioned credential wins).
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-openrouter-api-key
+                  key: latest
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-deepseek-api-key
+                  key: latest
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: redcase-anthropic-api-key
+                  key: latest

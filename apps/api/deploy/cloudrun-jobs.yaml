@@ -1,0 +1,106 @@
+# RedCase API — Cloud Run Job definitions (Task 1.7 step 5).
+# Two jobs, one file (--- separated):
+#   redcase-migrate   — Alembic upgrade head. Run on every schema-affecting
+#                       deploy, BEFORE the service revision takes traffic.
+#                       CI: gcloud run jobs execute redcase-migrate --wait
+#   redcase-reingest  — Fixture re-ingestion (benchmark corpus) for fresh
+#                       environments / disaster recovery. Mounts the corpus
+#                       bucket read-only; PDFs are NOT baked into the image.
+#                       Seed the bucket from the repo's fixtures/landmark-sc
+#                       directory (see docs/deploy-runbook.md).
+# Secrets: secretKeyRef NAMES only (HANDOFF.md 3).
+---
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: redcase-migrate
+  labels:
+    app: redcase
+    component: api-migrate
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT/redcase/api:latest
+              command:
+                - /srv/apps/api/.venv/bin/python
+                - -m
+                - alembic
+                - upgrade
+                - head
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: redcase-database-url
+                      key: latest
+          restartPolicy: Never
+---
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: redcase-reingest
+  labels:
+    app: redcase
+    component: api-reingest
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT/redcase/api:latest
+              command:
+                - /srv/apps/api/.venv/bin/python
+                - -m
+                - scripts.ingest
+                - --dir
+                - /srv/corpus/landmark-sc
+                - --tenant
+                - aetoes
+                - --vault
+                - juris
+              resources:
+                limits:
+                  cpu: "2"
+                  memory: 2Gi
+              volumeMounts:
+                - name: corpus
+                  mountPath: /srv/corpus
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: redcase-database-url
+                      key: latest
+                - name: JINA_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: redcase-jina-api-key
+                      key: latest
+                - name: EMBED_MODEL
+                  value: "jina-embeddings-v3"
+                - name: SUPABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: redcase-supabase-url
+                      key: latest
+                - name: SUPABASE_SERVICE_ROLE
+                  valueFrom:
+                    secretKeyRef:
+                      name: redcase-supabase-service-role
+                      key: latest
+          volumes:
+            - name: corpus
+              gcs:
+                bucket: redcase-corpus
+                readOnly: true
+          restartPolicy: Never

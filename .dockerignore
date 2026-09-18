@@ -1,0 +1,18 @@
+# Build context for apps/api/Dockerfile is the REPO ROOT — keep image uploads
+# small and keep secrets/local state out of layers.
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+.env
+.env.*
+**/calibration_results
+**/calibration_scores.json
+fixtures
+brand-check.png
+design-check*.png
+docs/RedCaseSVG
+*.md
+!apps/api/README.md

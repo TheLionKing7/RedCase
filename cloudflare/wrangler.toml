@@ -1,0 +1,18 @@
+# RedCase Cron Worker — Cloudflare (Task 1.7 step 5).
+# Cron Triggers (UTC): Africa/Lagos is UTC+1 year-round (no DST), so
+# 07:00 Lagos == 06:00 UTC.
+#   */10 * * * *  -> GET  {API_BASE_URL}/v1/health        (keep-alive)
+#   0 6 * * *     -> POST {API_BASE_URL}/v1/internal/sweep (daily backfill)
+#
+# The sweep token is a WORKER SECRET, not a var:
+#   npx wrangler secret put INTERNAL_SWEEP_TOKEN
+name = "redcase-cron"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+[triggers]
+crons = ["*/10 * * * *", "0 6 * * *"]
+
+# Non-secret only. API_BASE_URL points at the Cloudflare-proxied api. host.
+[vars]
+API_BASE_URL = "https://api.redcase.example"
