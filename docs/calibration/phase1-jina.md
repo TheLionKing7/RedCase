@@ -373,3 +373,23 @@ fresh traffic; history is immutable by the audit convention).
   | Processor | Role | Data categories | Diligence | Status |
   |---|---|---|---|---|
   | Cerebras AI | answer-LLM inference (primary, provisioned) | question embeddings-of-context: retrieved passages + prompts in request payloads | same class as Groq/DeepSeek/Anthropic: ZDR bar applies — no prompt bodies or document text in RedCase stores/logs; console zero-retention setting to be verified by owner (same open item as Groq) | ACTIVE config, INACTIVE traffic (402 — awaiting account quota) |
+
+## OpenRouter gpt-4o primary — credit blocker (2026-09-18)
+
+Owner funded a new OpenRouter key; openai/gpt-4o verified (temperature=0
+accepted, ~10k-token grounded prompts served in ~3s). Defaults committed:
+ANSWER_MODEL_PRIMARY=openrouter, FALLBACK=cerebras,groq,deepseek;
+llm_model=openai/gpt-4o.
+
+Two diligence notes recorded:
+
+- gpt-4o is NOT a ZDR-class endpoint: OpenAI API default retention applies
+  (no training; 30-day abuse-monitoring retention unless a ZDR agreement
+  exists). Owner verification item, same class as the Groq/Cerebras
+  console zero-retention settings. Anthropic claude-3-5-sonnet remains the
+  design-doc ZDR primary, picked up automatically when keyed.
+- Battery run blocked: the key's remaining credit covers ~3,500 output
+  tokens (OpenRouter affordability pre-check). Fix shipped in advance:
+  answer_max_tokens=4096 (Settings, construction-time on OpenAICompatLLM)
+  — bounds per-answer spend and satisfies the pre-check once credits land.
+  Awaiting owner top-up, then step 2 battery vs gpt-4o proceeds.
