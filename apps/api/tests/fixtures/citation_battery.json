@@ -1,52 +1,52 @@
 [
-  {
-    "id": "B01",
-    "question": "What test did the Supreme Court lay down in Madukolu v. Nkemdilim for determining when a court is competent to hear a matter?",
-    "expect": "answer"
-  },
-  {
-    "id": "B02",
-    "question": "In Amaechi v. INEC, what was the Supreme Court's holding on whether a political party's candidate substitution after nomination required INEC's consent?",
-    "expect": "answer"
-  },
-  {
-    "id": "B03",
-    "question": "According to Adegoke Motors v. Adesanya, when does the doctrine of stare decisis permit a lower court to depart from a Supreme Court decision?",
-    "expect": "answer"
-  },
-  {
-    "id": "B04",
-    "question": "What did the Supreme Court hold in Abacha v. Fawehinmi regarding the domestic applicability of the African Charter in Nigerian courts?",
-    "expect": "answer"
-  },
-  {
-    "id": "B05",
-    "question": "In Senator Adesanya v. FRN, why did the Supreme Court hold that the plaintiff lacked locus standi to challenge the EFCC Act?",
-    "expect": "answer"
-  },
-  {
-    "id": "B06",
-    "question": "What did the Supreme Court decide in Obikoya v. Wema Bank about a banker's duty of care and verification of signatures?",
-    "expect": "answer"
-  },
-  {
-    "id": "B07",
-    "question": "What is the ratio in Ondo State Government v. Adewumi concerning the tenure of local government chairmen?",
-    "expect": "answer"
-  },
-  {
-    "id": "B08",
-    "question": "Has the Supreme Court of Nigeria ever held that a statute may be invalidated solely because it was enacted by a military decree? Cite the case.",
-    "expect": "answer"
-  },
-  {
-    "id": "B09",
-    "question": "What is the leading Nigerian Supreme Court authority on the tort of negligent misstatement by a public authority, and what did it hold?",
-    "expect": "refusal"
-  },
-  {
-    "id": "B10",
-    "question": "Under Nigerian Supreme Court precedent, may a party recover punitive damages for breach of a commercial contract of sale of goods? Cite the binding authority.",
-    "expect": "refusal"
-  }
+  {"id": "B01", "question": "What test did the Supreme Court lay down in Madukolu v. Nkemdilim for determining when a court is competent to hear a matter?", "expect": "answer"},
+  {"id": "B02", "question": "In Amaechi v. INEC, what was the Supreme Court's holding on whether a political party's substitution of its candidate after nomination required INEC's consent?", "expect": "answer"},
+  {"id": "B03", "question": "In Adegoke Motors v. Adesanya, what procedural application was made by Kola Awodein & Co. before the Supreme Court, and in what Lagos High Court suit did the underlying dispute begin?", "expect": "answer"},
+  {"id": "B04", "question": "What did the Supreme Court hold in Abacha v. Fawehinmi regarding the domestic applicability of the African Charter in Nigerian courts?", "expect": "answer"},
+  {"id": "B05", "question": "In Senator Adesanya v. FRN, what did the trial court declare about the challenged appointment, and on what ground was it set aside?", "expect": "answer"},
+  {"id": "B06", "question": "What was the nature of the agreement in Obikoya v. Wema Bank, and what order was the plaintiff seeking from the court?", "expect": "answer"},
+  {"id": "B07", "question": "What was the Supreme Court asked to decide in Military Governor of Ondo State v. Adewumi concerning the exercise of executive power by the military governor?", "expect": "answer"},
+  {"id": "B08", "question": "Has the Supreme Court of Nigeria ever held that a statute may be invalidated solely because it was enacted by a military decree? Cite the case.", "expect": "answer"},
+  {"id": "B09", "question": "What is the leading Nigerian Supreme Court authority on the tort of negligent misstatement by a public authority, and what did it hold?", "expect": "refusal"},
+  {"id": "B10", "question": "Under Nigerian Supreme Court precedent, may a party recover punitive damages for breach of a commercial contract of sale of goods? Cite the binding authority.", "expect": "refusal"},
+  {"id": "B11", "question": "According to Madukolu v. Nkemdilim, why is it insufficient for a court to have jurisdiction over the subject matter if it was not properly constituted?", "expect": "answer"},
+  {"id": "B12", "question": "What role did the Court of Appeal's earlier decision play in Amaechi v. INEC before the matter reached the Supreme Court?", "expect": "answer"},
+  {"id": "B13", "question": "What facility did Wema Bank approve for Bronik Motors by its letter of 2 February 1976, and on what key term?", "expect": "answer"},
+  {"id": "B14", "question": "In Abacha v. Fawehinmi, what argument was made about the supremacy of the Constitution over inconsistent legislation?", "expect": "answer"},
+  {"id": "B15", "question": "What does section 50 of the Criminal Code define, and how is a seditious intention characterized?", "expect": "answer"},
+  {"id": "B16", "question": "What remedies did the plaintiff seek in Adesanya v. FRN alongside the declaration, and how did the trial court treat them?", "expect": "answer"},
+  {"id": "B17", "question": "What is the procedure for obtaining an interim injunction in Nigeria?", "expect": "refusal"},
+  {"id": "B18", "question": "What conditions must be satisfied before the Supreme Court will grant leave to appeal against an interlocutory decision?", "expect": "answer"},
+  {"id": "B19", "question": "Can the National Industrial Court entertain a claim for unfair termination of a private-sector employment contract, and what remedies can it award?", "expect": "refusal"},
+  {"id": "B20", "question": "In Amaechi v. INEC, what did the Supreme Court say about the autonomy of political parties in choosing their candidates?", "expect": "answer"},
+  {"id": "B21", "question": "What does the Criminal Code say about the offence of uttering seditious words?", "expect": "answer"},
+  {"id": "B22", "question": "In Obikoya v. Wema Bank, how did the parties treat the contravention of section 13 of the Banking Act 1969?", "expect": "answer"},
+  {"id": "B23", "question": "What is the test for granting specific performance of an agreement to execute a legal mortgage?", "expect": "answer"},
+  {"id": "B24", "question": "Under Nigerian law, what is the limitation period for bringing an action to recover land?", "expect": "refusal"},
+  {"id": "B25", "question": "What did the Supreme Court hold in Abacha v. Fawehinmi about whether a military decree could oust the jurisdiction of the courts over Charter rights?", "expect": "answer"},
+  {"id": "B26", "question": "What was the effect of the judgment delivered in breach of a constitutional provision as argued in Alimi v. Kosebinu?", "expect": "answer"},
+  {"id": "B27", "question": "Which authorities did the Court of Appeal apply in Alimi v. Kosebinu, and which line of cases was said to be preferable?", "expect": "answer"},
+  {"id": "B28", "question": "What is the maximum term of copyright protection for literary works under Nigerian copyright law?", "expect": "refusal"},
+  {"id": "B29", "question": "In Madukolu v. Nkemdilim, what consequence followed from a court acting without jurisdiction?", "expect": "answer"},
+  {"id": "B30", "question": "How can a party register a security interest under the Companies and Allied Matters Act?", "expect": "refusal"},
+  {"id": "B31", "question": "What facts gave rise to the dispute between the parties in Abacha v. Fawehinmi?", "expect": "answer"},
+  {"id": "B32", "question": "What is the procedure for opposing the registration of a trademark at the Nigerian Trade Marks Registry?", "expect": "refusal"},
+  {"id": "B33", "question": "In Adesanya v. FRN, what was the basis of the plaintiff's complaint about the appointment he challenged?", "expect": "answer"},
+  {"id": "B34", "question": "What is the jurisdiction of the ECOWAS Community Court of Justice over complaints by individuals?", "expect": "refusal"},
+  {"id": "B35", "question": "What procedural history led to the appeal in Amaechi v. INEC, and who delivered the leading judgment in the Supreme Court?", "expect": "answer"},
+  {"id": "B36", "question": "What standard of care does a carrier owe to passengers under the Warsaw Convention, and how is liability limited?", "expect": "refusal"},
+  {"id": "B37", "question": "What did the Supreme Court say in Madukolu about the relationship between jurisdiction and the validity of the entire proceedings?", "expect": "answer"},
+  {"id": "B38", "question": "What remedies are available under the Nigerian Data Protection Act to a data subject whose rights have been violated?", "expect": "refusal"},
+  {"id": "B39", "question": "In Obikoya v. Wema Bank, what earlier Supreme Court decision of nine years standing was discussed in relation to the bank's position?", "expect": "answer"},
+  {"id": "B40", "question": "What is the measure of damages for professional negligence against an architect whose design caused a building collapse?", "expect": "refusal"},
+  {"id": "B41", "question": "What was the Supreme Court's holding in Abacha v. Fawehinmi on the status of the African Charter as domestic law after its enactment as Cap A9?", "expect": "answer"},
+  {"id": "B42", "question": "How is a maritime lien enforced against a vessel arrested in Nigerian waters?", "expect": "refusal"},
+  {"id": "B43", "question": "What does the Criminal Code provide about importing seditious publications?", "expect": "answer"},
+  {"id": "B44", "question": "What is the procedure for enforcing a foreign arbitral award in Nigeria under the New York Convention?", "expect": "refusal"},
+  {"id": "B45", "question": "What did the Court of Appeal hold in Alimi v. Kosebinu, and why did the Supreme Court disagree with its application of authority?", "expect": "answer"},
+  {"id": "B46", "question": "What rate of VAT applies to imported services in Nigeria, and who is liable to account for it?", "expect": "refusal"},
+  {"id": "B47", "question": "What was the complaint in Adesanya v. FRN about the declaration the trial court granted?", "expect": "answer"},
+  {"id": "B48", "question": "What compensation is payable for compulsory acquisition of land under the Land Use Act?", "expect": "refusal"},
+  {"id": "B49", "question": "In Amaechi v. INEC, how did the Supreme Court treat the argument that INEC's consent was a precondition to a valid substitution?", "expect": "answer"},
+  {"id": "B50", "question": "What is the scope of the Tax Appeal Tribunal's jurisdiction over disputed assessments?", "expect": "refusal"}
 ]
