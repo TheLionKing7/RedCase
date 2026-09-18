@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # Cerebras' catalog id drops the openai/ prefix (verified against
     # GET /v1/models 2026-09-18). Same model class as the Groq entry.
     cerebras_model: str = "gpt-oss-120b"
+    mistral_api_key: SecretStr | None = None  # OpenAI-compatible chat (owner 2026-09-18)
+    mistral_base_url: str = "https://api.mistral.ai/v1"
+    # Free-tier reality (verified 2026-09-18): the account's rate limit for
+    # mistral-small/medium is 0 req/min — only the Ministrals are enabled.
+    # ministral-8b is therefore the only served model; a 5-ID battery pilot
+    # gauges its citation discipline before any full run.
+    mistral_model: str = "ministral-8b-latest"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)

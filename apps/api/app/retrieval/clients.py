@@ -152,6 +152,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     provider's credential is not provisioned. All providers below are
     OpenAI-compatible except anthropic, so this stays config-only."""
     key: SecretStr | None = {
+        "mistral": settings.mistral_api_key,
         "cerebras": settings.cerebras_api_key,
         "groq": settings.groq_api_key,
         "deepseek": settings.deepseek_api_key,
@@ -163,6 +164,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     if name == "anthropic":
         return AnthropicLLM(AsyncAnthropic(api_key=key.get_secret_value()))
     base_url, model = {
+        "mistral": (settings.mistral_base_url, settings.mistral_model),
         "cerebras": (settings.cerebras_base_url, settings.cerebras_model),
         "groq": (settings.groq_base_url, settings.groq_model),
         "deepseek": (settings.deepseek_base_url, settings.deepseek_model),
