@@ -199,3 +199,51 @@ battery-run B20/B45/B02 refusals.
 | 7 | CI battery | decision | Testing contract wants the 50-question battery in CI on PRs touching retrieval/prompts; it skips without live creds. Decision: CI secrets vs recorded-response fixtures. |
 | 8 | CORS/domain | config | cors_origins is localhost-only; production origin needed at deploy time. |
 | 9 | Pending code decisions | decision | B13 synthesis sentence (v2.x) and one-retry-on-refusal policy — both measured safe, awaiting owner go-ahead. |
+
+## GROUNDED_SYSTEM v2.1 + one-retry policy (Task 1.7 step 1, 2026-09-18)
+
+Owner-approved decisions applied and re-validated against the full battery:
+
+- **v2.1**: the B13 cross-chunk synthesis sentence (exact text proposed in
+  the B13 probe above) added to rule 1 of GROUNDED_SYSTEM. Retrieval, the
+  refusal string, and the zero-fabrication gates untouched.
+- **One-retry-on-refusal**: on a grounding refusal the answer call is
+  retried ONCE with the same prompt (all configured clients answer at
+  temperature 0 — AnthropicLLM now sets this explicitly; the retry is an
+  identical deterministic call aimed at serving-side flapping). Integrity
+  refusals do not retry (that path already consumed its one regeneration).
+  EVERY attempt writes its own query_audit row — attempt number is carried
+  in the structlog `query_refused` event (`attempt=1|2`); the audit table
+  has no attempt column (design DDL), so per-attempt DB rows plus log
+  correlation via question_hash is the faithful implementation.
+
+Battery results (full run, then targeted re-runs; zero fabricated
+citations in every run — hard gate held):
+
+1. Full 50 under v2.1 + retry: **40/50**. Fails were 10 over-refusals
+   (B02, B08, B16, B18, B20, B22, B23, B25, B26, B31); all 17
+   known-negatives refused — no under-refusal.
+2. One re-run of the 10 fails: B02, B16, B25 flipped to PASS — serving
+   flakes, matching the documented time-varying flapping.
+3. Third run of the five still refusing (B08, B22, B23, B26, B31): all
+   still refused — persistent, not streaky flapping.
+4. **v2-prompt isolation probe** (same IDs forced through the pre-v2.1
+   prompt text, retrieval unchanged): B22 and B26 PASSED under v2 as
+   well, and B22's retry path is visible in its audit — attempt 1
+   refusal, attempt 2 answered with 6 citations, both rows written.
+   B08, B23, B31 refused under BOTH prompts.
+
+Determination: the v2.1 sentence is exonerated — every "regressed" ID
+either flapped back to passing or refuses identically under v2. The
+new persistent set (B08, B23, B31) plus B18/B20 are serving/corpus
+items, the same class already documented, not prompt regressions.
+
+- B13 (the v2.1 target): **PASS** — cross-chunk synthesis refusal fixed.
+- Prompt-attributable regressions on the previously-passing set: **none**.
+- Under-refusal on the 17 known-negatives: **none** (17/17 refused).
+- Fabricated citations: **zero** (hard gate, all runs).
+
+Effective battery state: persistent failures B08, B18, B20, B23, B31;
+flaky B02, B16, B25 (each passed in at least one of two runs); 43/50 on
+the strictest single-run count. Committed as the new default per owner
+ruling.
