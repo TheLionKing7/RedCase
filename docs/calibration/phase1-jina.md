@@ -131,8 +131,71 @@ budget 8/3, ratio-exempt off).**
     artifact; v2's refusal is the designed rule-3 behavior on a
     corpus-thin question. Reclassified as a **corpus item**.
 
-**Decision status.** Owner gate: commit as new default iff >=6/9
-recovery, zero fabrications, no regressions. Recovery and fabrication
-conditions are met; B18 is the one open item (documented above as a
-corpus reclassification, pending owner sign-off). Still failing after
-v2: B13, B18, B20, B45.
+**Decision status (owner ruling 2026-09-18).** v2 committed as the new
+default (072563b). Recorded per ruling:
+
+1. **B18 reclassified as corpus-thin.** Its v1 pass was a leniency
+   artifact; v2's refusal is the designed rule-3 behavior when no
+   on-point passage exists. Tracked in the corpus-quality backlog.
+2. **B02 logged as a known serving-nondeterminism flake** (temp-0
+   over-refusal, passed on immediate re-run). Not a prompt effect;
+   see the serving-variance measurements in section 10.
+3. **Reranker (BGE): DEFERRED, do not build.** Evidence trail: the
+   original justification was 6 ranking-limited battery IDs (gold at
+   candidate ranks 5-14); all 6 recovered under v2 without any
+   re-ranking. The remaining 4 failures (B13, B18, B20, B45) are
+   corpus-thin (B18), serving nondeterminism (B20/B45), and one
+   systematic answer-LLM case (B13, section 10) — none is a ranking
+   failure a reranker would fix. Revisit at corpus scale-up to the
+   full 41k-judgment corpus, where candidate sets grow ~4,000x and
+   ranking pressure becomes real.
+
+## 10. Residual failure analysis (2026-09-18)
+
+### B13 case probe
+
+Dumped the live v2 payload for one failing run. The 8-passage set
+contains the answer across two Obikoya chunks: the ratio chunk (pages
+3-5) carries the amended claim paras 7-9 — the letter dated 2/2/76,
+Bronik Motors' endorsement accepting "all the terms and conditions
+stipulated therein", and the N500,000 guarantee — and the pages 15-18
+chunk carries the Bank's own letter: "the loan overdraft was granted on
+a short term basis." The answer (an overdraft/loan facility on a
+short-term basis) is present but must be SYNTHESIZED across chunks; the
+question's framing ("what facility did Wema Bank approve by its letter
+of 2 February 1976") presupposes a single explicit statement the corpus
+does not make, and distractor amounts (N2.1m judgment debt, N500k
+guarantee) sit nearby. The model refuses rather than risk mis-linking.
+Determination: phrasing/framing trigger, not a missing passage.
+Minimal proposed fix (v2.x, prompt-only, battery re-run to validate):
+one synthesis-clarifying sentence in GROUNDED_SYSTEM, e.g. "If the
+answer requires combining facts stated in different passages — a
+document referenced in one passage, its terms described in another —
+the passages support the combined answer; cite both passages."
+
+### Serving variance (B20 / B45, five runs each, temp 0)
+
+B20: 5/5 answered. B45: 5/5 answered. Combined with the battery run
+(both refused) and the earlier pre-v2 probe (B20 REF-ANS-ANS, B45
+REF-REF-REF), flapping persists and is time-varying on the serving
+side — identical config flips between refuse and answer across
+sessions. A one-retry-on-refusal policy was evaluated for under-refusal
+safety: all 17 known-negative battery items were run twice each and
+every run refused (34/34 refusals) — the guard holds on the full
+negative set. Recommendation: one retry on refusal (not on integrity
+failure), capped, audited; expected to absorb serving flakes like the
+battery-run B20/B45/B02 refusals.
+
+### Task 1.7 deploy readiness — blockers
+
+| # | Blocker | Kind | Detail |
+|---|---|---|---|
+| 1 | Latency PAT failing | measurement | query_audit across battery/gating runs: median 4.3s but p95 28s (max 205s) vs PAT p95 < 8s. Regeneration/integrity retry paths dominate the tail. Decision needed: budget caps vs faster model tier vs async responses. |
+| 2 | AWS/Fargate unprovisioned | credentials | No AWS account/creds in repo or env; needs ECR repo, task definition, service, Secrets Manager entries for the 6 secrets currently in apps/api/.env. |
+| 3 | Vercel unprovisioned | credentials + decision | No Vercel token/project; frontend API base URL env needed. Decision: Vercel as designed, or another host. |
+| 4 | Supabase production hardening | credentials + config | Direct Postgres DSN in use — needs Supavisor pooling URL for serverless; SUPABASE_JWT_SECRET absent from .env (JWT auth path unprovisioned); STORAGE_PUBLIC_URL unset (source_pdf_url links). |
+| 5 | ZDR verification script | build item | Task 1.7 DoD requires it; not written. Scope: scan logs/audit tables for question bodies or document text leakage; produce pass/fail artifact. |
+| 6 | Production answer-LLM decision | decision | Currently DeepSeek direct (premium key). Confirm prod model + fallback chain (Anthropic ZDR key per design? OpenRouter?). |
+| 7 | CI battery | decision | Testing contract wants the 50-question battery in CI on PRs touching retrieval/prompts; it skips without live creds. Decision: CI secrets vs recorded-response fixtures. |
+| 8 | CORS/domain | config | cors_origins is localhost-only; production origin needed at deploy time. |
+| 9 | Pending code decisions | decision | B13 synthesis sentence (v2.x) and one-retry-on-refusal policy — both measured safe, awaiting owner go-ahead. |
