@@ -324,3 +324,52 @@ classifier client exists in Phase 1).
   (experimental fallback) until then. Code default remains
   gpt-oss-120b — one config line already in place; it activates the
   moment the tier allows.
+
+## ZDR verification (Task 1.7 step 4, 2026-09-18) — scripts/zdr_audit_check.py
+
+Live-database + log-sink verifier. Exit non-zero on any finding; findings
+report locations only (never leaked content). Checks: query_audit hash-only
+schema; prompt-body markers in non-corpus tables; corpus 8-grams in every
+non-corpus table (recent rows, --since-days); answer_text with a precise
+detector (12-gram, >=3 hits, excluding cited documents, retrieved chunks,
+and formulaic boilerplate shared by >=3 chunks); secret patterns; local log
+sinks; per-table connections with retry (the Supabase link drops long scans).
+
+First live run surfaced REAL findings, all triaged:
+
+1. **Prompt-scaffold echoes in answers** (8 rows): DeepSeek sometimes emits
+   `<passages>/<question>/<filters>` blocks into its output; two rows carried
+   near-full passage echoes (up to 24k chars). Fix: deterministic
+   `strip_echoed_blocks` sanitizer in the service (applies before
+   verification + persistence), plus a unit test with an echoing fake LLM.
+2. **Verbatim quotes flagged as leaks** — precision work, three rounds:
+   cited-doc exclusion had a UUID-vs-string bug (never applied); after the
+   fix, remaining hits were Nigerian-judgment formulaic boilerplate (322 of
+   1,175 hits appear in >=3 chunks) — excluded at >=3-chunk frequency; the
+   4 holdout rows are pre-v2.1 legacy whose retrieved_chunk_ids dangle after
+   corpus re-ingestion (chunk ids rotate; immutable audit keeps the old
+   ids). Legacy findings are documented artifacts, not current behaviour.
+3. The refusal sentence ("No binding precedent found in Vault B.") was a
+   false-positive marker — it is both rule-3 output and the API response
+   contract. Removed from the marker set.
+
+Post-fix evidence: three live battery IDs (B13, B02, B31) run through the
+production path, then the verifier over a 0.01-day window — **pass, zero
+findings** on the fresh rows. Full-window runs still flag the documented
+legacy rows; that is the tool working as designed (runbook: CI runs it on
+fresh traffic; history is immutable by the audit convention).
+
+## Provider status after Cerebras attempt (2026-09-18)
+
+- Cerebras key provisioned and wired (config-only, same OpenAI-compatible
+  path). Catalog lists gpt-oss-120b + qwen-3.8-27b only; llama-3.3-70b /
+  llama-4-scout 404 (owner-reported availability not yet visible on the
+  account). EVERY model 402s: the account has no quota/payment method.
+- Consequence recorded in .env (not committed): ANSWER_MODEL_PRIMARY=deepseek
+  until a provider quota check passes — the chain resolves cerebras on key
+  presence and would 402 every answer call otherwise.
+- NDPA processor register (owner-held per HANDOFF §2.8; drafted for filing):
+
+  | Processor | Role | Data categories | Diligence | Status |
+  |---|---|---|---|---|
+  | Cerebras AI | answer-LLM inference (primary, provisioned) | question embeddings-of-context: retrieved passages + prompts in request payloads | same class as Groq/DeepSeek/Anthropic: ZDR bar applies — no prompt bodies or document text in RedCase stores/logs; console zero-retention setting to be verified by owner (same open item as Groq) | ACTIVE config, INACTIVE traffic (402 — awaiting account quota) |
