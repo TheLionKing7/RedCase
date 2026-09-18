@@ -393,3 +393,29 @@ Two diligence notes recorded:
   answer_max_tokens=4096 (Settings, construction-time on OpenAICompatLLM)
   — bounds per-answer spend and satisfies the pre-check once credits land.
   Awaiting owner top-up, then step 2 battery vs gpt-4o proceeds.
+
+## Battery vs ministral-8b — FAILED the under-refusal gate (2026-09-18)
+
+Mistral free tier serves only the Ministrals (small/medium rate limit is
+0 req/min — verified via 429 headers). Pilot 4/5 clean, so the full
+battery ran: **41/50, zero fabricated citations — but 4 UNDER-REFUSALS**
+(B32, B38, B42, B44: out-of-corpus questions ANSWERED). Known-negatives
+13/17 vs DeepSeek's 17/17 (and 34/34 in the retry probe). First-attempt
+flap 23/50 (46%) — similar to DeepSeek, so flapping is not provider-
+specific; the ~50% first-attempt refusal rate across two unrelated
+providers points at serving nondeterminism class, absorbed by the retry
+policy either way.
+
+Determination: ministral-8b is DISQUALIFIED as a platform answer model —
+answering out-of-corpus questions is the dangerous failure mode for a
+legal product, worse than a low score. gpt-4o (funded OpenRouter key,
+verified fast + temp-0 clean) is the next candidate for step 2; DeepSeek
+remains the only battery-qualified model serving today. .env chain
+re-pinned: deepseek primary until a funded challenger lands.
+
+| Provider/model | Battery | Fabrications | Under-refusal (17) | Status |
+|---|---|---|---|---|
+| DeepSeek-chat | 45/50 (v2), 43-46/50 (v2.1 runs, flaky) | 0 | 0/17 | qualified, serving (experimental fallback) |
+| ministral-8b (Mistral free) | 41/50 | 0 | 4/17 | DISQUALIFIED |
+| gpt-4o (OpenRouter) | pending credits | — | — | verified capable, unfunded |
+| gpt-oss-120b (Groq/Cerebras) | tier-blocked | — | — | awaiting Dev Tier / account quota |
