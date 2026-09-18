@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
+    internal_sweep_token: SecretStr | None = None  # authenticates POST /v1/internal/sweep
     storage_public_url: str | None = None  # public URL prefix for source_pdf_path
 
     # Web
