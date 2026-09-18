@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     deepseek_api_key: SecretStr | None = None  # OpenAI-compatible chat fallback
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     deepseek_model: str = "deepseek-chat"
+    groq_api_key: SecretStr | None = None  # OpenAI-compatible primary chat (owner 2026-09-18)
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "llama-3.3-70b-versatile"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
@@ -89,6 +92,16 @@ class Settings(BaseSettings):
     # holding passage is never crowded out by its own caption/header chunks
     # (the B11 failure mode). The 2x2 gating matrix runs with this on.
     retrieval_ratio_exempt: bool = False
+    # Answer-model provider selection (owner ruling 2026-09-18, Task 1.7
+    # step 3/1): env-selectable primary + fallback chain, names only.
+    # Resolution order: ANSWER_MODEL_PRIMARY, then ANSWER_MODEL_FALLBACK
+    # (comma-separated chain, first provisioned credential wins). Groq is the
+    # platform primary; DeepSeek is explicitly EXPERIMENTAL-FALLBACK (latency
+    # + flapping evidence in docs/calibration/phase1-jina.md); Anthropic
+    # (claude-3-5-sonnet-20241022) remains the design-doc ZDR primary and is
+    # used automatically when an Anthropic key is provisioned.
+    answer_model_primary: str = "groq"
+    answer_model_fallback: str = "deepseek"
     # Chat model served through OpenRouter when no Anthropic/DeepSeek key
     # is provisioned (the citation battery's answer LLM).
     llm_model: str = "deepseek/deepseek-chat-v3-1217"

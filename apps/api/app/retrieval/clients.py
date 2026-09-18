@@ -15,6 +15,7 @@ from typing import Protocol
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+from pydantic import SecretStr
 
 from app.config import Settings
 from app.middleware.zdr import get_logger
@@ -143,29 +144,59 @@ def make_embedder(settings: Settings) -> Embedder:
     )
 
 
+def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
+    """Build the answer LLM for one provider name, or None when that
+    provider's credential is not provisioned. All providers below are
+    OpenAI-compatible except anthropic, so this stays config-only."""
+    key: SecretStr | None = {
+        "groq": settings.groq_api_key,
+        "deepseek": settings.deepseek_api_key,
+        "openrouter": settings.openrouter_api_key,
+        "anthropic": settings.anthropic_api_key,
+    }.get(name)
+    if key is None:
+        return None
+    if name == "anthropic":
+        return AnthropicLLM(AsyncAnthropic(api_key=key.get_secret_value()))
+    base_url, model = {
+        "groq": (settings.groq_base_url, settings.groq_model),
+        "deepseek": (settings.deepseek_base_url, settings.deepseek_model),
+        "openrouter": ("https://openrouter.ai/api/v1", settings.llm_model),
+    }[name]
+    client = AsyncOpenAI(
+        api_key=key.get_secret_value(),
+        base_url=base_url,
+        timeout=180.0,
+        max_retries=4,
+    )
+    return OpenAICompatLLM(client, model)
+
+
 def make_llm(settings: Settings) -> AnswerLLM:
-    """Resolve the answer LLM. Anthropic (design primary) first; otherwise
-    DeepSeek direct (owner-offered); otherwise OpenRouter chat with
-    ``settings.llm_model``. Raises when nothing is provisioned."""
-    if settings.anthropic_api_key:
-        return AnthropicLLM(AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value()))
-    if settings.deepseek_api_key:
-        client = AsyncOpenAI(
-            api_key=settings.deepseek_api_key.get_secret_value(),
-            base_url=settings.deepseek_base_url,
-            timeout=180.0,
-            max_retries=4,
-        )
-        return OpenAICompatLLM(client, settings.deepseek_model)
-    if settings.openrouter_api_key:
-        client = AsyncOpenAI(
-            api_key=settings.openrouter_api_key.get_secret_value(),
-            base_url="https://openrouter.ai/api/v1",
-            timeout=180.0,
-            max_retries=4,
-        )
-        return OpenAICompatLLM(client, settings.llm_model)
+    """Resolve the answer LLM from the env-selectable provider chain.
+
+    Order: ANSWER_MODEL_PRIMARY, then each ANSWER_MODEL_FALLBACK entry, then
+    anthropic (the design-doc ZDR primary, used automatically when keyed) as
+    final implicit fallback. Provider names only — models and endpoints live
+    in Settings. Raises when nothing is provisioned.
+
+    Provider roles (owner ruling 2026-09-18): groq = platform primary;
+    deepseek = EXPERIMENTAL FALLBACK (per-call latency 4-10s and ~50%
+    first-attempt flapping measured 2026-09-18 — see
+    docs/calibration/phase1-jina.md); anthropic = design primary, currently
+    unprovisioned. DEVIATION from Phase1-Design §3.3 (Claude 3.5 Sonnet via
+    the ZDR workspace key as default): recorded per HANDOFF.md rule 3 — the
+    code honours the design the moment ANTHROPIC_API_KEY is provisioned."""
+    chain = [settings.answer_model_primary, *settings.answer_model_fallback.split(",")]
+    for name in chain:
+        llm = _provider_client(name.strip(), settings)
+        if llm is not None:
+            return llm
+    for implicit in ("anthropic", "openrouter"):
+        llm = _provider_client(implicit, settings)
+        if llm is not None:
+            return llm
     raise RuntimeError(
-        "No answer-LLM credential provisioned (ANTHROPIC_API_KEY,"
-        " DEEPSEEK_API_KEY or OPENROUTER_API_KEY) — cannot generate answers."
+        "No answer-LLM credential provisioned (GROQ_API_KEY, DEEPSEEK_API_KEY,"
+        " OPENROUTER_API_KEY or ANTHROPIC_API_KEY) — cannot generate answers."
     )

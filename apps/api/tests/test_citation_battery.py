@@ -54,8 +54,8 @@ LIVE_CORPUS = [
 
 def _provisioned() -> tuple[bool, str]:
     s = get_settings()
-    if not (s.anthropic_api_key or s.deepseek_api_key or s.openrouter_api_key):
-        return False, "no answer-LLM credential (ANTHROPIC/DEEPSEEK/OPENROUTER)"
+    if not (s.anthropic_api_key or s.groq_api_key or s.deepseek_api_key or s.openrouter_api_key):
+        return False, "no answer-LLM credential (ANTHROPIC/GROQ/DEEPSEEK/OPENROUTER)"
     if not (s.openai_api_key or s.jina_api_key or s.openrouter_api_key or s.nvidia_api_key):
         return False, "no embedding credential (OPENAI / JINA / OPENROUTER / NVAPI)"
     if not s.database_url:
