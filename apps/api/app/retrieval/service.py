@@ -82,7 +82,7 @@ HYBRID_SQL = """
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
         JOIN vaults v ON v.id = d.vault_id
-        WHERE d.tenant_id = $1 AND v.vault_type = 'juris'
+        WHERE d.tenant_id = $1 AND v.vault_type = $8::text
           AND ($3::text IS NULL OR d.court_level = $3)
           AND ($4::int IS NULL OR d.year >= $4)
           AND ($5::int IS NULL OR d.year <= $5)
@@ -96,7 +96,7 @@ HYBRID_SQL = """
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
         JOIN vaults v ON v.id = d.vault_id
-        WHERE d.tenant_id = $1 AND v.vault_type = 'juris'
+        WHERE d.tenant_id = $1 AND v.vault_type = $8::text
           AND dc.fts @@ plainto_tsquery('english', $7)
         LIMIT 40
     )
@@ -110,6 +110,12 @@ HYBRID_SQL = """
     ORDER BY score DESC NULLS LAST
     LIMIT 20
 """
+
+# Vault A variant (Task 2.3/2.4): identical pipeline over firm documents.
+# FTS degradation is EXPECTED for encrypted chunks (ciphertext indexes to
+# garbage tokens; vector leg carries retrieval) — recorded in the 2.4 DoD
+# report and the runbook backlog; the decrypt-then-index worker removes it.
+HYBRID_SQL_FIRM = HYBRID_SQL
 
 
 def _vec_literal(vec: list[float]) -> str:
@@ -127,6 +133,7 @@ class RetrievalService:
         filters: dict[str, Any],
         *,
         threshold: float | None = None,
+        vault: str = "juris",
     ) -> list[dict[str, Any]] | None:
         """Hybrid candidate fetch + the §3.4 refusal gate. Returns the raw
         hybrid-score-ordered rows, or None on refusal. Split from
@@ -144,6 +151,7 @@ class RetrievalService:
                 filters.get("year_to"),
                 filters.get("ratio_decidendi"),
                 question,
+                "firm" if vault == "firm" else "juris",
             )
         ]
         # §3.4 refusal: no rows, or best vsim below the gate. NULL vsim
@@ -169,8 +177,11 @@ class RetrievalService:
         top_k: int | None = None,
         per_doc_cap: int | None = None,
         ratio_exempt: bool | None = None,
+        vault: str = "juris",
     ) -> list[dict[str, Any]] | None:
-        rows = await self.candidates(question, qvec, filters, threshold=threshold)
+        rows = await self.candidates(
+            question, qvec, filters, threshold=threshold, vault=vault
+        )
         if rows is None:
             return None
         # Presentation budget (recorded adaptation, 2026-09-18): up to 8

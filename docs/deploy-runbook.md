@@ -148,3 +148,12 @@ gates are safety gates and are never amendable.
       docs-touching commit.
 - [ ] Revisit the BGE reranker at corpus scale-up to 41k judgments (decision
       and evidence trail recorded in docs/calibration/phase1-jina.md).
+- [ ] **FTS-on-ciphertext limitation (Vault A)** — retrieval on
+      CONFIDENTIAL+ Vault A chunks is vector-only: chunk text is stored
+      AES-256-GCM encrypted (Task 2.2), so the Postgres FTS index cannot
+      see it. Design options: (a) a separate Postgres FTS index fed by a
+      decrypt-then-index worker, (b) a dedicated search service. Decision
+      deferred to corpus-scale time. Consequence already live: Task 2.4's
+      dual-vault hybrid search degrades to vector-only on the Vault A side
+      for encrypted docs — expected Phase 2 behavior, documented here per
+      the Task 2.3 ruling.

@@ -8,7 +8,13 @@ API-key auth.
 Claim contract (provisioned on the Supabase user record, Phase 2):
   sub                          -> user_ref
   app_metadata.tenant_id       -> tenant (uuid of the tenants row)
-A token missing either claim is rejected — tenant scoping is never guessed.
+  app_metadata.clearance       -> clearance (STAFF|SENIOR|PARTNER|ADMIN;
+                                  IdP group mapping lands with Slack identity
+                                  work — until then the claim defaults to
+                                  STAFF and is set per-user at provisioning)
+A token missing the first two claims is rejected — tenant scoping and
+identity are never guessed. Clearance defaults to STAFF (fail-closed
+direction: an unmapped user gets the floor, never the ceiling).
 """
 
 import base64
@@ -29,6 +35,7 @@ from app.config import Settings
 class TenantContext:
     tenant_id: str
     user_ref: str
+    clearance: str  # STAFF | SENIOR | PARTNER | ADMIN (IdP group mapping, 2.3)
     db: asyncpg.Connection  # connection with RLS GUCs set inside a transaction
 
 
@@ -118,6 +125,13 @@ async def get_tenant_context(
                 "SELECT set_config('app.tenant_id', $1, true)", str(tenant_id)
             )
             await conn.execute("SELECT set_config('app.user_ref', $1, true)", str(user_ref))
+            clearance = (claims.get("app_metadata") or {}).get("clearance", "STAFF")
+            await conn.execute(
+                "SELECT set_config('app.user_clearance', $1, true)", str(clearance)
+            )
             yield TenantContext(
-                tenant_id=str(tenant_id), user_ref=str(user_ref), db=conn
+                tenant_id=str(tenant_id),
+                user_ref=str(user_ref),
+                clearance=str(clearance),
+                db=conn,
             )
