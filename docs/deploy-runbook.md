@@ -110,13 +110,21 @@ the contract working, not an obstacle to route around.
   smoke test. All deploy steps sit behind the `production` environment
   approval.
 
-## 6. Latency bars (amended by evidence, owner-approved 2026-09-18)
+## 6. Latency bars
 
-| Path | Bar |
-|---|---|
-| Answer path | p95 < 8 s |
-| Refusal-with-retry path | p95 < 15 s |
-| Hard ceiling (answer call) | 20 s (becomes a logged refusal; one-retry policy applies) |
+Amended for the pilot window, owner framework 2026-09-19 — measured basis
+and reversion trigger recorded in docs/calibration/phase1-jina.md
+("PAT pilot decision", 2026-09-19):
+
+| Path | Pilot bar | Post-migration bar (re-asserts at provider migration or 41k-judgment scale-up) |
+|---|---|---|
+| Answer path p95 | < 12 s | < 8 s |
+| Refusal-with-retry p95 | < 15 s | < 15 s |
+| Hard ceiling (per answer attempt) | 20 s | 20 s |
+
+Bars are user-experience targets and may be amended by evidence with a
+stated reversion trigger; the fabrication (zero, hard) and under-refusal
+gates are safety gates and are never amendable.
 
 ## 7. Known blockers at time of writing
 
