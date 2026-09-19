@@ -16,10 +16,11 @@ was withheld. Contract under test:
   * ALL fixture data is synthetic (owner rule: no real Aetoes documents
     in Vault A until the 2.2 pen-test DoD passes).
 
-Per the verbatim Phase 2 policy, SENIOR sees FIRM_INTERNAL + grants
-only — the doc's prose implies SENIOR >= CONFIDENTIAL but the SQL does
-not encode it; that gap is flagged to the owner, and this battery locks
-the VERBATIN behaviour so any future change is a conscious diff.
+Clearance ladder (owner ruling 2026-09-19, migration 0009):
+SENIOR gains CONFIDENTIAL visibility; PARTNER_RESTRICTED is grant-gated
+ONLY — partners and ADMIN need an explicit document_grants row like
+everyone else. Grant writes are enforced in SQL: only PARTNER/ADMIN
+clearances create grants, and granted_by must equal the caller.
 """
 
 import uuid
@@ -151,18 +152,37 @@ class TestClearanceBattery:
         assert "PARTNER_RESTRICTED" not in levels
         assert "CONFIDENTIAL" not in levels
 
-    async def test_senior_per_verbatim_policy(self, vault_a_fixture: dict) -> None:
-        # Phase 2 1.2's SQL grants SENIOR nothing beyond FIRM_INTERNAL +
-        # grants — the prose ordering (PARTNER > SENIOR > STAFF) is NOT in
-        # the policy. Locked verbatim; flagged to owner.
-        levels = await _visible_doc_levels(vault_a_fixture, SENIOR)
-        assert levels == {"FIRM_INTERNAL"}
-
-    async def test_partner_sees_all_classifications(
+    async def test_senior_gains_confidential_not_pr(
         self, vault_a_fixture: dict
     ) -> None:
-        levels = await _visible_doc_levels(vault_a_fixture, PARTNER)
-        assert levels == {"FIRM_INTERNAL", "CONFIDENTIAL", "PARTNER_RESTRICTED"}
+        # Ladder ruling: SENIOR sees CONFIDENTIAL; PARTNER_RESTRICTED stays
+        # grant-gated.
+        levels = await _visible_doc_levels(vault_a_fixture, SENIOR)
+        assert levels == {"FIRM_INTERNAL", "CONFIDENTIAL"}
+        assert "PARTNER_RESTRICTED" not in levels
+
+    async def test_partner_restricted_is_grant_gated_for_partners(
+        self, vault_a_fixture: dict
+    ) -> None:
+        # Ruling: partners see FIRM_INTERNAL + CONFIDENTIAL by clearance;
+        # PARTNER_RESTRICTED requires an explicit grant even for them.
+        conn: asyncpg.Connection = vault_a_fixture["conn"]
+        tenant = vault_a_fixture["tenant"]
+        pr_doc = vault_a_fixture["docs"]["PARTNER_RESTRICTED"]
+        assert await _visible_doc_levels(vault_a_fixture, PARTNER) == {
+            "FIRM_INTERNAL", "CONFIDENTIAL",
+        }
+        async with conn.transaction():
+            await _scope(conn, tenant, PARTNER[0], PARTNER[1])
+            await conn.execute(
+                "INSERT INTO document_grants"
+                " (tenant_id, document_id, user_ref, grant_level, granted_by)"
+                " VALUES ($1, $2, $3, 'READ', $3)",
+                tenant, pr_doc, PARTNER[0],
+            )
+        assert await _visible_doc_levels(vault_a_fixture, PARTNER) == {
+            "FIRM_INTERNAL", "CONFIDENTIAL", "PARTNER_RESTRICTED",
+        }
 
     async def test_grant_opens_exactly_that_document(
         self, vault_a_fixture: dict
@@ -171,14 +191,12 @@ class TestClearanceBattery:
         tenant = vault_a_fixture["tenant"]
         pr_doc = vault_a_fixture["docs"]["PARTNER_RESTRICTED"]
         async with conn.transaction():
-            await conn.execute(
-                "SELECT set_config('app.tenant_id', $1, true)", tenant
-            )
+            await _scope(conn, tenant, PARTNER[0], PARTNER[1])
             await conn.execute(
                 "INSERT INTO document_grants"
                 " (tenant_id, document_id, user_ref, grant_level, granted_by)"
                 " VALUES ($1, $2, $3, 'READ', $4)",
-                tenant, pr_doc, STAFF[0], "u-partner-syn",
+                tenant, pr_doc, STAFF[0], PARTNER[0],
             )
         # Granted user: PR visible now, CONFIDENTIAL still not.
         assert await _visible_doc_levels(vault_a_fixture, STAFF) == {
