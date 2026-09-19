@@ -3,7 +3,7 @@
 
 **Version:** 1.0 | **Status:** Ready for implementation
 **Builds on:** Phase 1 (`RedCase-Phase1-Design.md`) — Vault B, FastAPI RAG core, ZDR middleware
-**Brand assets:** `/brand` — RedCase SVG set (SVGO optimization required pre-production; see §6)
+**Brand assets:** `/brand` — RedCase SVG set (SVGO optimization required pre-production; see 6)
 
 ---
 
@@ -123,26 +123,101 @@ CREATE TABLE slack_intake (
 );
 ```
 
-RLS — Phase 1's tenant isolation stays; Phase 2 adds the **privilege layer**:
+RLS — Phase 1's tenant isolation stays; Phase 2 adds the **privilege layer**.
+
+> **Corrected-in-implementation (2026-09-19).** The SQL below is the
+> corrected, deployed form (migrations 0008 + 0009), backported into this
+> doc per owner ruling. Five corrections were required to make the
+> original block executable and secure — each was caught by the Task 2.1
+> clearance battery before deploy:
+> 1. `documents.vault_type` does not exist (Phase 1 scopes via
+>    `vault_id → vaults.vault_type`) → vault-type test is a join subquery.
+> 2. `vault_type_guard()` takes the chunk's `document_id` as a parameter —
+>    a policy function has no row context otherwise.
+> 3. Both policies are `AS RESTRICTIVE` — bare `CREATE POLICY` defaults to
+>    PERMISSIVE, which ORs with tenant_isolation and voids the clearance
+>    layer entirely.
+> 4. The new GUCs use the missing-ok `current_setting(name, true)` —
+>    single-arg would error every Phase 1 Vault B query (OR order is not
+>    guaranteed). Unset clearance denies above-FIRM_INTERNAL by denial.
+> 5. The grant EXISTS is qualified `g.document_id = documents.id` — the
+>    unqualified form resolves `id` to `g.id` inside the subquery and is
+>    permanently false.
+>
+> **Clearance ladder ruling (owner, 2026-09-19; migration 0009):** SENIOR
+> gains CONFIDENTIAL visibility; PARTNER_RESTRICTED is grant-gated ONLY —
+> partners (and ADMIN) require an explicit `document_grants` row, same as
+> everyone else. Restrictive policies carry `WITH CHECK (true)` so the
+> read layer never blocks ingestion writes (write authorization is
+> app-layer, matching Phase 1's tenant_isolation posture). `document_grants`
+> additionally enforces at SQL level that only PARTNER/ADMIN clearances
+> create grants, and `granted_by` must equal the caller's `app.user_ref`.
 
 ```sql
--- Base: documents visible if classification <= what the user can see,
--- enforced via app-set GUC 'app.user_clearance' (PARTNER > SENIOR > STAFF)
+-- Clearance ladder: PUBLIC/FIRM_INTERNAL visible to all same-tenant users;
+-- CONFIDENTIAL to SENIOR and above; PARTNER_RESTRICTED grant-gated only.
+-- Enforced via app-set GUCs 'app.user_clearance' / 'app.user_ref'.
 CREATE POLICY vault_a_clearance ON documents
-    USING (vault_type <> 'firm'
-        OR classification_level = 'FIRM_INTERNAL'
-        OR current_setting('app.user_clearance') IN ('PARTNER','ADMIN')
+    AS RESTRICTIVE
+    USING ((SELECT v.vault_type FROM vaults v WHERE v.id = vault_id) <> 'firm'
+        OR classification_level IN ('PUBLIC','FIRM_INTERNAL')
+        OR (classification_level = 'CONFIDENTIAL'
+            AND current_setting('app.user_clearance', true) IN ('SENIOR','PARTNER','ADMIN'))
         OR EXISTS (SELECT 1 FROM document_grants g
-                   WHERE g.document_id = id AND g.user_ref = current_setting('app.user_ref')));
+                   WHERE g.document_id = documents.id
+                     AND g.user_ref = current_setting('app.user_ref', true)))
+    WITH CHECK (true);   -- read layer only; ingestion writes are app-authorized
 
 -- Retrieval-time grant filter (applied in SQL, not app code, so it cannot be skipped)
 CREATE POLICY chunk_privilege ON document_chunks
-    USING (vault_type_guard());   -- joins documents, applies same clearance + grant rules
+    AS RESTRICTIVE
+    USING (vault_type_guard(document_id))
+    WITH CHECK (true);
+
+CREATE FUNCTION vault_type_guard(p_document_id UUID)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $guard$
+    SELECT EXISTS (
+        SELECT 1 FROM documents d
+        WHERE d.id = p_document_id
+          AND ((SELECT v.vault_type FROM vaults v WHERE v.id = d.vault_id) <> 'firm'
+               OR d.classification_level IN ('PUBLIC','FIRM_INTERNAL')
+               OR (d.classification_level = 'CONFIDENTIAL'
+                   AND current_setting('app.user_clearance', true) IN ('SENIOR','PARTNER','ADMIN'))
+               OR EXISTS (SELECT 1 FROM document_grants g
+                          WHERE g.document_id = d.id
+                            AND g.user_ref = current_setting('app.user_ref', true))))
+    )
+$guard$;
+
+-- Grant administration, enforced in SQL: grants are created only by
+-- PARTNER/ADMIN clearances, and granted_by must be the caller.
+ALTER TABLE document_grants ENABLE ROW LEVEL SECURITY;  -- (plus tenant_isolation, migration 0008)
+CREATE POLICY grant_admin ON document_grants
+    AS RESTRICTIVE
+    USING (true)
+    WITH CHECK (current_setting('app.user_clearance', true) IN ('PARTNER','ADMIN')
+                AND granted_by = current_setting('app.user_ref', true));
 ```
+
+Original text preserved for the record: *"Base: documents visible if
+classification <= what the user can see, enforced via app-set GUC
+'app.user_clearance' (PARTNER > SENIOR > STAFF)."* The ladder above
+implements that ordering with the 2026-09-19 ruling's two changes.
 
 **Encryption model.** Two layers, deliberately:
 - **Storage layer** — Supabase Storage/S3 SSE-AES-256 for PDF blobs (same as Phase 1). This satisfies "encrypted at rest" for the platform.
 - **Envelope layer** (the differentiator) — each Vault A document gets a unique 256-bit DEK, wrapped by a tenant master key in AWS KMS. Chunk text for `classification_level >= 'CONFIDENTIAL'` is AES-256-GCM encrypted at the application layer before upsert; only retrieval workers holding the unwrapped DEK can embed or serve it. `encrypted_content_hash` (HMAC over ciphertext) gives tamper evidence for the audit trail.
+
+> **Corrected-in-implementation (Task 2.2, 2026-09-19).** The wrapping
+> key provider is a `KeyProvider` interface (`wrap`/`unwrap`) with two
+> implementations: a KMS provider (AWS KMS-shaped, production) and a
+> **local AES-256-GCM provider for dev** (master key from
+> `VAULT_A_MASTER_KEY`, dev fallback per the Task 2.2 brief). Ciphertext
+> is stored in `chunk_text` as `enc:v1:<base64(nonce ‖ ciphertext)>`;
+> retrieval decrypts on read. The Vault A ingest endpoint that encrypts
+> at intake ships with the Slack intake work — 2.2 delivers the crypto
+> module, the storage format, and the decrypt-on-retrieve path.
 
 ---
 
@@ -235,7 +310,7 @@ async def dual_vault_query(question: str, ctx, db: AsyncSession) -> dict:
 async def vault_a_query(q: str, ctx, db: AsyncSession, audit_extra: dict,
                         dry_run: bool = False) -> dict:
     """Vault A retrieval = Phase 1 engine + privilege filter + decryption.
-    The clearance + document_grants join happens IN SQL (§1.2 policy)."""
+    The clearance + document_grants join happens IN SQL (1.2 policy)."""
     svc = RetrievalService(db, ctx.tenant_id, user_ref=ctx.user_ref,
                            clearance=ctx.clearance, vault="firm")
     rows = await svc.retrieve(q, filters={"matter_id": ctx.matter_id} if ctx.matter_id else {})
@@ -399,7 +474,7 @@ async def handle_reply_with_file(event, client):
     if not pending:
         return
     for f in event["files"]:
-        doc = await intake_file(f, pending)                     # §3.5
+        doc = await intake_file(f, pending)                     # 3.5
         analysis = await redteam_analyze(doc, pending)          # Vault A+B router, adversarial prompt
         await client.chat_postMessage(channel=event["channel"],
                                       thread_ts=event["ts"],
