@@ -419,3 +419,26 @@ re-pinned: deepseek primary until a funded challenger lands.
 | ministral-8b (Mistral free) | 41/50 | 0 | 4/17 | DISQUALIFIED |
 | gpt-4o (OpenRouter) | pending credits | — | — | verified capable, unfunded |
 | gpt-oss-120b (Groq/Cerebras) | tier-blocked | — | — | awaiting Dev Tier / account quota |
+
+## Free-provider capacity probe — both dead for battery-size prompts (2026-09-19)
+
+Owner redirect (2026-09-19): run steps 2-3 against free providers (Cerebras,
+Groq-ZDR) with the paced runner before any OpenRouter spend. Probed live via
+`scripts/probe_providers.py` (tiny call + realistic ~10k-token grounded-size
+call, app's own client path):
+
+| Provider | Tiny call | ~10k-token call | Verdict |
+|---|---|---|---|
+| Cerebras `gpt-oss-120b` | 402 payment_required | 402 payment_required | No free quota on the account — account-wide, billing tab needs payment. Not a rate limit; cannot be paced around. |
+| Groq `openai/gpt-oss-120b` | OK, 1.1s | 413 — TPM limit 8,000/min | Free-tier per-minute TOKEN ceiling is smaller than one battery prompt (~10k). Pacing (added in f89bea4, --pace default 12s) fixes RPM, not a size cap. |
+
+Conclusion: neither free provider can serve a single grounded battery
+question, let alone 50. The redirect's escape hatch ("only if both free
+providers fail does OpenRouter credit become the right spend") is triggered
+— and on capacity, a harder failure than citation discipline. Options for
+the owner: (a) small OpenRouter top-up -> gpt-4o confirmation battery per
+the original plan; (b) accept DeepSeek-chat as the PAT production answer
+model (only battery-qualified model serving today; v2.1 + one-retry policy
+committed as default in 325104c) and migrate to gpt-4o post-PAT. Decision
+rests with the owner — spend vs ship. G1 stays open until the paced
+battery + path-split latency run against the chosen provider.
