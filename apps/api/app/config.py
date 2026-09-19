@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
     internal_sweep_token: SecretStr | None = None  # authenticates POST /v1/internal/sweep
+    # Vault A envelope crypto (Phase 2 Task 2.2): key provider selection.
+    # local = dev fallback (VAULT_A_MASTER_KEY, 64-char hex, never commit);
+    # kms = production backend, fails closed until the KMS wiring lands.
+    vault_a_key_provider: str = "local"
+    vault_a_master_key: SecretStr | None = None
     storage_public_url: str | None = None  # public URL prefix for source_pdf_path
 
     # Web
