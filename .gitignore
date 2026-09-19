@@ -18,8 +18,13 @@ Thumbs.db
 Desktop.ini
 
 
-# Owner rule: markdown files are not committed
+# Owner rule: markdown files are not committed — EXCEPT docs/, which holds
+# the load-bearing project artifacts (design docs, calibration file,
+# deploy runbook, design-system guidelines). Root-level and apps-level
+# *.md stay ignored. Owner ruling 2026-09-19: the per-file sanctioned-
+# exception gate has done its job; docs/ is a standing allowlist now.
 *.md
+!docs/**
 
 # Node (apps/web)
 node_modules/
