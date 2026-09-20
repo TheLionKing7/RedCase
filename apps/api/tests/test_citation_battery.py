@@ -22,6 +22,7 @@ Run:  pytest tests/test_citation_battery.py -v
 """
 
 import json
+import os
 import ssl
 from pathlib import Path
 
@@ -75,6 +76,12 @@ def _load_battery() -> list[dict]:
 async def test_battery(item: dict) -> None:
     """One battery entry: in-corpus questions must answer with verified,
     corpus-internal citations; out-of-corpus questions must refuse."""
+    # BATTERY_PACE (seconds, default 0): throttle between battery items —
+    # the permanent fix for provider rate limits (Groq 2026-09-18, explabs
+    # 2026-09-20). Only THIS test may sleep; every other suite stays fast.
+    pace = float(os.environ.get("BATTERY_PACE", "0"))
+    if pace > 0:
+        await asyncio.sleep(pace)
     settings = get_settings()
 
     conn = await asyncpg.connect(settings.database_url)
