@@ -36,6 +36,37 @@ class AnswerLLM(Protocol):
     async def answer(self, system: str, user: str) -> str: ...
 
 
+class RateLimitedError(RuntimeError):
+    """Provider returned HTTP 429. Carries Retry-After seconds when the
+    gateway advertised one, so callers (battery runner, fallback chain) can
+    back off without re-parsing provider-specific response objects."""
+
+    def __init__(self, retry_after: float | None, provider: str, model: str) -> None:
+        self.retry_after = retry_after
+        self.provider = provider
+        self.model = model
+        super().__init__(f"{provider}/{model} rate-limited (retry_after={retry_after})")
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    """True when the provider error is an HTTP 429 (openai/anthropic both
+    expose status_code on their APIStatusError subclasses)."""
+    return getattr(exc, "status_code", None) == 429
+
+
+def _extract_retry_after(exc: Exception) -> float | None:
+    """Best-effort Retry-After in seconds from provider response headers."""
+    resp = getattr(exc, "response", None)
+    headers = getattr(resp, "headers", None) or {}
+    raw = headers.get("retry-after") or headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class OpenAIEmbedder:
     """text-embedding-3-large via the no-retention ZDR proxy; OpenRouter is
     the OpenAI-compatible fallback (same wiring as scripts/ingest.py)."""
@@ -56,15 +87,24 @@ class AnthropicLLM:
 
     def __init__(self, client: AsyncAnthropic) -> None:
         self._client = client
+        self.provider = "anthropic"
+        self.model = self.MODEL
 
     async def answer(self, system: str, user: str) -> str:
-        msg = await self._client.messages.create(
-            model=self.MODEL,
-            max_tokens=2048,
-            temperature=0,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
+        try:
+            msg = await self._client.messages.create(
+                model=self.MODEL,
+                max_tokens=2048,
+                temperature=0,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+        except Exception as exc:  # re-raise non-429 unchanged; 429 -> RateLimitedError
+            if _is_rate_limited(exc):
+                raise RateLimitedError(
+                    _extract_retry_after(exc), self.provider, self.model
+                ) from exc
+            raise
         log.info(
             "llm_answer",
             model=self.MODEL,
@@ -82,21 +122,36 @@ class OpenAICompatLLM:
     temperature, and a construction-time completion cap (bounds spend per
     answer and satisfies OpenRouter's affordability pre-check)."""
 
-    def __init__(self, client: AsyncOpenAI, model: str, max_tokens: int = 4096) -> None:
+    def __init__(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        provider: str,
+        max_tokens: int = 4096,
+    ) -> None:
         self._client = client
         self._model = model
+        self.provider = provider
+        self.model = model
         self._max_tokens = max_tokens
 
     async def answer(self, system: str, user: str) -> str:
-        r = await self._client.chat.completions.create(
-            model=self._model,
-            temperature=0,
-            max_tokens=self._max_tokens,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        )
+        try:
+            r = await self._client.chat.completions.create(
+                model=self._model,
+                temperature=0,
+                max_tokens=self._max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+        except Exception as exc:  # re-raise non-429 unchanged; 429 -> RateLimitedError
+            if _is_rate_limited(exc):
+                raise RateLimitedError(
+                    _extract_retry_after(exc), self.provider, self.model
+                ) from exc
+            raise
         log.info(
             "llm_answer",
             model=self._model,
@@ -178,7 +233,9 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
         timeout=180.0,
         max_retries=4,
     )
-    return OpenAICompatLLM(client, model, max_tokens=settings.answer_max_tokens)
+    return OpenAICompatLLM(
+        client, model, provider=name, max_tokens=settings.answer_max_tokens
+    )
 
 
 def make_llm(settings: Settings) -> AnswerLLM:
