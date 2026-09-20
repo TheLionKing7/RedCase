@@ -11,6 +11,8 @@ ZDR (HANDOFF.md 2.1): these clients never log prompt bodies, document text,
 or embedding inputs — token counts and ids only.
 """
 
+import asyncio
+import random
 from typing import Protocol
 
 from anthropic import AsyncAnthropic
@@ -238,32 +240,130 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     )
 
 
+# Fallback-chain backoff (per-call): honor a gateway Retry-After only when it
+# is small enough to keep the whole retry+fallback sequence inside
+# answer_timeout_s (20s). Per-minute limits are the battery runner's job
+# (15/30/60s), not the per-call chain's.
+_FALLBACK_BACKOFF_SECONDS = (1.0, 2.0, 4.0)
+MAX_FALLBACK_RETRIES = 3
+
+
+def _fallback_delay(retry_after: float | None, retry: int) -> float:
+    """Jittered per-call backoff (retry is 0-indexed): 1/2/4s base +0-50%
+    jitter, or an advertised Retry-After when it is <= 3s."""
+    if retry_after is not None and 0 < retry_after <= 3.0:
+        return retry_after
+    base = _FALLBACK_BACKOFF_SECONDS[retry]
+    return base + random.uniform(0.0, base * 0.5)  # noqa: S311 — jitter, not crypto
+
+
+def _failure_reason(exc: Exception) -> str:
+    """Classify a hard failure for the audit-trail structlog event."""
+    if getattr(exc, "status_code", None) == 402:
+        return "quota_exhausted"
+    return "hard_failure"
+
+
+class FallbackLLM:
+    """Answer LLM with a two-tier provider error policy.
+
+    Tier 1 — 429/transient: retry the SAME provider with backoff (max 3)
+    before any fallback. Falling back on a momentary limit would silently
+    downgrade to a weaker model mid-run and poison provider-comparison
+    evidence.
+
+    Tier 2 — hard failure / exhausted quota (e.g. 402): fall through to the
+    next provider in the chain immediately.
+
+    Content refusals are never errors: the model returns the no-precedence
+    sentence like any other answer, so neither tier triggers. ``provider`` /
+    ``model`` reflect the provider that ACTUALLY served the last call (the
+    caller records these in query_audit).
+    """
+
+    def __init__(self, providers: list[tuple[str, AnswerLLM]]) -> None:
+        self._providers = providers
+        self.provider: str | None = None
+        self.model: str | None = None
+
+    async def answer(self, system: str, user: str) -> str:
+        tried: list[str] = []
+        last_exc: Exception | None = None
+        for name, llm in self._providers:
+            for rl in range(MAX_FALLBACK_RETRIES + 1):
+                try:
+                    out = await llm.answer(system, user)
+                    self.provider = getattr(llm, "provider", name)
+                    self.model = getattr(llm, "model", None)
+                    return out
+                except RateLimitedError as exc:
+                    if rl == MAX_FALLBACK_RETRIES:
+                        tried.append(name)
+                        last_exc = exc
+                        log.warn(
+                            "provider_fallback",
+                            provider=name,
+                            reason="rate_limited",
+                            retries=MAX_FALLBACK_RETRIES,
+                            tried=list(tried),
+                        )
+                        break
+                    delay = _fallback_delay(exc.retry_after, rl)
+                    log.info(
+                        "provider_rate_limited_retry",
+                        provider=name,
+                        retry=rl + 1,
+                        delay_s=round(delay, 1),
+                    )
+                    await asyncio.sleep(delay)
+                except Exception as exc:  # hard failure -> fall through
+                    tried.append(name)
+                    last_exc = exc
+                    log.warn(
+                        "provider_fallback",
+                        provider=name,
+                        reason=_failure_reason(exc),
+                        tried=list(tried),
+                    )
+                    break
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("answer provider chain exhausted with no providers")
+
+
 def make_llm(settings: Settings) -> AnswerLLM:
-    """Resolve the answer LLM from the env-selectable provider chain.
+    """Resolve the answer LLM as a runtime-fallback chain.
 
     Order: ANSWER_MODEL_PRIMARY, then each ANSWER_MODEL_FALLBACK entry, then
     anthropic (the design-doc ZDR primary, used automatically when keyed) as
-    final implicit fallback. Provider names only — models and endpoints live
-    in Settings. Raises when nothing is provisioned.
+    final implicit fallback, then openrouter. Provider names only — models and
+    endpoints live in Settings. Every provisioned name becomes one link in a
+    FallbackLLM chain with the two-tier error policy above. Raises when
+    nothing is provisioned.
 
     Provider roles (owner ruling 2026-09-18): groq = platform primary;
-    deepseek = EXPERIMENTAL FALLBACK (per-call latency 4-10s and ~50%
-    first-attempt flapping measured 2026-09-18 — see
-    docs/calibration/phase1-jina.md); anthropic = design primary, currently
-    unprovisioned. DEVIATION from Phase1-Design §3.3 (Claude 3.5 Sonnet via
-    the ZDR workspace key as default): recorded per HANDOFF.md rule 3 — the
-    code honours the design the moment ANTHROPIC_API_KEY is provisioned."""
-    chain = [settings.answer_model_primary, *settings.answer_model_fallback.split(",")]
-    for name in chain:
-        llm = _provider_client(name.strip(), settings)
-        if llm is not None:
-            return llm
+    deepseek = EXPERIMENTAL FALLBACK; anthropic = design primary. The chain
+    records the ACTUAL serving provider per call (FallbackLLM.provider), which
+    answer_question persists to query_audit — a run configured for one primary
+    is never silently mis-attributed when a fallback serves."""
+    names: list[str] = []
+    for name in [settings.answer_model_primary, *settings.answer_model_fallback.split(",")]:
+        name = name.strip()
+        if name and name not in names:
+            names.append(name)
     for implicit in ("anthropic", "openrouter"):
-        llm = _provider_client(implicit, settings)
+        if implicit not in names:
+            names.append(implicit)
+
+    providers: list[tuple[str, AnswerLLM]] = []
+    for name in names:
+        llm = _provider_client(name, settings)
         if llm is not None:
-            return llm
-    raise RuntimeError(
-        "No answer-LLM credential provisioned (EXPLABS_API_KEY, GROQ_API_KEY,"
-        " DEEPSEEK_API_KEY, OPENROUTER_API_KEY or ANTHROPIC_API_KEY)"
-        " — cannot generate answers."
-    )
+            providers.append((name, llm))
+    if not providers:
+        raise RuntimeError(
+            "No answer-LLM credential provisioned (EXPLABS_API_KEY, GROQ_API_KEY,"
+            " DEEPSEEK_API_KEY, OPENROUTER_API_KEY or ANTHROPIC_API_KEY)"
+            " — cannot generate answers."
+        )
+    return FallbackLLM(providers)

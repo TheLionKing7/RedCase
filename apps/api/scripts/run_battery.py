@@ -132,7 +132,7 @@ async def main() -> None:
         "--provider",
         type=str,
         default=None,
-        help="override ANSWER_MODEL_PRIMARY for this run only (serving config untouched)",
+        help="measure this provider ALONE (override primary + clear fallback) for the run",
     )
     args = ap.parse_args()
 
@@ -148,9 +148,15 @@ async def main() -> None:
 
     settings = get_settings()
     if args.provider:
-        # Override ANSWER_MODEL_PRIMARY for THIS run only; the cached global
-        # Settings (and hence the live serving config) is untouched.
-        settings = settings.model_copy(update={"answer_model_primary": args.provider})
+        # Override ANSWER_MODEL_PRIMARY AND clear the fallback chain for THIS
+        # run only — a calibration run must measure the named provider alone,
+        # so a transient 429 surfaces as "not_run_rate_limited" (resumable)
+        # rather than silently falling through to a weaker provider and
+        # blending quality/latency evidence. The cached global Settings (and
+        # hence the live serving config) is untouched.
+        settings = settings.model_copy(
+            update={"answer_model_primary": args.provider, "answer_model_fallback": ""}
+        )
     primary = settings.answer_model_primary
     model = getattr(settings, _MODEL_FIELD.get(primary, "llm_model"), None)
     conn = await asyncpg.connect(settings.database_url)

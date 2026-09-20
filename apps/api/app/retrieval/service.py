@@ -329,6 +329,15 @@ async def answer_question(
     passages = svc.build_passages(rows)
     base_audit: dict[str, Any] = dict(audit, threshold_passed=True)
 
+    def _serving() -> dict[str, Any]:
+        """The provider/model that actually served this attempt's answer
+        call(s) — recorded per row so a fallback is never mis-attributed to
+        the configured primary."""
+        return {
+            "serving_provider": getattr(llm, "provider", None),
+            "serving_model": getattr(llm, "model", None),
+        }
+
     async def _answer_once() -> tuple[str, list[dict[str, Any]], int]:
         """One answer call with the §3.4 citation-integrity regeneration cap.
         Returns (answer_text, citations, regenerations_used). Raises
@@ -373,7 +382,9 @@ async def answer_question(
         append-only contract free of in-place-mutable columns."""
         await write_audit(
             db,
-            _with_latency(dict(base_audit, answer_text=None, citations=[])),
+            _with_latency(
+                dict(base_audit, answer_text=None, citations=[], **_serving())
+            ),
         )
         log.info(
             "query_refused",
@@ -396,6 +407,7 @@ async def answer_question(
                         answer_text=None,
                         citations=[],
                         integrity_refusal=True,
+                        **_serving(),
                     )
                 ),
             )
@@ -435,6 +447,7 @@ async def answer_question(
                     # score — skip them rather than float(None).
                     similarity_scores=[float(r["vsim"]) for r in rows if r["vsim"] is not None],
                     regenerations=regenerations,
+                    **_serving(),
                 )
             ),
         )

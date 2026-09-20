@@ -26,15 +26,17 @@ AUDIT_SQL = """
     INSERT INTO query_audit
         (id, tenant_id, user_ref, question_hash, filters, retrieved_chunk_ids,
          similarity_scores, threshold_passed, answer_text, citations,
-         latency_ms, analysis_id)
-    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, $11, $12)
+         latency_ms, analysis_id, serving_provider, serving_model)
+    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
 """
 
 
 async def write_audit(db: asyncpg.Connection, audit: dict[str, Any]) -> None:
     """Persist one query_audit row. Raises on failure — by design (HALT).
     ``analysis_id`` links analysis-pipeline events (Feature-Addendum Step A);
-    null for /v1/query traffic."""
+    null for /v1/query traffic. ``serving_provider``/``serving_model`` record
+    which provider actually served the answer (fallback chain) — null for
+    threshold-only refusals that never reach an answer LLM."""
     await db.execute(
         AUDIT_SQL,
         uuid.uuid4(),
@@ -49,6 +51,8 @@ async def write_audit(db: asyncpg.Connection, audit: dict[str, Any]) -> None:
         json.dumps(audit.get("citations") or []),
         int(audit.get("latency_ms") or 0),
         uuid.UUID(str(audit["analysis_id"])) if audit.get("analysis_id") else None,
+        audit.get("serving_provider"),
+        audit.get("serving_model"),
     )
     log.info(
         "query_audited",
