@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     # ministral-8b is therefore the only served model; a 5-ID battery pilot
     # gauges its citation discipline before any full run.
     mistral_model: str = "ministral-8b-latest"
+    # Experiential Labs paid gateway (owner 2026-09-20): OpenAI-compatible
+    # chat over a 288-model catalog (GET /v1/models verified). Hosts the
+    # Claude Sonnet class — the Phase1-Design §3.3 ZDR-primary family — so
+    # explabs is the premium answer-model candidate for the battery's
+    # answer-LLM-limited failures (DeepSeek over-refusal/flap class).
+    explabs_api_key: SecretStr | None = None
+    explabs_base_url: str = "https://api.experientiallabs.ai/v1"
+    explabs_model: str = "claude-sonnet-4.5"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)

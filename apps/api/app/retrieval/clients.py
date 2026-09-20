@@ -152,6 +152,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     provider's credential is not provisioned. All providers below are
     OpenAI-compatible except anthropic, so this stays config-only."""
     key: SecretStr | None = {
+        "explabs": settings.explabs_api_key,
         "mistral": settings.mistral_api_key,
         "cerebras": settings.cerebras_api_key,
         "groq": settings.groq_api_key,
@@ -164,6 +165,7 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
     if name == "anthropic":
         return AnthropicLLM(AsyncAnthropic(api_key=key.get_secret_value()))
     base_url, model = {
+        "explabs": (settings.explabs_base_url, settings.explabs_model),
         "mistral": (settings.mistral_base_url, settings.mistral_model),
         "cerebras": (settings.cerebras_base_url, settings.cerebras_model),
         "groq": (settings.groq_base_url, settings.groq_model),
@@ -204,6 +206,7 @@ def make_llm(settings: Settings) -> AnswerLLM:
         if llm is not None:
             return llm
     raise RuntimeError(
-        "No answer-LLM credential provisioned (GROQ_API_KEY, DEEPSEEK_API_KEY,"
-        " OPENROUTER_API_KEY or ANTHROPIC_API_KEY) — cannot generate answers."
+        "No answer-LLM credential provisioned (EXPLABS_API_KEY, GROQ_API_KEY,"
+        " DEEPSEEK_API_KEY, OPENROUTER_API_KEY or ANTHROPIC_API_KEY)"
+        " — cannot generate answers."
     )
