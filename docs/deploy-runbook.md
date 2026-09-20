@@ -68,6 +68,12 @@ the contract working, not an obstacle to route around.
 3. Sanity: `POST /v1/internal/sweep` once (or let the daily cron run) so any
    deferred-embedding chunks backfill before queries hit them.
 
+Live dev-database state note (2026-09-20): the shared Supabase project was
+at revision 0007 since Phase 1; 0008 (Vault A clearance) + 0009 (clearance
+ladder) were applied to it during Task 2.4 testing (`alembic upgrade head`).
+The live schema is now at head (0009) — the Phase 2 retrieval SQL
+(`d.matter_id` predicate, Task 2.4) requires it.
+
 ## 3. Cloud Run / Cloudflare setup checklist
 
 - [ ] GCP project + Artifact Registry repo `redcase`; service account

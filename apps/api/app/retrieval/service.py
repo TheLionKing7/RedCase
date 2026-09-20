@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import re
 import time
+import uuid
 from typing import Any
 
 import asyncpg
@@ -83,6 +84,7 @@ HYBRID_SQL = """
         JOIN documents d ON d.id = dc.document_id
         JOIN vaults v ON v.id = d.vault_id
         WHERE d.tenant_id = $1 AND v.vault_type = $8::text
+          AND ($9::uuid IS NULL OR d.matter_id = $9)
           AND ($3::text IS NULL OR d.court_level = $3)
           AND ($4::int IS NULL OR d.year >= $4)
           AND ($5::int IS NULL OR d.year <= $5)
@@ -97,6 +99,7 @@ HYBRID_SQL = """
         JOIN documents d ON d.id = dc.document_id
         JOIN vaults v ON v.id = d.vault_id
         WHERE d.tenant_id = $1 AND v.vault_type = $8::text
+          AND ($9::uuid IS NULL OR d.matter_id = $9)
           AND dc.fts @@ plainto_tsquery('english', $7)
         LIMIT 40
     )
@@ -140,6 +143,10 @@ class RetrievalService:
         ``retrieve`` so gate calibration (scripts/calibrate_gate.py) can
         read the exact gate metric — the vsim of the top-hybrid-score row —
         without the presentation re-ordering below changing rows[0]."""
+        # matter_id (Task 2.4): NULL means unfiltered — the Phase 1 juris path
+        # never sets it, so its SQL shape is unchanged. Vault A dual-vault
+        # retrieval sets it when a matter-scoped (non-partner) user asks.
+        mid = filters.get("matter_id")
         rows = [
             dict(r)
             for r in await self.db.fetch(
@@ -152,6 +159,7 @@ class RetrievalService:
                 filters.get("ratio_decidendi"),
                 question,
                 "firm" if vault == "firm" else "juris",
+                uuid.UUID(str(mid)) if mid else None,
             )
         ]
         # §3.4 refusal: no rows, or best vsim below the gate. NULL vsim
@@ -273,6 +281,7 @@ async def answer_question(
     settings: Settings,
     embedder: Embedder | None = None,
     llm: AnswerLLM | None = None,
+    audit_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Grounded answer pipeline (§3.3) with the §3.4 refusal contracts and
     the one-regeneration cap. ``embedder``/``llm`` are injectable for tests;
@@ -297,11 +306,14 @@ async def answer_question(
         ratio_exempt=settings.retrieval_ratio_exempt,
     )
 
+    # audit_extra (Task 2.4): caller-supplied routing metadata (route,
+    # route_confidence) folded into the persisted filters JSON — additive,
+    # Phase 1 callers pass nothing and get the unchanged row shape.
     audit: dict[str, Any] = {
         "tenant_id": tenant_id,
         "user_ref": user_ref,
         "question_hash": hashlib.sha256(question.encode()).hexdigest(),
-        "filters": filters,
+        "filters": {**filters, **(audit_extra or {})},
     }
 
     if rows is None:

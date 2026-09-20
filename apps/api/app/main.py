@@ -22,6 +22,7 @@ from app.routers.analyses import router as analyses_router
 from app.routers.channels import router as channels_router
 from app.routers.internal import router as internal_router
 from app.routers.query import router as query_router
+from app.routers.router import router as dual_query_router
 from app.routers.vault_a import router as vault_a_router
 
 log = get_logger("redcase.boot")
@@ -75,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(channels_router)
     app.include_router(internal_router)
     app.include_router(vault_a_router)
+    app.include_router(dual_query_router)
     return app
 
 
