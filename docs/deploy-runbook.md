@@ -71,8 +71,14 @@ the contract working, not an obstacle to route around.
 Live dev-database state note (2026-09-20): the shared Supabase project was
 at revision 0007 since Phase 1; 0008 (Vault A clearance) + 0009 (clearance
 ladder) were applied to it during Task 2.4 testing (`alembic upgrade head`).
-The live schema is now at head (0009) — the Phase 2 retrieval SQL
-(`d.matter_id` predicate, Task 2.4) requires it.
+
+Second migration-drift catch (2026-09-20, same day): 0010 (query_audit
+`serving_provider`/`serving_model` — additive, nullable TEXT) was applied
+during Task 2.6 provider-fallback work (`alembic upgrade head`, then
+spot-checked in information_schema: both columns TEXT, nullable, default
+NULL). Two manual drift catches in one day is the structural signal — the
+deploy pipeline's migrate-before-deploy job (step 1 above) retires this
+class of issue entirely once it lands.
 
 ## 3. Cloud Run / Cloudflare setup checklist
 
