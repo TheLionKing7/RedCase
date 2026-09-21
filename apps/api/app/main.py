@@ -23,6 +23,7 @@ from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
 from app.routers.expert_chat import router as expert_chat_router
 from app.routers.internal import router as internal_router
+from app.routers.practice import router as practice_router
 from app.routers.query import router as query_router
 from app.routers.router import router as dual_query_router
 from app.routers.vault_a import router as vault_a_router
@@ -80,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(expert_chat_router)
     app.include_router(internal_router)
     app.include_router(vault_a_router)
+    app.include_router(practice_router)
     app.include_router(dual_query_router)
     return app
 

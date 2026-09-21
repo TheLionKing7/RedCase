@@ -71,6 +71,47 @@ async def _resolve_channel(ctx: TenantContext, channel_id: str) -> None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="channel not found")
 
 
+async def _handle_time_command(
+    ctx: TenantContext, channel_id: str, raw: str, idempotency_key: str | None
+) -> None:
+    """Parse `/time <minutes> <description>` and record a time entry on the
+    channel's matter. Only valid in MATTER channels (the time attaches to the
+    matter); FIRM/DIRECT channels have no matter to bill."""
+    tokens = raw.lstrip()[len("/time") :].strip().split(None, 1)
+    if not tokens or not tokens[0].isdigit():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="/time <minutes> <description> — e.g. `/time 30 reviewed affidavit`",
+        )
+    minutes = int(tokens[0])
+    description = tokens[1].strip() if len(tokens) > 1 else "time entry"
+    if minutes <= 0:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="minutes must be positive"
+        )
+    matter = await ctx.db.fetchval(
+        "SELECT matter_id FROM channels WHERE id = $1::uuid AND kind = 'MATTER'",
+        uuid.UUID(channel_id),
+    )
+    if matter is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="/time is only valid in a matter channel",
+        )
+    await ctx.db.execute(
+        "INSERT INTO time_entries"
+        " (tenant_id, matter_id, user_ref, description, minutes, idempotency_key)"
+        " VALUES ($1, $2, $3, $4, $5, $6)"
+        " ON CONFLICT (tenant_id, idempotency_key) DO NOTHING",
+        uuid.UUID(ctx.tenant_id),
+        matter,
+        ctx.user_ref,
+        description,
+        minutes,
+        idempotency_key,
+    )
+
+
 @router.post("/channels/{channel_id}/messages", status_code=201)
 async def post_message(
     channel_id: str,
@@ -79,6 +120,46 @@ async def post_message(
     ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
 ) -> MessageCreated:
     await _resolve_channel(ctx, channel_id)
+
+    # Slash-command surface — time capture where work happens (§9.1): a
+    # `/time 30 reviewed affidavit` in a matter channel records a time entry on
+    # that channel's matter instead of a free-text message.
+    if body.body.lstrip().startswith("/time"):
+        await _handle_time_command(ctx, channel_id, body.body, body.idempotency_key)
+        # Reflect the capture back into the channel as a normal message so the
+        # matter thread has a durable record of who logged what.
+        key = body.idempotency_key
+        row = await ctx.db.fetchrow(
+            "INSERT INTO channel_messages"
+            " (tenant_id, channel_id, sender_ref, sender_kind, body, idempotency_key)"
+            " VALUES ($1, $2, $3, 'USER', $4, $5)"
+            " ON CONFLICT (tenant_id, idempotency_key) DO NOTHING"
+            " RETURNING id, created_at",
+            uuid.UUID(ctx.tenant_id),
+            uuid.UUID(channel_id),
+            ctx.user_ref,
+            f"⏱ logged {body.body.lstrip()[len('/time'):].strip()}",
+            key,
+        )
+        if row is None:
+            row = await ctx.db.fetchrow(
+                "SELECT id, created_at FROM channel_messages"
+                " WHERE tenant_id = $1::uuid AND idempotency_key = $2"
+                "   AND channel_id = $3::uuid",
+                uuid.UUID(ctx.tenant_id),
+                key,
+                uuid.UUID(channel_id),
+            )
+        log.info(
+            "channel_time_command",
+            channel_id=channel_id,
+            sender=ctx.user_ref,
+        )
+        return MessageCreated(
+            id=str(row["id"]),
+            channel_id=channel_id,
+            created_at=row["created_at"].isoformat(),
+        )
 
     # Attachment reference checks — FKs bypass RLS, so verify tenancy
     # explicitly (§7: references only; no cross-tenant pinning).
