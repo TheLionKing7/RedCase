@@ -64,6 +64,7 @@ apps/api (FastAPI, Python 3.12, port 8000)
 | `redteam/` | `engine.py` (agent-chain), `packs.py` (ADVERSARIAL_BRIEF/SUMMONS_RESPONSE/CONTRACT_REVIEW), `schemas.py`. |
 | `comms/` | `agents.py` — functional agent participants posting AGENT/SYSTEM channel messages (battle cards). |
 | `ingestion/` | `chunker.py` (page-tracked), `db.py`, `metadata.py`. |
+| `invoicing_pdf.py` | Invoice PDF builder (3.9 sub-task 2) — pymupdf A4 letterhead using brand tokens (crimson/obsidian/gold) as 0-1 RGB; `InvoiceLine` dataclass; NGN money formatting; subtotal/paid/balance block. |
 | `vault_a/` | `crypto.py` (KeyProvider, enc:v1 envelope), `ingest.py`. |
 
 ### Routers — `apps/api/app/routers/`
@@ -79,16 +80,20 @@ apps/api (FastAPI, Python 3.12, port 8000)
 | `audit.py` | Audit read endpoints | |
 | `vault_a.py` | Vault A routes | Clearance-gated ingestion/retrieval. |
 | `practice.py` | `POST/GET /v1/matters/{matter_id}/time` | Time capture (3.9 sub-task 1). `ops.time` CORE entitlement; matter tenancy validated; idempotency on (tenant_id, idempotency_key); minutes>0; returns total_minutes. |
+| `invoicing.py` | `POST /v1/matters/{id}/invoice`, `GET /v1/matters/{id}/invoices`, `GET/POST /v1/invoices/{id}`, `POST /v1/invoices/{id}/send`, `GET /v1/invoices/{id}.pdf`, `POST /v1/invoices/{id}/payments`, `GET /v1/receivables/aging` | Invoicing + payments (3.9 sub-task 2). `ops.invoicing` premium gate; per-tenant `RC-<N>` numbering; line amount = minutes/60 × hourly rate_ngn; DRAFT→SENT (send, `sent_at`), payment → PARTIAL/PAID; PDF via `app.invoicing_pdf` (pymupdf, brand letterhead); aging buckets for receivables. |
+| `_load_invoice` helper | (in invoicing.py) | Fetches invoice + `paid_ngn`/`balance_ngn` + optional lines; 404 on foreign/unknown. |
+
 
 ### Migrations — `infra/supabase/migrations/versions/`
 
-Sequential `0001`…`0014`:
-`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`.
+Sequential `0001`…`0015`:
+`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`, `0015_invoicing`.
 - `0014_time_entries.py`: `time_entries` (tenant_id, matter_id FK→matters, user_ref, description, minutes>0, rate_ngn, billed, idempotency_key, created_at, worked_at) + (tenant_id, matter_id) idx + unique (tenant_id, idempotency_key) idx + RLS tenant_isolation.
+- `0015_invoicing.py`: `invoices` (tenant_id, matter_id, number, status DRAFT/SENT/PARTIAL/PAID, amount_ngn, due_date, sent_at, created_at) + `invoice_line_items` (snapshot of each billed entry) + `payments` (invoice_id, amount_ngn, method, received_at) + RLS on all three. Per-tenant `RC-<N>` invoice number sequence.
 
 ### Tests — `apps/api/tests/` (pytest)
 
-`conftest.py` (fixtures/app factory), `pdf_factory.py`, plus `test_app`, `test_query_api`, `test_router`, `test_retrieval`, `test_citation_battery` (50-q), `test_channels`, `test_agents`, `test_practice`, `test_provisioning`, `test_entitlements`, `test_analyses`, `test_expert_chat`, `test_clearance`, `test_privilege_pentest`, `test_rls`, `test_zdr_filter`, `test_chunker`, `test_ingest_db`, `test_metadata`, `test_internal`, `test_packs`, `test_provider_fallback`, `test_vault_a_ingest`.
+`conftest.py` (fixtures/app factory), `pdf_factory.py`, plus `test_app`, `test_query_api`, `test_router`, `test_retrieval`, `test_citation_battery` (50-q), `test_channels`, `test_agents`, `test_practice`, `test_invoicing`, `test_provisioning`, `test_entitlements`, `test_analyses`, `test_expert_chat`, `test_clearance`, `test_privilege_pentest`, `test_rls`, `test_zdr_filter`, `test_chunker`, `test_ingest_db`, `test_metadata`, `test_internal`, `test_packs`, `test_provider_fallback`, `test_vault_a_ingest`.
 
 ### Frontend — `apps/web/src/`
 
@@ -124,15 +129,18 @@ Sequential `0001`…`0014`:
 - **Phase 3:**
   - 3.1 ✅ Expert Chat backend (`8a8e2a1`); 3.2 ✅ Red-Teamer engine + packs (`842146b`).
   - **3.9 sub-task 1 ✅ JUST COMPLETED** — practice time capture (practice.py, channels.py `/time` command, main.py mount, test_practice.py, 0014_time_entries). **Committed `60c22bf`**; tests pass, ruff clean.
+  - **3.9 sub-task 2 ✅ COMPLETED** — invoicing + payments (invoices, invoice_line_items, payments; invoicing.py router wired in main.py; invoicing_pdf.py brand letterhead; 0015_invoicing; test_invoicing.py 6/6 pass). Committed below.
+  - 3.9 sub-task 2 deviations recorded in `0015_invoicing.py` header: line-items table added, `sent_at` added, explicit tenant_id on payments, RLS on all 3 (per HANDOFF 2.5).
 
 ### In Progress / Next
-- **Task 3.9 sub-task 2+ (Addendum §9.1):** `invoices`, `payments`, one-click invoicing (PDF export), receivables aging, **AI conflict check at client intake** (party names vs. Vault A + matters + corpus). Trust ledger deferred (Phase 4). DoD: time→invoice→payment round-trip test; conflict-check flags planted fixture; synthetic data only.
+- **Task 3.9 sub-task 3+ (Addendum §9.1):** payments UI + receivables dashboard (frontend), **AI conflict check at client intake** (party names vs. Vault A + matters + corpus). Trust ledger deferred (Phase 4). DoD: time→invoice→payment round-trip test ✅; conflict-check flags planted fixture; synthetic data only.
 - **Phase 3 remaining:** 3.3 battle-card rendering, 3.4 deadline rule pack (`deadlines/` module NOT YET created), 3.5 notification fan-out, 3.6 observability/Langfuse, 3.7 benchmark+calibration, 3.8 training/go-live.
 - **Backlog:** Slack connector (post-deploy), deadline sweeps, reranker (deferred with evidence).
 - **Blocker:** Phase 1 deploy held pending owner credentials (CI secrets, GCP SA, CF zone).
 
 ### Working-tree notes
-- `MEMORY_BANK.md` + `.clinerules` untracked (project-local).
+- `MEMORY_BANK.md` + `.gitignore` negation committed (`4dc9bb4`); the `.md` ignore now exempts MEMORY_BANK.md so future commits need no force-add.
+- `MEMORY_BANK.md` file tracks current intent; **drift caveat applies** — run `git status` before assuming the map is current.
 - Uncommitted: `HANDOFF.md`, `apps/web/public/brand/redcase-mark-white.svg`, `docs/RedCase-Phase1/Phase3-Design.md` (design backport docs), plus calibration artifacts.
 
 ---
