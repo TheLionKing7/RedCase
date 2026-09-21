@@ -29,6 +29,12 @@ Desktop.ini
 # Node (apps/web)
 node_modules/
 dist/
+
+# MEMORY_BANK.md is a sanctioned exception to the *.md ignore (owner ruling):
+# it is the live codebase-intelligence file at project root, force-added once and
+# thereafter tracked by this negation so future commits need no --force.
+!MEMORY_BANK.md
+
 .vite/
 !apps/web/.env.example
 
