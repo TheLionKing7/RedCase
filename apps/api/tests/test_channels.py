@@ -111,8 +111,10 @@ async def _provision_matter_channel(
                 claimant,
                 defendant,
             )
+            # SECURITY DEFINER read: the caller is not yet a participant, so a
+            # plain SELECT would be filtered out by participant_read RLS.
             chan = await conn.fetchrow(
-                "SELECT name FROM channels WHERE id = $1", row["id"]
+                "SELECT channel_name($1) AS name", row["id"]
             )
     finally:
         await conn.close()
@@ -216,3 +218,164 @@ class TestPostMessage:
                 headers=_auth(),
             )
         assert resp.status_code == 422
+
+
+def _auth_sub(sub: str, tenant: str = SEED_TENANT_AETOES) -> dict[str, str]:
+    return {"Authorization": f"Bearer {make_jwt(sub=sub, tenant=tenant)}"}
+
+
+async def _add_participant(
+    app_db_url: str, tenant: str, channel_id: uuid.UUID, ref: str
+) -> None:
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        async with conn.transaction():
+            await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant)
+            await conn.execute(
+                "INSERT INTO channel_participants"
+                " (tenant_id, channel_id, participant_ref, participant_kind)"
+                " VALUES ($1, $2, $3, 'USER')",
+                uuid.UUID(tenant),
+                channel_id,
+                ref,
+            )
+    finally:
+        await conn.close()
+
+
+async def _count_messages_as(
+    app_db_url: str, tenant: str, channel_id: uuid.UUID, user_ref: str
+) -> int:
+    """SQL-level read as a given user: RLS (participant_read) filters rows."""
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        async with conn.transaction():
+            await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant)
+            await conn.execute("SELECT set_config('app.user_ref', $1, true)", user_ref)
+            return await conn.fetchval(
+                "SELECT count(*) FROM channel_messages WHERE channel_id = $1::uuid",
+                channel_id,
+            )
+    finally:
+        await conn.close()
+
+
+async def _provision_general(app_db_url: str, tenant: str) -> uuid.UUID:
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        return await conn.fetchval(
+            "SELECT provision_general_channel($1::uuid)", uuid.UUID(tenant)
+        )
+    finally:
+        await conn.close()
+
+
+async def _provision_direct(
+    app_db_url: str, tenant: str, a: str, b: str
+) -> uuid.UUID:
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        return await conn.fetchval(
+            "SELECT provision_direct_channel($1::uuid, $2, $3)",
+            uuid.UUID(tenant),
+            a,
+            b,
+        )
+    finally:
+        await conn.close()
+
+
+class TestIdempotentSend:
+    def test_duplicate_idempotency_key_is_one_message(self, app_db_url: str) -> None:
+        key = f"k-{uuid.uuid4().hex}"
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            first = client.post(
+                f"/v1/channels/{GENERAL_CHANNEL}/messages",
+                json={"body": "filed today", "idempotency_key": key},
+                headers=_auth(),
+            )
+            second = client.post(
+                f"/v1/channels/{GENERAL_CHANNEL}/messages",
+                json={"body": "filed today", "idempotency_key": key},
+                headers=_auth(),
+            )
+        assert first.status_code == 201
+        assert second.status_code == 201
+        # Same message id — the retry did not create a second row.
+        assert first.json()["id"] == second.json()["id"]
+
+    def test_distinct_keys_are_two_messages(self, app_db_url: str) -> None:
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            first = client.post(
+                f"/v1/channels/{GENERAL_CHANNEL}/messages",
+                json={"body": "one", "idempotency_key": f"a-{uuid.uuid4().hex}"},
+                headers=_auth(),
+            )
+            second = client.post(
+                f"/v1/channels/{GENERAL_CHANNEL}/messages",
+                json={"body": "two", "idempotency_key": f"b-{uuid.uuid4().hex}"},
+                headers=_auth(),
+            )
+        assert first.json()["id"] != second.json()["id"]
+
+
+class TestParticipantIsolation:
+    def test_non_participant_reads_zero_rows(self, app_db_url: str) -> None:
+        chan_id, _ = asyncio.run(
+            _provision_matter_channel(app_db_url, SEED_TENANT_AETOES, "Alpha", "Beta")
+        )
+        asyncio.run(_add_participant(app_db_url, SEED_TENANT_AETOES, chan_id, "user-a"))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.post(
+                f"/v1/channels/{chan_id}/messages",
+                json={"body": "confidential matter note"},
+                headers=_auth_sub("user-a"),
+            )
+        assert resp.status_code == 201
+        # A non-participant sees ZERO rows at SQL level (RLS participant_read).
+        assert (
+            asyncio.run(
+                _count_messages_as(app_db_url, SEED_TENANT_AETOES, chan_id, "user-b")
+            )
+            == 0
+        )
+
+    def test_participant_reads_their_rows(self, app_db_url: str) -> None:
+        chan_id, _ = asyncio.run(
+            _provision_matter_channel(app_db_url, SEED_TENANT_AETOES, "Gamma", "Delta")
+        )
+        asyncio.run(_add_participant(app_db_url, SEED_TENANT_AETOES, chan_id, "user-a"))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            client.post(
+                f"/v1/channels/{chan_id}/messages",
+                json={"body": "note"},
+                headers=_auth_sub("user-a"),
+            )
+        assert (
+            asyncio.run(
+                _count_messages_as(app_db_url, SEED_TENANT_AETOES, chan_id, "user-a")
+            )
+            == 1
+        )
+
+    def test_firm_channel_visible_tenant_wide(self, app_db_url: str) -> None:
+        # #general (FIRM) has no participants but is readable by any tenant user.
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.get("/v1/channels", headers=_auth_sub("any-user"))
+        assert resp.status_code == 200
+        ids = [c["id"] for c in resp.json()]
+        assert GENERAL_CHANNEL in ids
+
+
+class TestProvisioning:
+    def test_provision_general_channel_idempotent(self, app_db_url: str) -> None:
+        tid = asyncio.run(_provision_tenant(app_db_url))
+        gid = asyncio.run(_provision_general(app_db_url, tid))
+        again = asyncio.run(_provision_general(app_db_url, tid))
+        assert gid == again
+
+    def test_provision_direct_channel_idempotent_and_sorted(self, app_db_url: str) -> None:
+        tid = asyncio.run(_provision_tenant(app_db_url))
+        did = asyncio.run(_provision_direct(app_db_url, tid, "user-a", "user-b"))
+        again = asyncio.run(_provision_direct(app_db_url, tid, "user-b", "user-a"))
+        assert did == again
