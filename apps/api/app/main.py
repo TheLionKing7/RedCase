@@ -21,6 +21,7 @@ from app.middleware.zdr import configure_logging, get_logger
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
+from app.routers.conflicts import router as conflicts_router
 from app.routers.expert_chat import router as expert_chat_router
 from app.routers.internal import router as internal_router
 from app.routers.invoicing import router as invoicing_router
@@ -78,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(query_router)
     app.include_router(analyses_router)
     app.include_router(channels_router)
+    app.include_router(conflicts_router)
     app.include_router(audit_router)
     app.include_router(expert_chat_router)
     app.include_router(internal_router)

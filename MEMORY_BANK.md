@@ -131,9 +131,10 @@ Sequential `0001`…`0015`:
   - **3.9 sub-task 1 ✅ JUST COMPLETED** — practice time capture (practice.py, channels.py `/time` command, main.py mount, test_practice.py, 0014_time_entries). **Committed `60c22bf`**; tests pass, ruff clean.
   - **3.9 sub-task 2 ✅ COMPLETED** — invoicing + payments (invoices, invoice_line_items, payments; invoicing.py router wired in main.py; invoicing_pdf.py brand letterhead; 0015_invoicing; test_invoicing.py 6/6 pass). Committed below.
   - 3.9 sub-task 2 deviations recorded in `0015_invoicing.py` header: line-items table added, `sent_at` added, explicit tenant_id on payments, RLS on all 3 (per HANDOFF 2.5).
+  - **3.9 sub-task 3 ✅ COMPLETED** — AI conflict check at client intake (`conflict_matcher.py` three-tier matcher EXACT/FUZZY/PHONETIC; `routers/conflicts.py` POST /conflicts/check / GET /conflicts/{id} / POST /conflicts/{id}/decision append-only; scans clients/matters/Vault A case_title; gated require_feature("ops.conflicts") CORE; wired in main.py; `0016_conflict_check.py`). **Fixed 0016 alembic ids** (`revision`/`down_revision` lowercase — `REVISION`/`DOWN_REVISION` uppercase broke `upgrade head`). `tests/test_conflicts.py` 7/7 pass; full suite 192 passed; ruff clean.
 
 ### In Progress / Next
-- **Task 3.9 sub-task 3+ (Addendum §9.1):** payments UI + receivables dashboard (frontend), **AI conflict check at client intake** (party names vs. Vault A + matters + corpus). Trust ledger deferred (Phase 4). DoD: time→invoice→payment round-trip test ✅; conflict-check flags planted fixture; synthetic data only.
+- **Task 3.9 sub-task 3+ (Addendum §9.1):** payments UI + receivables dashboard (frontend remains). Conflict check backend ✅. Trust ledger deferred (Phase 4).
 - **Phase 3 remaining:** 3.3 battle-card rendering, 3.4 deadline rule pack (`deadlines/` module NOT YET created), 3.5 notification fan-out, 3.6 observability/Langfuse, 3.7 benchmark+calibration, 3.8 training/go-live.
 - **Backlog:** Slack connector (post-deploy), deadline sweeps, reranker (deferred with evidence).
 - **Blocker:** Phase 1 deploy held pending owner credentials (CI secrets, GCP SA, CF zone).
