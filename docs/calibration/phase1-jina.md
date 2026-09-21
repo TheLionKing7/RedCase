@@ -74,6 +74,9 @@ A pure vector-similarity baseline (no candidates() plumbing) scored 43/50.
 
 - **BGE reranker**: next calibration step; requires owner confirmation
   before starting (owner instruction, 2026-09-18).
+- **explabs latency profile** (2026-09-20): answer p95 26.7s (single-attempt
+  p95 25.0s, 14% of attempts over the 20s ceiling) recorded as evidence the
+  gateway is not a serving candidate regardless of answer quality.
 
 ## 8. Corpus-quality backlog (owner ruling, 2026-09-18)
 
@@ -91,6 +94,14 @@ stay ingested but are corpus-quality items:
   gating matrix (top-k x per-doc-cap) must not be judged against, or
   adopted on the basis of, questions whose recall ceiling is the source
   document itself.
+- **B17 root-cause probe** (2026-09-20): dump B17's retrieval set — which
+  chunks cleared the 0.52 gate, their margins, and whether the thin
+  LawGlobal reprint chunks carried the answer. Decides the B17
+  under-refusal class: corpus-thinness → re-test Claude after full-text
+  judgment replacement (this backlog); model-eagerness → Claude
+  permanently barred from the answer path. Provider-split note: Claude's
+  determinism (27% flap, clean structured output) may still suit the
+  router/classifier call even if barred from answers.
 
 ## 9. GROUNDED_SYSTEM v2 (2026-09-18) and full battery re-run
 
