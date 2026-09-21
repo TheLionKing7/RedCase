@@ -227,6 +227,39 @@ async def start_analysis(
     return AnalyzeAccepted(analysis_id=analysis_id)
 
 
+@router.get("/analyses", response_model=list[AnalysisStatus])
+async def list_analyses(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> list[AnalysisStatus]:
+    """Per-user Workbench: the caller's own analyses (Addendum §6.2 'My
+    Operations'). Scoped by the RLS session to this tenant and by created_by to
+    this user. Newest first — the Workbench surfaces running/complete work."""
+
+    def _json(v: Any) -> Any:
+        return json.loads(v) if isinstance(v, str) else v
+
+    rows = await ctx.db.fetch(
+        "SELECT id, document_id, prompt_pack, status, output, confidence,"
+        " error, created_by, created_at FROM document_analyses"
+        " WHERE created_by = $1 ORDER BY created_at DESC LIMIT 100",
+        ctx.user_ref,
+    )
+    return [
+        AnalysisStatus(
+            analysis_id=str(r["id"]),
+            document_id=str(r["document_id"]),
+            prompt_pack=r["prompt_pack"],
+            status=r["status"],
+            output=_json(r["output"]),
+            confidence=_json(r["confidence"]),
+            error=r["error"],
+            created_by=r["created_by"],
+            created_at=r["created_at"].isoformat(),
+        )
+        for r in rows
+    ]
+
+
 @router.get("/analyses/{analysis_id}", response_model=AnalysisStatus)
 async def get_analysis(
     analysis_id: str,

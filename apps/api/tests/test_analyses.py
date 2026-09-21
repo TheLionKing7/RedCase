@@ -288,6 +288,32 @@ class TestAnalyzeEndpoints:
             )
         assert resp.status_code == 404
 
+    def test_list_analyses_returns_own_analyses(self, app_db_url: str, tmp_path) -> None:
+        """Addendum §6.2 per-user 'My Operations': the list endpoint returns the
+        caller's own analyses (created_by scoped) with the tabbed wire shape."""
+        doc_id = asyncio.run(_ingest_doc(app_db_url, tmp_path))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.post(
+                f"/v1/documents/{doc_id}/analyze",
+                json={"prompt_pack": "ADVERSAL_BRIEF"},
+                headers=_auth(),
+            )
+            assert resp.status_code == 202
+            analysis_id = resp.json()["analysis_id"]
+
+            listing = client.get("/v1/analyses", headers=_auth())
+            assert listing.status_code == 200
+            rows = listing.json()
+            assert isinstance(rows, list)
+            assert any(r["analysis_id"] == analysis_id for r in rows)
+            row = next(r for r in rows if r["analysis_id"] == analysis_id)
+            assert row["status"] in {"RUNNING", "COMPLETE", "FAILED"}
+            assert row["document_id"] == str(doc_id)
+
+            one = client.get(f"/v1/analyses/{analysis_id}", headers=_auth())
+            assert one.status_code == 200
+            assert one.json()["created_by"] == "user-1"
+
 
 async def _fetch_analysis_audit(app_db_url: str, analysis_id: str) -> list:
     """Connect, read the analysis' audit rows, close — all on ONE event loop
