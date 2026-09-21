@@ -23,6 +23,27 @@ APP_PASSWORD = "testpass"  # noqa: S105 (throwaway embedded-test cluster only)
 APP_DB = "redcase_test"
 SEED_TENANT_AETOES = "a0000001-0000-4000-8000-000000000001"
 
+# Live-LLM / network-dependent suites (citation battery, retrieval chain, route-set
+# accuracy) must NEVER hard-fail in CI or on a machine without reachable providers.
+# They are opt-in: they only RUN when RUN_LIVE_TESTS=1 is explicitly set. When
+# unset they skip regardless of whether provider keys happen to be present in the
+# environment — presence of a key is not proof the network/provider is reachable, and a
+# green "N passed" signal must never be noise from timeouts (HANDOFF §4 quality gate).
+
+
+def live_tests_enabled() -> tuple[bool, str]:
+    """True only when the operator has explicitly opted into live provider tests."""
+    flag = os.environ.get("RUN_LIVE_TESTS", "")
+    if flag != "1":
+        return False, "set RUN_LIVE_TESTS=1 to run live provider/network tests"
+    return True, ""
+
+
+def live_tests_gate() -> object:
+    """pytest.mark.skipif marker factory for live suites (single consistent gate)."""
+    ok, reason = live_tests_enabled()
+    return pytest.mark.skipif(not ok, reason=f"live tests disabled: {reason}")
+
 
 @pytest.fixture(scope="session")
 def app_db_url(tmp_path_factory: pytest.TempPathFactory) -> str:

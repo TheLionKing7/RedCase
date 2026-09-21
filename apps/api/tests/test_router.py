@@ -30,7 +30,7 @@ from pathlib import Path
 
 import asyncpg
 import pytest
-from conftest import SEED_TENANT_AETOES
+from conftest import SEED_TENANT_AETOES, live_tests_gate
 from fastapi.testclient import TestClient
 
 import app.router.service as router_service
@@ -586,6 +586,8 @@ class TestRouteSetAccuracy:
     a single command at 295s; 60 short calls fit, but slicing keeps the
     gate runnable under the cap).
     """
+
+    pytestmark = live_tests_gate()
 
     async def test_route_set_accuracy(self):
         items = json.loads(ROUTE_SET_PATH.read_text(encoding="utf-8"))

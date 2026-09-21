@@ -21,6 +21,7 @@ Run:  pytest tests/test_citation_battery.py -v
 (after VECTOR_GATE calibration — see scripts/ingest.py for the corpus)
 """
 
+import asyncio
 import json
 import os
 import ssl
@@ -28,6 +29,7 @@ from pathlib import Path
 
 import asyncpg
 import pytest
+from conftest import live_tests_enabled
 
 from app.config import get_settings
 from app.retrieval.service import answer_question
@@ -54,6 +56,9 @@ LIVE_CORPUS = [
 
 
 def _provisioned() -> tuple[bool, str]:
+    ok, reason = live_tests_enabled()
+    if not ok:
+        return False, reason
     s = get_settings()
     if not (s.anthropic_api_key or s.groq_api_key or s.deepseek_api_key or s.openrouter_api_key):
         return False, "no answer-LLM credential (ANTHROPIC/GROQ/DEEPSEEK/OPENROUTER)"
