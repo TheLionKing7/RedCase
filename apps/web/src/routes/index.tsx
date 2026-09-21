@@ -5,10 +5,12 @@ import { Problem } from "@/components/marketing/Problem";
 import { DualVault } from "@/components/marketing/DualVault";
 import { Trust } from "@/components/marketing/Trust";
 import { Workbench } from "@/components/marketing/Workbench";
+import { RedTeam } from "@/components/marketing/RedTeam";
+import { SecureMessenger } from "@/components/marketing/SecureMessenger";
 import { Operations } from "@/components/marketing/Operations";
 import { Security } from "@/components/marketing/Security";
 import { Pricing } from "@/components/marketing/Pricing";
-import { Faq } from "@/components/marketing/Faq";
+import { Receptionist } from "@/components/marketing/Receptionist";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,10 +40,12 @@ function MarketingHome() {
       <DualVault />
       <Trust />
       <Workbench />
+      <RedTeam />
+      <SecureMessenger />
       <Operations />
       <Security />
       <Pricing />
-      <Faq />
+      <Receptionist />
       <section className="border-t border-border/60 bg-primary/5">
         <div className="mx-auto max-w-3xl px-5 py-20 text-center lg:px-8">
           <h2 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">Put the law back in your firm&rsquo;s hands.</h2>

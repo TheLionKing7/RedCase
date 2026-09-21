@@ -1,0 +1,46 @@
+{
+  "intro": "I'm RedCase's receptionist. I can tell you what the platform does, how it protects your data, and whether a capability is available today or on the roadmap. If I'm not sure, I'd rather not guess.",
+  "capabilities": {
+    "dual_vault": { "status": "shipped", "label": "Dual Vault — firm knowledge (Vault A) and Nigerian jurisprudence (Vault B)" },
+    "vault_search": { "status": "shipped", "label": "Semantic search across both vaults with page-pinned citations" },
+    "workbench_analysis": { "status": "shipped", "label": "Workbench analysis packs: SmartBrief, Summons Response, Contract Review, Red-Teamer" },
+    "legal_assistant": { "status": "shipped", "label": "Legal Assistant — one per lawyer, learns in your workbench, your permissions" },
+    "practice_ops": { "status": "shipped", "label": "Practice operations: time capture, invoices, conflict checks" },
+    "deadline_tracker": { "status": "shipped-pending-counsel-validation", "label": "Deadline tracker — shipped, pending counsel validation of computed rules" },
+    "client_portal": { "status": "roadmap", "phase": "Phase 4", "label": "Client portal — Phase 4" },
+    "slack_connector": { "status": "roadmap", "phase": "post-deploy", "label": "Slack connector — post-deploy" }
+  },
+  "faq": [
+    {
+      "q": "Is my data used to train your models?",
+      "a": "No. Every AI call is zero-retention — client conversations never touch a model provider's logs, and nothing you write is used to train anyone's model."
+    },
+    {
+      "q": "What does 'page-pinned citations' actually mean?",
+      "a": "Every legal proposition carries a citation to a specific page and paragraph of a stored source you can open and verify. If RedCase can't verify the authority in the vaults, it refuses to answer rather than guess."
+    },
+    {
+      "q": "Who controls access to our firm's documents?",
+      "a": "Documents are encrypted with AES-256, per-document keys your firm controls. Permission is scoped per user by clearance and explicit grants — a restricted partner brief is invisible to everyone without a named grant."
+    },
+    {
+      "q": "Which Nigerian courts are covered?",
+      "a": "Vault B indexes jurisprudence from the Supreme Court, Court of Appeal, Federal and State High Courts, and the NICN, cited to page and paragraph by ratio decidendi."
+    },
+    {
+      "q": "How does the Legal Assistant learn how I work?",
+      "a": "One assistant per lawyer, bound to a Workbench. It learns your preferences from the work you do in your workbench — and converses only there, under your permissions, never in shared channels."
+    }
+  ],
+  "plain": [
+    "Your firm's brain. Nigeria's law. One engine. RedCase unites your firm's knowledge and the country's jurisprudence in two secure vaults, and answers with pinpoint citations to real authority. Never invented. Always page-pinned.",
+    "Two vaults, one synthesis. Vault A holds every brief, pleading and opinion your firm has written — encrypted, permissioned, searchable by meaning. Vault B holds Nigerian jurisprudence indexed by ratio decidendi, Supreme Court to NICN, cited to page and paragraph.",
+    "The engine that refuses to guess. When the authority isn't in the vaults, RedCase says so. Every proposition carries a page-pinned citation you can open and verify. Fabricated citations are a hard failure, tested every release.",
+    "A senior strategist on every matter. Upload an opposing brief; get procedural flaws, strength-rated counter-arguments, and binding authority — every section human-reviewable.",
+    "Red-Teamer: adversarial intelligence. Cross-examine every brief before the court does. Upload the other side's filing; get procedural and jurisdictional flaws, your opponent's probable arguments strength-rated out of ten, and counter-arguments backed by binding Supreme Court and Court of Appeal authority.",
+    "Secure Firm Messenger: your chambers, in your pocket. Matter channels where partners and associates work, with court deadlines, battle cards and analysis results posted into the thread by name. Encrypted under your firm's keys. Your client conversations never pass through Meta.",
+    "The OS, not a chatbot: time capture where work happens, invoices in your letterhead, conflict checks before the engagement letter, court deadlines computed from validated rules and pushed to your calendar.",
+    "Built for privilege: AES-256 envelope encryption, per-document keys your firm controls, every AI call zero-retention, append-only audit trail, NDPA DPIA filed.",
+    "Pricing: Core is everything a firm runs on — vaults, channels, research, deadlines, time and invoicing, conflict checks. Workbench is every lawyer's personal engine — all analysis packs, the Legal Assistant, saved searches. For pricing, talk to us."
+  ]
+}

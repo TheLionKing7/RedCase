@@ -2,7 +2,7 @@ import { Bot, ScanText } from "lucide-react";
 import { Eyebrow } from "./MarketingLayout";
 
 const PIPELINE_PACKS = [
-  "BriefBot",
+  "SmartBrief",
   "Summons Response",
   "Contract Review",
   "Red-Teamer",
