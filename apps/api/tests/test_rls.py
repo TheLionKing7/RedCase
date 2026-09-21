@@ -129,6 +129,40 @@ class TestTenantIsolation:
         assert result == "UPDATE 0"
 
 
+class TestAuditImmutability:
+    """§7 acceptance: UPDATE/DELETE on audit tables denied at DB level."""
+
+    async def test_query_audit_append_only(self, app_db_url: str) -> None:
+        conn = await asyncpg.connect(app_db_url)
+        try:
+            await conn.execute(
+                "SELECT set_config('app.tenant_id', $1, false)", SEED_TENANT_AETOES
+            )
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await conn.execute(
+                    "UPDATE query_audit SET answer_text = NULL WHERE false"
+                )
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await conn.execute("DELETE FROM query_audit WHERE false")
+        finally:
+            await conn.close()
+
+    async def test_entitlement_events_append_only(self, app_db_url: str) -> None:
+        conn = await asyncpg.connect(app_db_url)
+        try:
+            await conn.execute(
+                "SELECT set_config('app.tenant_id', $1, false)", SEED_TENANT_AETOES
+            )
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await conn.execute(
+                    "UPDATE entitlement_events SET decision = 'ALLOW' WHERE false"
+                )
+            with pytest.raises(asyncpg.InsufficientPrivilegeError):
+                await conn.execute("DELETE FROM entitlement_events WHERE false")
+        finally:
+            await conn.close()
+
+
 class TestSeed:
     async def test_aetoes_tenant_seeded(self, app_db_url: str) -> None:
         conn = await asyncpg.connect(app_db_url)

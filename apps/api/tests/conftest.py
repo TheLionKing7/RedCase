@@ -59,6 +59,12 @@ def app_db_url(tmp_path_factory: pytest.TempPathFactory) -> str:
                 "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public "
                 f"TO {APP_ROLE}"
             )
+            # Append-only tables (HANDOFF.md 3): UPDATE/DELETE revoked from the
+            # app role — audit immutability is a database grant, not a promise.
+            await conn.execute(f"REVOKE UPDATE, DELETE ON query_audit FROM {APP_ROLE}")
+            await conn.execute(
+                f"REVOKE UPDATE, DELETE ON entitlement_events FROM {APP_ROLE}"
+            )
             await conn.execute(
                 "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public "
                 f"TO {APP_ROLE}"
