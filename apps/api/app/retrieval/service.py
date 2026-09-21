@@ -282,10 +282,14 @@ async def answer_question(
     embedder: Embedder | None = None,
     llm: AnswerLLM | None = None,
     audit_extra: dict[str, Any] | None = None,
+    thread_id: str | None = None,
+    analysis_id: str | None = None,
 ) -> dict[str, Any]:
     """Grounded answer pipeline (§3.3) with the §3.4 refusal contracts and
     the one-regeneration cap. ``embedder``/``llm`` are injectable for tests;
-    production defaults resolve from settings (503 when unprovisioned)."""
+    production defaults resolve from settings (503 when unprovisioned).
+    ``thread_id`` (Expert Chat) scopes the audit row to an expert_chat_threads
+    row — null for /v1/query traffic."""
     embedder = embedder or make_embedder(settings)
     llm = llm or make_llm(settings)
     started = time.monotonic()
@@ -314,6 +318,8 @@ async def answer_question(
         "user_ref": user_ref,
         "question_hash": hashlib.sha256(question.encode()).hexdigest(),
         "filters": {**filters, **(audit_extra or {})},
+        "thread_id": thread_id,
+        "analysis_id": analysis_id,
     }
 
     if rows is None:

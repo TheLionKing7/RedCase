@@ -106,8 +106,9 @@ async def test_write_audit_persists_serving_provider():
         "serving_model": "claude-sonnet-4.5",
     })
     _, args = conn.executed[0]
-    assert args[-2] == "explabs"
-    assert args[-1] == "claude-sonnet-4.5"
+    assert args[-3] == "explabs"  # serving_provider
+    assert args[-2] == "claude-sonnet-4.5"  # serving_model
+    assert args[-1] is None  # thread_id (not set)
 
 
 async def test_write_audit_serving_provider_defaults_none():

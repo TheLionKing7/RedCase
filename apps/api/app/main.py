@@ -21,6 +21,7 @@ from app.middleware.zdr import configure_logging, get_logger
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
+from app.routers.expert_chat import router as expert_chat_router
 from app.routers.internal import router as internal_router
 from app.routers.query import router as query_router
 from app.routers.router import router as dual_query_router
@@ -76,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(analyses_router)
     app.include_router(channels_router)
     app.include_router(audit_router)
+    app.include_router(expert_chat_router)
     app.include_router(internal_router)
     app.include_router(vault_a_router)
     app.include_router(dual_query_router)

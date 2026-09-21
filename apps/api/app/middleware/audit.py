@@ -26,8 +26,8 @@ AUDIT_SQL = """
     INSERT INTO query_audit
         (id, tenant_id, user_ref, question_hash, filters, retrieved_chunk_ids,
          similarity_scores, threshold_passed, answer_text, citations,
-         latency_ms, analysis_id, serving_provider, serving_model)
-    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
+         latency_ms, analysis_id, serving_provider, serving_model, thread_id)
+    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15)
 """
 
 
@@ -53,6 +53,7 @@ async def write_audit(db: asyncpg.Connection, audit: dict[str, Any]) -> None:
         uuid.UUID(str(audit["analysis_id"])) if audit.get("analysis_id") else None,
         audit.get("serving_provider"),
         audit.get("serving_model"),
+        uuid.UUID(str(audit["thread_id"])) if audit.get("thread_id") else None,
     )
     log.info(
         "query_audited",
