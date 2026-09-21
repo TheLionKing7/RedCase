@@ -201,3 +201,38 @@ async def list_messages(
         )
         for r in rows
     ]
+
+
+class ChannelCreate(BaseModel):
+    kind: str
+    other_user_ref: str
+
+
+@router.post("/channels", status_code=201)
+async def create_channel(
+    body: ChannelCreate,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict:
+    """Create a DIRECT channel between the caller and another user.
+
+    Matter (#case-{a}-v-{b}) and FIRM (#general) channels are auto-provisioned
+    by the system; the only user-created kind is DIRECT. provision_direct_channel
+    is SECURITY DEFINER and adds both participants atomically.
+    """
+    if body.kind != "DIRECT":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="only DIRECT channels are user-created (matter/firm are auto-provisioned)",
+        )
+    if not body.other_user_ref or not body.other_user_ref.strip():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail="other_user_ref required"
+        )
+    channel_id = await ctx.db.fetchval(
+        "SELECT provision_direct_channel($1::uuid, $2, $3)",
+        uuid.UUID(ctx.tenant_id),
+        ctx.user_ref,
+        body.other_user_ref,
+    )
+    log.info("channel_created", kind="DIRECT", channel_id=str(channel_id))
+    return {"id": str(channel_id), "kind": "DIRECT"}
