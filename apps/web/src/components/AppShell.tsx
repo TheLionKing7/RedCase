@@ -1,9 +1,9 @@
-import { Link } from "@tanstack/react-router";
+﻿import { Link } from "@tanstack/react-router";
 import { Search, ShieldAlert, CalendarClock, Circle } from "lucide-react";
 import type { ReactNode } from "react";
 
 const NAV = [
-  { to: "/", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
+  { to: "/search", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
   {
     to: "/red-teamer",
     label: "Case Red-Teamer",
@@ -42,7 +42,7 @@ export function AppShell({
               <span className="font-light text-muted-foreground">Case</span>
             </div>
             <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-              Aetoes Legal · Tenant Zero
+              Aetoes Legal Â· Tenant Zero
             </div>
           </div>
         </div>
@@ -52,7 +52,7 @@ export function AppShell({
             <Link
               key={item.to}
               to={item.to}
-              activeOptions={{ exact: item.to === "/" }}
+              activeOptions={{ exact: item.to === "/search" }}
               className="group rounded-lg px-3 py-3 text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
               activeProps={{
                 className:
@@ -75,11 +75,11 @@ export function AppShell({
         <div className="mt-auto space-y-3 px-6 py-6 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <Circle className="size-2 fill-success text-success" />
-            Vault A synced · 1,284 briefs
+            Vault A synced Â· 1,284 briefs
           </div>
           <div className="flex items-center gap-2">
             <Circle className="size-2 fill-success text-success" />
-            Juris OS · 41,902 judgments
+            Juris OS Â· 41,902 judgments
           </div>
           <div className="border-t border-sidebar-border pt-3 font-mono uppercase tracking-widest">
             Partner build v0.9
@@ -103,10 +103,10 @@ export function AppShell({
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="rounded-full border border-gold/40 px-3 py-1 font-mono text-gold">
-                CONFIDENTIAL · PRIVILEGED
+                CONFIDENTIAL Â· PRIVILEGED
               </span>
               <span className="hidden sm:inline">
-                Tosin Adebayo · Managing Partner
+                Tosin Adebayo Â· Managing Partner
               </span>
             </div>
           </div>
@@ -115,7 +115,7 @@ export function AppShell({
               <Link
                 key={item.to}
                 to={item.to}
-                activeOptions={{ exact: item.to === "/" }}
+                activeOptions={{ exact: item.to === "/search" }}
                 className="rounded-md border border-border px-3 py-1.5 text-xs"
                 activeProps={{ className: "border-gold text-gold" }}
               >
@@ -129,3 +129,4 @@ export function AppShell({
     </div>
   );
 }
+

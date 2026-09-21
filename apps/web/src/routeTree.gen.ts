@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RedTeamerRouteImport } from './routes/red-teamer'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as WorkbenchRouteImport } from './routes/workbench'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const RedTeamerRoute = RedTeamerRouteImport.update({
   id: '/red-teamer',
   path: '/red-teamer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TrackerRoute = TrackerRouteImport.update({
@@ -38,12 +44,14 @@ const WorkbenchRoute = WorkbenchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/red-teamer': typeof RedTeamerRoute
+  '/search': typeof SearchRoute
   '/tracker': typeof TrackerRoute
   '/workbench': typeof WorkbenchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/red-teamer': typeof RedTeamerRoute
+  '/search': typeof SearchRoute
   '/tracker': typeof TrackerRoute
   '/workbench': typeof WorkbenchRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/red-teamer': typeof RedTeamerRoute
+  '/search': typeof SearchRoute
   '/tracker': typeof TrackerRoute
   '/workbench': typeof WorkbenchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/red-teamer' | '/tracker' | '/workbench'
+  fullPaths: '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/red-teamer' | '/tracker' | '/workbench'
-  id: '__root__' | '/' | '/red-teamer' | '/tracker' | '/workbench'
+  to: '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
+  id: '__root__' | '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   RedTeamerRoute: typeof RedTeamerRoute
+  SearchRoute: typeof SearchRoute
   TrackerRoute: typeof TrackerRoute
   WorkbenchRoute: typeof WorkbenchRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/red-teamer'
       fullPath: '/red-teamer'
       preLoaderRoute: typeof RedTeamerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tracker': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   RedTeamerRoute: RedTeamerRoute,
+  SearchRoute: SearchRoute,
   TrackerRoute: TrackerRoute,
   WorkbenchRoute: WorkbenchRoute,
 }

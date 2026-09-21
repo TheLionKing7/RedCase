@@ -28,7 +28,7 @@ apps/api (FastAPI, Python 3.12, port 8000)
     ▼
   entitlements.require_feature(feature) — optional gate dependency.
     Writes exactly one entitlement_events row; DENY_PLAN/DENY_SEAT→402,
-    DENY_SUSPENDED→403. Premium set = {workbench.analyze, workbench.chat}.
+    DENY_SUSPENDED→403. Premium set = {workbench.analyze, workbench.chat, workbench.assistant}.
     Core features (core.dual_vault, comms.send, ops.time) always ALLOW but still audit.
     ▼
   Routers (apps/api/app/routers/*) → service/engine layers →
@@ -76,6 +76,7 @@ apps/api (FastAPI, Python 3.12, port 8000)
 | `analyses.py` | `/v1/analyses`, `/v1/analyses/{id}` | Workbench pack analyses (AnalysisStatus wire model). |
 | `channels.py` | `/v1/channels`, `/v1/channels/{id}/messages`, `POST /v1/channels/{id}/messages` | In-app channels (2.5/2.6). Includes `/time <minutes> <desc>` slash-command → `time_entries` on the channel's matter + reflects a message. Attachment tenancy checks (FK bypass). Direct channels via `provision_direct_channel` SECURITY DEFINER. |
 | `expert_chat.py` | Workbench Expert Chat (3.1) | Per-user conversational assistant. |
+| `assistant/` | **Legal Assistant (Addendum §7.2)** — the ONE conversational agent. `service.py` = `run_assistant_turn` bounded ReAct loop (planner→executor→verifier, `MAX_TOOL_ITERATIONS=6`) with internal tools `search_vault_a`/`search_vault_b`/`matter_context`/`save_to_workbench`/`analyze_document`; grounding via `verify_namespaced_citations` (zero-fabrication hard gate), serving provider recorded. `router.py` = `/v1/assistant/threads`, `GET /threads/{id}` (turns + digest), `POST /threads/{id}/messages` (SSE), `POST /threads/{id}/feedback` (learning signal → `style_correction` preference). |
 | `internal.py` | Internal/sweep endpoints | Token-gated. |
 | `audit.py` | Audit read endpoints | |
 | `vault_a.py` | Vault A routes | Clearance-gated ingestion/retrieval. |
@@ -86,8 +87,8 @@ apps/api (FastAPI, Python 3.12, port 8000)
 
 ### Migrations — `infra/supabase/migrations/versions/`
 
-Sequential `0001`…`0015`:
-`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`, `0015_invoicing`.
+Sequential `0001`…`0017`:
+`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`, `0015_invoicing`, `0016_conflict_check`, `0017_assistant`.
 - `0014_time_entries.py`: `time_entries` (tenant_id, matter_id FK→matters, user_ref, description, minutes>0, rate_ngn, billed, idempotency_key, created_at, worked_at) + (tenant_id, matter_id) idx + unique (tenant_id, idempotency_key) idx + RLS tenant_isolation.
 - `0015_invoicing.py`: `invoices` (tenant_id, matter_id, number, status DRAFT/SENT/PARTIAL/PAID, amount_ngn, due_date, sent_at, created_at) + `invoice_line_items` (snapshot of each billed entry) + `payments` (invoice_id, amount_ngn, method, received_at) + RLS on all three. Per-tenant `RC-<N>` invoice number sequence.
 
@@ -131,9 +132,11 @@ Sequential `0001`…`0015`:
   - **3.9 sub-task 1 ✅ JUST COMPLETED** — practice time capture (practice.py, channels.py `/time` command, main.py mount, test_practice.py, 0014_time_entries). **Committed `60c22bf`**; tests pass, ruff clean.
   - **3.9 sub-task 2 ✅ COMPLETED** — invoicing + payments (invoices, invoice_line_items, payments; invoicing.py router wired in main.py; invoicing_pdf.py brand letterhead; 0015_invoicing; test_invoicing.py 6/6 pass). Committed below.
   - 3.9 sub-task 2 deviations recorded in `0015_invoicing.py` header: line-items table added, `sent_at` added, explicit tenant_id on payments, RLS on all 3 (per HANDOFF 2.5).
-  - **3.9 sub-task 3 ✅ COMPLETED** — AI conflict check at client intake (`conflict_matcher.py` three-tier matcher EXACT/FUZZY/PHONETIC; `routers/conflicts.py` POST /conflicts/check / GET /conflicts/{id} / POST /conflicts/{id}/decision append-only; scans clients/matters/Vault A case_title; gated require_feature("ops.conflicts") CORE; wired in main.py; `0016_conflict_check.py`). **Fixed 0016 alembic ids** (`revision`/`down_revision` lowercase — `REVISION`/`DOWN_REVISION` uppercase broke `upgrade head`). `tests/test_conflicts.py` 7/7 pass; full suite 192 passed; ruff clean.
+  - **3.9 sub-task 3 ✅ COMPLETED** — AI conflict check at client intake (`conflict_matcher.py` three-tier matcher EXACT/FUZZY/PHONETIC; `routers/conflicts.py` POST /conflicts/check / GET /conflicts/{id} / POST /conflicts/{id}/decision append-only; scans clients/matters/Vault A case_title; gated require_feature("ops.conflicts") CORE; wired in main.py; `0016_conflict_check.py`). `tests/test_conflicts.py` 7/7 pass; **alembic ids fixed** (`revision`/`down_revision` lowercase).
+- **Legal Assistant (Addendum §7.2) ✅ COMPLETED** — `app/assistant/` (bounded ReAct agent, `service.py` + SSE `router.py`), `PREMIUM_FEATURES` += `workbench.assistant`, `0017_assistant.py` (threads/messages/preferences/feedback/artifacts + tenant+user RLS single PERMISSIVE policies — RESTRICTIVE blocks app-role inserts, verified). Tests: entitlement gate 402/200, thread flow, SSE+persistence, feedback→preference→prompt round-trip, zero-fabrication refusal, bounded loop cap.
 
 ### In Progress / Next
+- **Part 1 — Marketing website (in progress)** — `/` is now the public marketing landing; Vault Search relocated to `/search` (route `search.tsx`, export renamed `SearchPage`); AppShell nav `/`→`/search` (lines 6/55/118). New `src/components/marketing/` = MarketingLayout (sticky nav + footer + Eyebrow), Hero (uses SplitVaultVisual), SplitVault (Vault A/B + Juris 41,902 + skeleton shimmer), Problem, DualVault, Trust, Workbench, Operations, Security, Pricing, Faq (Radix accordion). Favicon→`/brand/redcase-mark-crimson.svg`. Brand SVGO-optimized in `apps/web/brand/` + `public/brand/`. **`npm run build` GREEN.** Links to `/onboarding` & `/search` (routes not yet auth-guarded — expected 404 in this part). Next: commit per repo conventions.
 - **Task 3.9 sub-task 3+ (Addendum §9.1):** payments UI + receivables dashboard (frontend remains). Conflict check backend ✅. Trust ledger deferred (Phase 4).
 - **Phase 3 remaining:** 3.3 battle-card rendering, 3.4 deadline rule pack (`deadlines/` module NOT YET created), 3.5 notification fan-out, 3.6 observability/Langfuse, 3.7 benchmark+calibration, 3.8 training/go-live.
 - **Backlog:** Slack connector (post-deploy), deadline sweeps, reranker (deferred with evidence).

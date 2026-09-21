@@ -113,7 +113,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         },
         {
           rel: "icon",
-          href: "/brand/redcase-mark.svg",
+          href: "/brand/redcase-mark-crimson.svg",
           type: "image/svg+xml",
         },
       ],
