@@ -91,6 +91,45 @@ export async function verifyOtp(
   return session;
 }
 
+/** Step: email+password sign-in via Supabase Auth password grant. */
+export async function signInWithPassword(
+  email: string,
+  password: string,
+): Promise<AuthSession> {
+  const { url, key } = requireConfig();
+  if (!EMAIL_RE.test(email)) throw new AuthError("Enter a valid email address");
+  if (!password) throw new AuthError("Enter your password");
+  const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: key, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = (await res.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_at?: number;
+    user?: { id?: string };
+    error_description?: string;
+    msg?: string;
+    code?: string;
+  };
+  if (!res.ok || !data.access_token) {
+    throw new AuthError(
+      data.error_description ??
+        data.msg ??
+        `Sign-in failed (HTTP ${res.status})`,
+    );
+  }
+  const session: AuthSession = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token ?? "",
+    expires_at: data.expires_at ?? 0,
+    user_ref: data.user?.id ?? null,
+  };
+  persist(session);
+  return session;
+}
+
 export function getSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -105,6 +144,28 @@ export function getSession(): AuthSession | null {
     return session;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Clearance from the current session's JWT `app_metadata.clearance` claim
+ * (STAFF | SENIOR | PARTNER | ADMIN — the claim contract in apps/api/app/deps.py).
+ * Used by the post-login role landing (Part 3 Slice 2). Fails closed to
+ * STAFF when the claim is absent: an unmapped user gets the floor, never the
+ * ceiling. Returns "ANON" when there is no session at all.
+ */
+export function getClearance(): string {
+  const token = getAccessToken();
+  if (!token) return "ANON";
+  try {
+    const payloadB64 = token.split(".")[1] ?? "";
+    const pad = "=".repeat(-payloadB64.length % 4);
+    const payload = JSON.parse(atob(payloadB64)) as {
+      app_metadata?: { clearance?: string };
+    };
+    return payload.app_metadata?.clearance ?? "STAFF";
+  } catch {
+    return "STAFF";
   }
 }
 

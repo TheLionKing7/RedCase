@@ -13,7 +13,7 @@ import { ApiError } from "@/lib/api/client";
 import { useDeadlineEvents } from "@/lib/api/deadlines";
 import type { DeadlineEvent } from "@/lib/api/deadlines";
 
-export const Route = createFileRoute("/tracker")({
+export const Route = createFileRoute("/_authed/tracker")({
   head: () => ({
     meta: [
       { title: "Statutory Tracker — RedCase" },

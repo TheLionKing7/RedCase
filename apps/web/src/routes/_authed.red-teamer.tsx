@@ -17,7 +17,7 @@ import { ApiError } from "@/lib/api/client";
 import { useBattleCard } from "@/lib/api/redteam";
 import type { BattleCard, BattleSeverity } from "@/lib/api/redteam";
 
-export const Route = createFileRoute("/red-teamer")({
+export const Route = createFileRoute("/_authed/red-teamer")({
   head: () => ({
     meta: [
       { title: "Case Red-Teamer — RedCase" },

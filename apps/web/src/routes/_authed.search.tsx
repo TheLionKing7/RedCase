@@ -9,13 +9,14 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { CoachMarks } from "@/components/CoachMarks";
 import { useVaultQuery } from "@/lib/api/query";
 import { ApiError } from "@/lib/api/client";
 import type { Citation } from "@/lib/api/types";
 import { COURT_LEVELS, RATIO_TAGS } from "@/lib/court-filters";
 import type { FilterOption } from "@/lib/court-filters";
 
-export const Route = createFileRoute("/search")({
+export const Route = createFileRoute("/_authed/search")({
   head: () => ({
     meta: [
       { title: "Vault Search â€” RedCase" },
@@ -92,6 +93,24 @@ function SearchPage() {
 
   return (
     <AppShell eyebrow="Nigerian Juris OS" title="Vault Search">
+      <CoachMarks
+        surface="search"
+        icon={Search}
+        steps={[
+          {
+            title: "Run your first vault search",
+            body: "Ask a legal question in plain language and press Run Query. RedCase searches internal briefs and Nigerian case law in one pass.",
+          },
+          {
+            title: "Every answer is page-pinned",
+            body: "Results carry verified PDF citations. The citation guard blocks ungrounded answers — cannot rely on anything that isn't sourced.",
+          },
+          {
+            title: "Narrow by court and year",
+            body: "Use the Court Level and Year filters to focus results the way you'd cite them — from full court to trial, and across reporting decades.",
+          },
+        ]}
+      />
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Vault scope â€” Phase 1 locked to Vault B (owner ruling 1). */}
         <VaultScopeBar />
@@ -198,8 +217,8 @@ function SearchPage() {
             </p>
             <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
               State an issue to retrieve grounded, page-pinned authority from
-              the Nigerian Juris OS â€” or run the example above. Every answer is
-              verified against the source or refused outright.
+              the Nigerian Juris OS â€” or run the example above. Every answer
+              is verified against the source or refused outright.
             </p>
           </div>
         )}
@@ -402,5 +421,3 @@ function Filter({
     </label>
   );
 }
-
-
