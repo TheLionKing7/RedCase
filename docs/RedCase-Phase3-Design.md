@@ -42,7 +42,7 @@ flowchart TD
         H -->|"pass"| J["Battle Card JSON<br/>schema-validated"]
     end
     J --> K["Slack renderer<br/>threaded blocks in matter channel"]
-    K --> L["query_audit + deadline sweep<br/>(does the brief contain dates? → §3)"]
+    K --> L["query_audit + deadline sweep<br/>(does the brief contain dates? → 3)"]
 ```
 
 ### 1.2 Battle card schema (the contract every agent stage produces/consumes)
@@ -80,7 +80,7 @@ from dataclasses import dataclass
 
 from app.middleware.zdr import zdr_client
 from app.router.service import dual_vault_query     # Phase 2
-from app.retrieval.rerank import rerank             # §4
+from app.retrieval.rerank import rerank             # 4
 from app.redteam.schemas import BattleCard, ClaimGraph
 from app.redteam.render import render_battle_card   # Slack blocks
 
@@ -168,7 +168,7 @@ async def redteam(document_id: str, ident, db) -> BattleCard:
         # else: regenerate with critic feedback injected
 
     await audit_redteam(document_id, ident, card)             # query_audit extension
-    await sweep_dates_for_deadlines(claims, ident, db)        # §3 hook
+    await sweep_dates_for_deadlines(claims, ident, db)        # 3 hook
     return card
 ```
 
@@ -346,7 +346,7 @@ class RerankService:
         return out
 ```
 
-**Placement:** reranking runs **after** hybrid retrieval (top-20) and **before** the LLM, and also per-claim inside the Red-Teamer (§2.1). It never replaces the vector threshold gate — it reorders and prunes what already passed.
+**Placement:** reranking runs **after** hybrid retrieval (top-20) and **before** the LLM, and also per-claim inside the Red-Teamer (2.1). It never replaces the vector threshold gate — it reorders and prunes what already passed.
 
 ### 4.2 Dual-threshold enforcement
 
@@ -367,7 +367,7 @@ def apply_gate(passages: list[dict], mode: Mode) -> tuple[list[dict], str]:
     return usable, "OK"
 ```
 
-Threshold calibration is a **go-live gate**, not a guess: §5 runs the 5-case benchmark and produces the score-distribution plot; thresholds are set at the precision ≥ 0.95 crossover and committed to config, with the calibration report attached to the PAT sign-off.
+Threshold calibration is a **go-live gate**, not a guess: 5 runs the 5-case benchmark and produces the score-distribution plot; thresholds are set at the precision ≥ 0.95 crossover and committed to config, with the calibration report attached to the PAT sign-off.
 
 ---
 

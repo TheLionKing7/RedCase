@@ -246,7 +246,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.middleware.zdr import zdr_client
 
-SIMILARITY_THRESHOLD = 0.78        # calibrated in Phase 1 testing; see §5
+SIMILARITY_THRESHOLD = 0.78        # calibrated in Phase 1 testing; see 5
 HYBRID_SQL = text("""
     WITH vec AS (
         SELECT dc.id, dc.document_id, dc.chunk_text, dc.page_start, dc.page_end,
@@ -369,7 +369,7 @@ def verify_citations(answer: str, rows: list[dict]) -> list[dict]:
 ```
 
 Behavior contract:
-- **Best retrieved `vsim` < 0.78** → immediate refusal, no LLM call. Threshold is a config value calibrated against the 10-case benchmark set (§5).
+- **Best retrieved `vsim` < 0.78** → immediate refusal, no LLM call. Threshold is a config value calibrated against the 10-case benchmark set (5).
 - **Citation integrity failure** → one regeneration with a stricter system prompt; second failure → refusal. A fabricated citation is never shown to the user.
 - **Every citation renders** as: case name, citation, court, year, `p. X`, `¶ Y (Justice)`, "Verified against source PDF" badge linking to the stored PDF — matching the Aetoes Ops Hub contract.
 
@@ -528,7 +528,7 @@ Metadata extraction quality is the known weak point; the script marks `metadata_
 
 ### 5.1 Provisioning (Day 1–2)
 
-- [ ] **Supabase project** (`redcase-prod`, region `eu-west-1` — closest NDPA-suitable region; confirm data-residency stance with Aetoes): run §2.1 DDL via migrations (Alembic).
+- [ ] **Supabase project** (`redcase-prod`, region `eu-west-1` — closest NDPA-suitable region; confirm data-residency stance with Aetoes): run 2.1 DDL via migrations (Alembic).
 - [ ] **Storage bucket** `juris-pdfs`, private, AES-256 server-side; signed-URL-only access.
 - [ ] **Vercel**: deploy Next.js app; env vars `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_BRAND_*` (crimson/obsidian/vellum tokens). Enable TLS 1.3 + HSTS.
 - [ ] **AWS ECS Fargate** (or Railway/Fly.io equivalent): FastAPI container, secrets from AWS Secrets Manager (`ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE`, `OPENAI_API_KEY` via ZDR proxy). Task CPU 0.5 vCPU / 1 GB baseline; scale on request count.

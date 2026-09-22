@@ -49,7 +49,7 @@ function MarketingHome() {
       <section className="border-t border-border/60 bg-primary/5">
         <div className="mx-auto max-w-3xl px-5 py-20 text-center lg:px-8">
           <h2 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">Put the law back in your firm&rsquo;s hands.</h2>
-          <a href="/onboarding" className="mt-8 inline-flex items-center justify-center rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">Start your firm</a>
+          <a href="/signin" className="mt-8 inline-flex items-center justify-center rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">Start your firm</a>
         </div>
       </section>
     </MarketingLayout>

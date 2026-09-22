@@ -5,7 +5,6 @@ const NAV = [
   { href: "#product", label: "Product" },
   { href: "#security", label: "Security" },
   { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
 ];
 
 export function MarketingLayout({ children }: { children: ReactNode }) {
@@ -45,7 +44,7 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
               Sign in
             </Link>
             <Link
-              to="/onboarding"
+              to="/signin"
               className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
             >
               Start your firm
