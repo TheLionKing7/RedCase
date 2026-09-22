@@ -19,13 +19,13 @@ import type { FilterOption } from "@/lib/court-filters";
 export const Route = createFileRoute("/_authed/search")({
   head: () => ({
     meta: [
-      { title: "Vault Search â€” RedCase" },
+      { title: "Vault Search — RedCase" },
       {
         name: "description",
         content:
           "Dual-vault legal retrieval across Aetoes internal briefs and the Nigerian Juris OS, with verified PDF page citations.",
       },
-      { property: "og:title", content: "Vault Search â€” RedCase" },
+      { property: "og:title", content: "Vault Search — RedCase" },
       {
         property: "og:description",
         content:
@@ -36,19 +36,19 @@ export const Route = createFileRoute("/_authed/search")({
   component: SearchPage,
 });
 
-// Owner ruling 1 (2026-09-16): no /v1/query vault param â€” Phase 1 is locked to
+// Owner ruling 1 (2026-09-16): no /v1/query vault param — Phase 1 is locked to
 // Vault B (Nigerian Juris OS); Vault A renders disabled with a PHASE 2 tag.
 // Phase 2 moves vault selection server-side and replaces the toggle with
-// per-citation vault badges (Phase2 Â§2.2).
+// per-citation vault badges (Phase2 §2.2).
 
-// UI year ranges â†’ QueryRequest year_from/year_to (Phase1-Design Â§3.5).
+// UI year ranges → QueryRequest year_from/year_to (Phase1-Design §3.5).
 function yearRange(label: string): { year_from?: number; year_to?: number } {
   switch (label) {
-    case "2020â€“2026":
+    case "2020–2026":
       return { year_from: 2020, year_to: 2026 };
-    case "2010â€“2019":
+    case "2010–2019":
       return { year_from: 2010, year_to: 2019 };
-    case "2000â€“2009":
+    case "2000–2009":
       return { year_from: 2000, year_to: 2009 };
     case "Pre-2000":
       return { year_to: 1999 };
@@ -57,7 +57,7 @@ function yearRange(label: string): { year_from?: number; year_to?: number } {
   }
 }
 
-// Â§2.1 CHECK enums â†’ law-report court abbreviations (how counsel cites them).
+// §2.1 CHECK enums → law-report court abbreviations (how counsel cites them).
 const COURT_BADGE: Record<string, string> = {
   SUPREME_COURT: "SC",
   COURT_OF_APPEAL: "CA",
@@ -78,7 +78,7 @@ function SearchPage() {
 
   const vaultQuery = useVaultQuery();
   const data = vaultQuery.data;
-  const questionValid = query.trim().length >= 10; // Â§3.5 min_length=10
+  const questionValid = query.trim().length >= 10; // §3.5 min_length=10
 
   function run() {
     if (!questionValid || vaultQuery.isPending) return;
@@ -112,7 +112,7 @@ function SearchPage() {
         ]}
       />
       <div className="mx-auto max-w-6xl space-y-6">
-        {/* Vault scope â€” Phase 1 locked to Vault B (owner ruling 1). */}
+        {/* Vault scope — Phase 1 locked to Vault B (owner ruling 1). */}
         <VaultScopeBar />
 
         {/* Command bar */}
@@ -124,7 +124,7 @@ function SearchPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && run()}
-                placeholder="State the issue â€” e.g. what test governsâ€¦"
+                placeholder="State the issue — e.g. what test governs…"
                 className="w-full rounded-lg border border-input bg-background/60 py-3 pl-10 pr-4 text-sm outline-none transition-shadow placeholder:text-muted-foreground focus:glow-steel"
               />
             </div>
@@ -144,7 +144,7 @@ function SearchPage() {
           {!questionValid && (
             <p className="mt-2 text-[11px] text-muted-foreground">
               Questions need at least 10 characters (API contract, Phase1-Design
-              Â§3.5).
+              §3.5).
             </p>
           )}
 
@@ -161,9 +161,9 @@ function SearchPage() {
               onChange={setYear}
               options={[
                 { label: "Any year", value: "Any year" },
-                { label: "2020â€“2026", value: "2020â€“2026" },
-                { label: "2010â€“2019", value: "2010â€“2019" },
-                { label: "2000â€“2009", value: "2000â€“2009" },
+                { label: "2020–2026", value: "2020–2026" },
+                { label: "2010–2019", value: "2010–2019" },
+                { label: "2000–2009", value: "2000–2009" },
                 { label: "Pre-2000", value: "Pre-2000" },
               ]}
             />
@@ -180,13 +180,13 @@ function SearchPage() {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="font-mono uppercase tracking-widest">
             {vaultQuery.isPending
-              ? "Retrievingâ€¦"
+              ? "Retrieving…"
               : data && !data.refusal
-                ? `${data.citations.length} authorit${data.citations.length === 1 ? "y" : "ies"} Â· verified`
+                ? `${data.citations.length} authorit${data.citations.length === 1 ? "y" : "ies"} · verified`
                 : "Awaiting query"}
           </span>
           <span className="inline-flex items-center gap-1.5 text-success">
-            <ShieldCheck className="size-3.5" /> Citation guard active â€” every
+            <ShieldCheck className="size-3.5" /> Citation guard active — every
             answer page-pinned
           </span>
         </div>
@@ -217,7 +217,7 @@ function SearchPage() {
             </p>
             <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
               State an issue to retrieve grounded, page-pinned authority from
-              the Nigerian Juris OS â€” or run the example above. Every answer
+              the Nigerian Juris OS — or run the example above. Every answer
               is verified against the source or refused outright.
             </p>
           </div>
@@ -234,20 +234,20 @@ function VaultScopeBar() {
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div className="inline-flex rounded-lg border border-border bg-surface p-1">
         <span className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
-          Vault B Â· Nigerian Juris OS
+          Vault B · Nigerian Juris OS
         </span>
         <span
           className="inline-flex cursor-not-allowed items-center gap-2 rounded-md px-4 py-2 text-sm text-muted-foreground/50"
           title="Vault A joins the corpus server-side in Phase 2"
         >
-          Vault A Â· Internal Briefs
+          Vault A · Internal Briefs
           <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
             Phase 2
           </span>
         </span>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        41,902 judgments Â· SC, CA, FHC, SHC, NICN â€” Vault A matter scoping
+        41,902 judgments · SC, CA, FHC, SHC, NICN — Vault A matter scoping
         arrives server-side in Phase 2.
       </p>
     </div>
@@ -256,7 +256,7 @@ function VaultScopeBar() {
 
 /** The grounded answer, set like an opinion excerpt: display serif for the
  *  narrative, mono for the audit line. Rendered only when every citation
- *  verified (Â§3.4). */
+ *  verified (§3.4). */
 function AnswerOpinion({ answer, count }: { answer: string; count: number }) {
   return (
     <section className="panel p-6 lg:p-8">
@@ -273,14 +273,14 @@ function AnswerOpinion({ answer, count }: { answer: string; count: number }) {
         <span>
           {count} {count === 1 ? "authority" : "authorities"} pinned
         </span>
-        <span>Question audit-hashed Â· ZDR</span>
+        <span>Question audit-hashed · ZDR</span>
       </div>
     </section>
   );
 }
 
 /**
- * Refusal â€” Â§3.4 contract verbatim. Below the 0.78 gate or on citation-
+ * Refusal — §3.4 contract verbatim. Below the 0.78 gate or on citation-
  * integrity failure, no answer is rendered and no fabricated citation is
  * ever shown. The refusal is the product's honesty, so it carries the
  * crimson seal and the contract's own words.
@@ -289,15 +289,15 @@ function RefusalPanel() {
   return (
     <section className="panel border-l-4 border-l-primary p-8">
       <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-primary">
-        Refused Â· citation integrity
+        Refused · citation integrity
       </div>
       <h2 className="mt-3 font-display text-2xl leading-snug">
-        â€œNo binding precedent found in Vault B.â€
+        “No binding precedent found in Vault B.”
       </h2>
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         The retrieved passages did not meet the verification gate for this
         question. Under the citation-integrity contract, RedCase shows no answer
-        rather than an unverified one â€” a fabricated citation is never
+        rather than an unverified one — a fabricated citation is never
         displayed.
       </p>
       <p className="mt-3 text-[11px] text-muted-foreground">
@@ -308,14 +308,14 @@ function RefusalPanel() {
   );
 }
 
-/** Table of Authorities â€” briefs list authorities; so does RedCase. Each row
+/** Table of Authorities — briefs list authorities; so does RedCase. Each row
  *  is a law-report citation line: court badge, NWLR cite, pinpoint pages and
  *  paragraph refs, and the seal linking the stored source PDF. */
 function AuthoritiesRail({ citations }: { citations: Citation[] }) {
   return (
     <aside className="space-y-3 lg:sticky lg:top-28">
       <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-        Table of Authorities Â· {citations.length}
+        Table of Authorities · {citations.length}
       </div>
       {citations.map((c) => (
         <AuthorityRow key={c.document_id} citation={c} />
@@ -328,9 +328,9 @@ function AuthorityRow({ citation: c }: { citation: Citation }) {
   const pages =
     c.page_start === c.page_end
       ? `p. ${c.page_start}`
-      : `pp. ${c.page_start}â€“${c.page_end}`;
+      : `pp. ${c.page_start}–${c.page_end}`;
   const paras = c.paragraph_refs.length
-    ? ` Â· Â¶ ${c.paragraph_refs.join(", Â¶ ")}`
+    ? ` · ¶ ${c.paragraph_refs.join(", ¶ ")}`
     : "";
   return (
     <article className="panel border-l-2 border-l-gold/60 p-4 transition-colors hover:border-l-gold">
@@ -385,7 +385,7 @@ function QueryErrorState({ error }: { error: unknown }) {
           ? "Your Supabase session is missing or expired. Sign in again with the email magic link."
           : error instanceof Error
             ? error.message
-            : "Unknown error â€” is the FastAPI backend running?"}
+            : "Unknown error — is the FastAPI backend running?"}
       </p>
     </section>
   );

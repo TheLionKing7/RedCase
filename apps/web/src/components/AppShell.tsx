@@ -43,7 +43,7 @@ export function AppShell({
               <span className="font-light text-muted-foreground">Case</span>
             </div>
             <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-              Aetoes Legal Â· Tenant Zero
+              Aetoes Legal · Tenant Zero
             </div>
           </div>
         </div>
@@ -76,11 +76,11 @@ export function AppShell({
         <div className="mt-auto space-y-3 px-6 py-6 text-[11px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <Circle className="size-2 fill-success text-success" />
-            Vault A synced Â· 1,284 briefs
+            Vault A synced · 1,284 briefs
           </div>
           <div className="flex items-center gap-2">
             <Circle className="size-2 fill-success text-success" />
-            Juris OS Â· 41,902 judgments
+            Juris OS · 41,902 judgments
           </div>
           <div className="border-t border-sidebar-border pt-3 font-mono uppercase tracking-widest">
             Partner build v0.9
@@ -104,10 +104,10 @@ export function AppShell({
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="rounded-full border border-gold/40 px-3 py-1 font-mono text-gold">
-                CONFIDENTIAL Â· PRIVILEGED
+                CONFIDENTIAL · PRIVILEGED
               </span>
               <span className="hidden sm:inline">
-                Tosin Adebayo Â· Managing Partner
+                Tosin Adebayo · Managing Partner
               </span>
             </div>
           </div>

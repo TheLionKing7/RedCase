@@ -1,0 +1,18 @@
+# RedCase — encoding enforcement (Addendum §8.5 encoding cleanup, 2026-09-22).
+# Every text path is forced UTF-8 so the cp1252-mojibake class (â€" Â§ Â· â€™)
+# cannot re-enter through git. Combined with .editorconfig's charset rule this is the
+# CI/repo-level gate the Codebase Audit (H2) called for.
+
+* text=auto eol=lf
+*.py text eol=lf charset=utf-8
+*.ts text eol=lf charset=utf-8
+*.tsx text eol=lf charset=utf-8
+*.js text eol=lf charset=utf-8
+*.json text eol=lf charset=utf-8
+*.css text eol=lf charset=utf-8
+*.md text eol=lf charset=utf-8
+*.svg text=false
+*.png binary
+*.jpg binary
+
+# text=auto normalizes on commit; these stop accidental CRLF/encoding churn on Windows.

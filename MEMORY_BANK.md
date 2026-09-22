@@ -124,6 +124,8 @@ Sequential `0001`…`0017`:
 **Branch:** `main` (ahead of origin — NOT pushed).
 
 ### Completed
+- **Audit remediation (2026-09-22) — H2 encoding sweep ✅:** full-tree cp1252-mojibake sweep of `apps/` (the "known 4 files" bound was the H2 lapse; this is a scan, not a memory bound). **48 replacements, 2 files, ZERO remaining** (`_authed.search.tsx` 43: page title `—`, og:title, year-range labels `2020–2026`, placeholder, citation-guard, comment arrows `→`; `AppShell.tsx` 5: `·` middots). Guard rails created: `.editorconfig` (charset=utf-8, LF, final-newline, per-lang indent) + `.gitattributes` (`* text=auto eol=lf`, utf-8 charset per ext, svg/png/binary) so the corruption class cannot silently re-enter via editor or git.
+
 - **Phase 1 — ✅ COMPLETE (G1 evidence 2026-09-19):** scaffold, ZDR filter, schema+RLS+seed, page-tracked ingestion (Jina v3, VECTOR_GATE=0.52), hybrid retrieval + `/v1/query` + citations + audit, Web UI (TanStack Start, brand redesign), deploy prep (held pending owner credentials).
 - **Phase 2 (in-app comms; Slack deferred to post-deploy):**
   - 2.1 ✅ clients/matters/document_grants/clearance RLS; 2.2 ✅ clearance ladder + envelope crypto (12/12 pen-test); 2.3 ✅ Vault A ingestion; 2.4 ✅ dual-vault router (98.3%); 2.5 ✅ in-app channels (`dec4c5f`); 2.6 ✅ agent surfaces (`d54e8e6`); 2.7 ✅ provisioning polish (`4a54da9`).
