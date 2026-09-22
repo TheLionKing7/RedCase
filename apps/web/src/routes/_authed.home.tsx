@@ -11,6 +11,7 @@ import {
   Scale,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { CoachMarks } from "@/components/CoachMarks";
 import { getClearance } from "@/lib/auth/supabase";
 import { useDeadlineEvents } from "@/lib/api/deadlines";
 import type { DeadlineEvent } from "@/lib/api/deadlines";
@@ -51,8 +52,33 @@ const GLANCE_LINKS = [
 
 function AuthenticatedHome() {
   const clearance = getClearance();
-  if (clearance === "PARTNER" || clearance === "ADMIN") return <FirmDashboard />;
-  return <PractitionerLanding clearance={clearance} />;
+  return (
+    <>
+      <CoachMarks
+        surface="home"
+        icon={Scale}
+        steps={[
+          {
+            title: "Your morning brief",
+            body: "This is your RedCase landing — firm deadlines, recent analyses and your next priorities, all in one place after sign-in.",
+          },
+          {
+            title: "Know what's due",
+            body: "Keep an eye on overdue and upcoming statutory deadlines so nothing slips. Missed dates surface here so they can't hide.",
+          },
+          {
+            title: "Jump straight to work",
+            body: "Open Vault Search, the Workbench, the Red-Teamer or the Tracker from here. Your role decides what you see first.",
+          },
+        ]}
+      />
+      {clearance === "PARTNER" || clearance === "ADMIN" ? (
+        <FirmDashboard />
+      ) : (
+        <PractitionerLanding clearance={clearance} />
+      )}
+    </>
+  );
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
