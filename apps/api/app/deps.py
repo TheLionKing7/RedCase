@@ -26,7 +26,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 import asyncpg
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 
 from app.config import Settings
 
@@ -37,6 +37,7 @@ class TenantContext:
     user_ref: str
     clearance: str  # STAFF | SENIOR | PARTNER | ADMIN (IdP group mapping, 2.3)
     db: asyncpg.Connection  # connection with RLS GUCs set inside a transaction
+    is_firm_admin: bool = False  # §8.5 — administered capability, orthogonal to clearance
 
 
 class JwtError(ValueError):
@@ -129,9 +130,37 @@ async def get_tenant_context(
             await conn.execute(
                 "SELECT set_config('app.user_clearance', $1, true)", str(clearance)
             )
+            # §8.5 firm-admin capability: an orthogonal, grantable flag read from the
+            # JWT app_metadata claim. Fail-closed false: an absent claim is NOT an
+            # admin, never a privilege guess. The append-only grant/revoke ledger for
+            # this flag is migration 0020 (firm_admins).
+            is_firm_admin = bool((claims.get("app_metadata") or {}).get("is_firm_admin", False))
+            await conn.execute(
+                "SELECT set_config('app.is_firm_admin', $1, true)",
+                "true" if is_firm_admin else "false",
+            )
             yield TenantContext(
                 tenant_id=str(tenant_id),
                 user_ref=str(user_ref),
                 clearance=str(clearance),
+                is_firm_admin=is_firm_admin,
                 db=conn,
             )
+
+
+async def require_firm_admin(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> TenantContext:
+    """Dependency gate for §8.5 admin-only surfaces (Firm Command).
+
+    Admin capability is orthogonal to clearance and read from the JWT
+    ``app_metadata.is_firm_admin`` claim (fail-closed false in the tenant context).
+    A non-admin — ANY clearance, including a PARTNER without the flag — is rejected
+    403. This is server-side enforcement, never UI hiding (§8.5; audit H3).
+    """
+    if not ctx.is_firm_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Firm Command requires firm-admin capability.",
+        )
+    return ctx

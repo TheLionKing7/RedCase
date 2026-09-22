@@ -89,6 +89,9 @@ def app_db_url(tmp_path_factory: pytest.TempPathFactory) -> str:
             # signup_audit is the provisioning log — same append-only contract
             # (documented in migration 0018). Immutability is a DB grant.
             await conn.execute(f"REVOKE UPDATE, DELETE ON signup_audit FROM {APP_ROLE}")
+            # firm_admins (0020) holds the admin grant/revoke trail — append-only by
+            # the same DB-grant contract (update/delete revoked from the app role).
+            await conn.execute(f"REVOKE UPDATE, DELETE ON firm_admins FROM {APP_ROLE}")
             await conn.execute(
                 "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public "
                 f"TO {APP_ROLE}"

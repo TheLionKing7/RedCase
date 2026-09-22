@@ -25,6 +25,7 @@ from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
 from app.routers.conflicts import router as conflicts_router
 from app.routers.expert_chat import router as expert_chat_router
+from app.routers.firm_admin import router as firm_admin_router
 from app.routers.internal import router as internal_router
 from app.routers.invites import router as invites_router
 from app.routers.invoicing import router as invoicing_router
@@ -105,6 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(dual_query_router)
     app.include_router(signup_router)
     app.include_router(invites_router)
+    app.include_router(firm_admin_router)
     return app
 
 

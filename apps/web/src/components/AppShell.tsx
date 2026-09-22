@@ -1,9 +1,10 @@
 ﻿import { Link } from "@tanstack/react-router";
-import { Home, Search, ShieldAlert, CalendarClock, Circle } from "lucide-react";
+import { Home, Search, ShieldAlert, CalendarClock, Circle, Landmark } from "lucide-react";
 import type { ReactNode } from "react";
+import { getFirmAdmin } from "@/lib/auth/supabase";
 
 const NAV = [
-  { to: "/home", label: "Home", sub: "Role landing", icon: Home },
+  { to: "/home", label: "Home", sub: "Workbench landing", icon: Home },
   { to: "/search", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
   {
     to: "/red-teamer",
@@ -17,7 +18,15 @@ const NAV = [
     sub: "Deadline computation",
     icon: CalendarClock,
   },
+  {
+    to: "/firm-command",
+    label: "Firm Command",
+    sub: "Run-the-firm · admin",
+    icon: Landmark,
+    adminOnly: true,
+  },
 ] as const;
+
 
 export function AppShell({
   title,
@@ -28,6 +37,8 @@ export function AppShell({
   eyebrow: string;
   children: ReactNode;
 }) {
+  const firmAdmin = getFirmAdmin();
+  const visibleNav = NAV.filter((item) => !("adminOnly" in item) || firmAdmin);
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
@@ -49,7 +60,7 @@ export function AppShell({
         </div>
 
         <nav className="flex flex-col gap-1 px-3">
-          {NAV.map((item) => (
+          {visibleNav.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -112,7 +123,7 @@ export function AppShell({
             </div>
           </div>
           <nav className="mt-4 flex gap-2 lg:hidden">
-            {NAV.map((item) => (
+            {visibleNav.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}

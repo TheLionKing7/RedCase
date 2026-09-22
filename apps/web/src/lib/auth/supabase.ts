@@ -169,6 +169,29 @@ export function getClearance(): string {
   }
 }
 
+/**
+ * Firm-admin capability from the current session's JWT `app_metadata.is_firm_admin`
+ * claim (Addendum §8.5 — an ORTHOGONAL, grantable admin flag, NOT derived from
+ * clearance). Used to gate the Firm Command nav entry. Fails closed to `false` when
+ * the claim is absent or there is no session — an unmapped user is never treated as an
+ * admin. The claim is the same source `app.deps.verify_supabase_jwt` reads for the
+ * server-side `require_firm_admin` gate; this only (de)selects UI, never enforces.
+ */
+export function getFirmAdmin(): boolean {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    const payloadB64 = token.split(".")[1] ?? "";
+    const pad = "=".repeat(-payloadB64.length % 4);
+    const payload = JSON.parse(atob(payloadB64)) as {
+      app_metadata?: { is_firm_admin?: boolean };
+    };
+    return payload.app_metadata?.is_firm_admin === true;
+  } catch {
+    return false;
+  }
+}
+
 /** JWT sent as `Authorization: Bearer` to FastAPI (see lib/api/client.ts). */
 export function getAccessToken(): string | null {
   return getSession()?.access_token ?? null;

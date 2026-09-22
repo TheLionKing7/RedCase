@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as AuthedFirmCommandRouteImport } from './routes/_authed.firm-command'
 import { Route as AuthedHomeRouteImport } from './routes/_authed.home'
 import { Route as AuthedRedTeamerRouteImport } from './routes/_authed.red-teamer'
 import { Route as AuthedSearchRouteImport } from './routes/_authed.search'
@@ -37,6 +38,11 @@ const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedFirmCommandRoute = AuthedFirmCommandRouteImport.update({
+  id: '/firm-command',
+  path: '/firm-command',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedHomeRoute = AuthedHomeRouteImport.update({
   id: '/home',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/signin': typeof SigninRoute
+  '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/signin': typeof SigninRoute
+  '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/signin': typeof SigninRoute
+  '/_authed/firm-command': typeof AuthedFirmCommandRoute
   '/_authed/home': typeof AuthedHomeRoute
   '/_authed/red-teamer': typeof AuthedRedTeamerRoute
   '/_authed/search': typeof AuthedSearchRoute
@@ -102,6 +111,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/signin'
+    | '/firm-command'
     | '/home'
     | '/red-teamer'
     | '/search'
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/signin'
+    | '/firm-command'
     | '/home'
     | '/red-teamer'
     | '/search'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/accept-invite'
     | '/signin'
+    | '/_authed/firm-command'
     | '/_authed/home'
     | '/_authed/red-teamer'
     | '/_authed/search'
@@ -167,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/firm-command': {
+      id: '/_authed/firm-command'
+      path: '/firm-command'
+      fullPath: '/firm-command'
+      preLoaderRoute: typeof AuthedFirmCommandRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/home': {
       id: '/_authed/home'
       path: '/home'
@@ -206,6 +225,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedRouteChildren {
+  AuthedFirmCommandRoute: typeof AuthedFirmCommandRoute
   AuthedHomeRoute: typeof AuthedHomeRoute
   AuthedRedTeamerRoute: typeof AuthedRedTeamerRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
@@ -214,6 +234,7 @@ interface AuthedRouteChildren {
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedFirmCommandRoute: AuthedFirmCommandRoute,
   AuthedHomeRoute: AuthedHomeRoute,
   AuthedRedTeamerRoute: AuthedRedTeamerRoute,
   AuthedSearchRoute: AuthedSearchRoute,
