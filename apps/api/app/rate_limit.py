@@ -94,3 +94,32 @@ def client_ip(request) -> str:
         if first:
             return first
     return request.client.host if request.client else "unknown"
+
+
+class InviteAcceptLimiter:
+    """Composite limiter for the UNAUTHENTICATED invitee bootstrap path.
+
+    ``POST /v1/invites/accept`` is an unauthenticated write, so it is throttled
+    per IP (no auth to identify the caller) AND per invite token (a brute-forced
+    link is shut down after a handful of guesses). Shares the same process-local
+    sliding-window + Cloudflare-edge caveat as the signup limiter.
+    """
+
+    def __init__(
+        self,
+        *,
+        ip_limit: int,
+        token_limit: int,
+        window_s: int,
+    ) -> None:
+        self.accept_ip = SlidingWindowLimiter(ip_limit, window_s)
+        self.accept_token = SlidingWindowLimiter(token_limit, window_s)
+
+    def allow_accept(self, ip: str, token_hash: str) -> bool:
+        ok_ip = self.accept_ip.allow(ip)
+        if not ok_ip:
+            log.warning("invite_accept_rate_limited", key="ip")
+        ok_token = self.accept_token.allow(token_hash)
+        if not ok_token:
+            log.warning("invite_accept_rate_limited", key="token")
+        return ok_ip and ok_token

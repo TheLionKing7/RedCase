@@ -67,3 +67,13 @@ def hash_verify_token(token: str) -> str:
     comparison a hash of a token (never reversible to the token). Constant-time
     comparison is the caller's job (hmac.compare_digest)."""
     return hmac.new(b"redcase-verify", token.encode(), hashlib.sha256).hexdigest()
+
+
+def new_invite_token() -> str:
+    """Cryptographically random, URL-safe firm invite token (32 raw bytes => 43 chars)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_invite_token(token: str) -> str:
+    """Subkeyed SHA-256 digest of a firm invite token (invite namespace)."""
+    return hmac.new(b"redcase-invite", token.encode(), hashlib.sha256).hexdigest()

@@ -166,6 +166,16 @@ class Settings(BaseSettings):
     # Email-verification token lifetime (Part 2 DoD gate).
     signup_verify_ttl_s: int = 86400           # 24h
 
+    # --- Part 3 Slice 1: invitee bootstrap (POST /v1/invites/accept) ---
+    # Another UNAUTHENTICATED write path, throttled per IP and per invite token
+    # (same process-local window + Cloudflare-edge caveat as signup). The invite
+    # link itself is short-lived (7 days) so a leaked/forwarded link cannot be
+    # redeemed indefinitely.
+    invite_accept_rate_limit_per_ip: int = 10        # accept attempts per window per IP
+    invite_accept_rate_limit_per_token: int = 5      # accept attempts per window per token
+    invite_accept_rate_window_s: int = 900           # 15-minute sliding window
+    invite_token_ttl_s: int = 604800                # 7 days
+
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""
         missing = [n for n in names if getattr(self, n, None) is None]

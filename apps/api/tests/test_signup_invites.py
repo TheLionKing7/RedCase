@@ -30,12 +30,13 @@ import uuid
 from datetime import UTC
 
 import asyncpg
+import pytest
 from conftest import SEED_TENANT_AETOES
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.onboarding import hash_verify_token, new_verify_token
+from app.onboarding import hash_invite_token, hash_verify_token, new_invite_token, new_verify_token
 
 JWT_SECRET = "test-jwt-secret-not-a-real-secret"  # noqa: S105 (throwaway test secret)
 
@@ -422,3 +423,154 @@ class TestInvites:
                 headers={"Authorization": f"Bearer {make_jwt(tenant=tid)}"},
             )
         assert resp.status_code == 422
+
+    def test_accept_rejects_unknown_token(self, app_db_url: str) -> None:
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.post(
+                "/v1/invites/accept",
+                json={"token": "no-such-token-123", "password": "superSecret9"},
+            )
+        assert resp.status_code == 400
+
+
+async def _seed_invite(
+    app_db_url: str,
+    tenant_id: str,
+    email: str,
+    *,
+    role: str = "ASSOCIATE",
+    clearance: str = "STAFF",
+    expires_in_s: int = 3600,
+) -> str:
+    """Insert a PENDING firm_invites row (RLS-scoped) and return the RAW token."""
+    token = new_invite_token()
+    token_hash = hash_invite_token(token)
+    expires = datetime.datetime.now(UTC) + datetime.timedelta(seconds=expires_in_s)
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        async with conn.transaction():
+            await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant_id)
+            await conn.execute(
+                "INSERT INTO firm_invites"
+                " (tenant_id, invited_email, role, clearance, invited_by,"
+                "  invite_token_hash, invite_token_expires_at)"
+                " VALUES ($1, $2, $3, $4, 'partner-1', $5, $6)",
+                uuid.UUID(tenant_id),
+                email,
+                role,
+                clearance,
+                token_hash,
+                expires,
+            )
+    finally:
+        await conn.close()
+    return token
+
+
+class TestInviteAccept:
+    """POST /v1/invites/accept - Slice 1 backend close."""
+
+    def test_accept_creates_user_with_invite_clearance_and_is_single_use(
+        self, app_db_url: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        tid = str(uuid.uuid4())
+        asyncio.run(_seed_subscription(app_db_url, tid, max_seats=3, current_seats=1))
+        email = f"invitee-{uuid.uuid4().hex[:8]}@example.com"
+        token = asyncio.run(
+            _seed_invite(app_db_url, tid, email, role="ASSOCIATE", clearance="STAFF")
+        )
+        captured: dict = {}
+
+        async def fake_create(settings, email, password, name, tenant_id, clearance):
+            captured["email"] = email
+            captured["password"] = password
+            captured["clearance"] = clearance
+            captured["tenant"] = tenant_id
+            return "user-created-123"
+
+        monkeypatch.setattr("app.routers.invites._create_supabase_user", fake_create)
+        app = create_app(_settings(app_db_url))
+        with TestClient(app) as client:
+            resp = client.post(
+                "/v1/invites/accept",
+                json={"token": token, "password": "superSecret9"},
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ACCEPTED"
+        assert body["tenant_id"] == tid
+        assert body["clearance"] == "STAFF"
+        assert captured["clearance"] == "STAFF"
+        assert captured["email"] == email
+
+        async def _check() -> None:
+            conn = await asyncpg.connect(app_db_url)
+            try:
+                async with conn.transaction():
+                    await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tid)
+                    row = await conn.fetchrow(
+                        "SELECT status, accepted_user_ref FROM firm_invites"
+                        " WHERE invited_email = $1 AND tenant_id = $2::uuid",
+                        email,
+                        uuid.UUID(tid),
+                    )
+                    audit = await conn.fetchrow(
+                        "SELECT step FROM signup_audit WHERE step = 'invite_accepted'",
+                    )
+            finally:
+                await conn.close()
+            assert row is not None
+            assert row["status"] == "ACCEPTED"
+            assert row["accepted_user_ref"] == "user-created-123"
+            assert audit is not None
+
+        asyncio.run(_check())
+
+        with TestClient(app) as client:
+            resp2 = client.post(
+                "/v1/invites/accept",
+                json={"token": token, "password": "superSecret9"},
+            )
+        assert resp2.status_code == 400
+
+    def test_accept_rejects_expired_token(self, app_db_url: str) -> None:
+        tid = str(uuid.uuid4())
+        asyncio.run(_seed_subscription(app_db_url, tid, max_seats=3, current_seats=1))
+        token = asyncio.run(
+            _seed_invite(app_db_url, tid, "expired@example.com", expires_in_s=-60)
+        )
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.post(
+                "/v1/invites/accept",
+                json={"token": token, "password": "superSecret9"},
+            )
+        assert resp.status_code == 400
+
+    def test_accept_ignores_client_clearance_injection(
+        self, app_db_url: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A forged clearance in the body must be ignored - the grant comes from the invite."""
+        tid = str(uuid.uuid4())
+        asyncio.run(_seed_subscription(app_db_url, tid, max_seats=3, current_seats=1))
+        email = f"inject-{uuid.uuid4().hex[:8]}@example.com"
+        token = asyncio.run(
+            _seed_invite(app_db_url, tid, email, role="STAFF", clearance="STAFF")
+        )
+        captured: dict = {}
+
+        async def fake_create(settings, email, password, name, tenant_id, clearance):
+            captured["clearance"] = clearance
+            return None
+
+        monkeypatch.setattr("app.routers.invites._create_supabase_user", fake_create)
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            resp = client.post(
+                "/v1/invites/accept",
+                json={
+                    "token": token,
+                    "password": "superSecret9",
+                    "clearance": "PARTNER",
+                },
+            )
+        assert resp.status_code == 200
+        assert captured["clearance"] == "STAFF"

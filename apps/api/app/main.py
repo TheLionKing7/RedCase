@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.assistant.router import router as assistant_router
 from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
-from app.rate_limit import PublicSignupLimiter
+from app.rate_limit import InviteAcceptLimiter, PublicSignupLimiter
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
@@ -74,6 +74,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         email_limit=settings.signup_rate_limit_per_email,
         window_s=settings.signup_rate_window_s,
         verify_ip_limit=settings.verify_rate_limit_per_ip,
+    )
+    app.state.invite_accept_limiter = InviteAcceptLimiter(
+        ip_limit=settings.invite_accept_rate_limit_per_ip,
+        token_limit=settings.invite_accept_rate_limit_per_token,
+        window_s=settings.invite_accept_rate_window_s,
     )
 
     # Dev CORS for the apps/web vite dev server (7100). Locked down to the
