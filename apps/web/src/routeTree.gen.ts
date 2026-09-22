@@ -10,73 +10,131 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RedTeamerRouteImport } from './routes/red-teamer'
-import { Route as SearchRouteImport } from './routes/search'
-import { Route as TrackerRouteImport } from './routes/tracker'
-import { Route as WorkbenchRouteImport } from './routes/workbench'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as AuthedHomeRouteImport } from './routes/_authed.home'
+import { Route as AuthedRedTeamerRouteImport } from './routes/_authed.red-teamer'
+import { Route as AuthedSearchRouteImport } from './routes/_authed.search'
+import { Route as AuthedTrackerRouteImport } from './routes/_authed.tracker'
+import { Route as AuthedWorkbenchRouteImport } from './routes/_authed.workbench'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RedTeamerRoute = RedTeamerRouteImport.update({
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInviteRoute = AcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedHomeRoute = AuthedHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedRedTeamerRoute = AuthedRedTeamerRouteImport.update({
   id: '/red-teamer',
   path: '/red-teamer',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRoute,
 } as any)
-const SearchRoute = SearchRouteImport.update({
+const AuthedSearchRoute = AuthedSearchRouteImport.update({
   id: '/search',
   path: '/search',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRoute,
 } as any)
-const TrackerRoute = TrackerRouteImport.update({
+const AuthedTrackerRoute = AuthedTrackerRouteImport.update({
   id: '/tracker',
   path: '/tracker',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRoute,
 } as any)
-const WorkbenchRoute = WorkbenchRouteImport.update({
+const AuthedWorkbenchRoute = AuthedWorkbenchRouteImport.update({
   id: '/workbench',
   path: '/workbench',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthedRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/red-teamer': typeof RedTeamerRoute
-  '/search': typeof SearchRoute
-  '/tracker': typeof TrackerRoute
-  '/workbench': typeof WorkbenchRoute
+  '/accept-invite': typeof AcceptInviteRoute
+  '/signin': typeof SigninRoute
+  '/home': typeof AuthedHomeRoute
+  '/red-teamer': typeof AuthedRedTeamerRoute
+  '/search': typeof AuthedSearchRoute
+  '/tracker': typeof AuthedTrackerRoute
+  '/workbench': typeof AuthedWorkbenchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/red-teamer': typeof RedTeamerRoute
-  '/search': typeof SearchRoute
-  '/tracker': typeof TrackerRoute
-  '/workbench': typeof WorkbenchRoute
+  '/accept-invite': typeof AcceptInviteRoute
+  '/signin': typeof SigninRoute
+  '/home': typeof AuthedHomeRoute
+  '/red-teamer': typeof AuthedRedTeamerRoute
+  '/search': typeof AuthedSearchRoute
+  '/tracker': typeof AuthedTrackerRoute
+  '/workbench': typeof AuthedWorkbenchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/red-teamer': typeof RedTeamerRoute
-  '/search': typeof SearchRoute
-  '/tracker': typeof TrackerRoute
-  '/workbench': typeof WorkbenchRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/accept-invite': typeof AcceptInviteRoute
+  '/signin': typeof SigninRoute
+  '/_authed/home': typeof AuthedHomeRoute
+  '/_authed/red-teamer': typeof AuthedRedTeamerRoute
+  '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/tracker': typeof AuthedTrackerRoute
+  '/_authed/workbench': typeof AuthedWorkbenchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
+  fullPaths:
+    | '/'
+    | '/accept-invite'
+    | '/signin'
+    | '/home'
+    | '/red-teamer'
+    | '/search'
+    | '/tracker'
+    | '/workbench'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
-  id: '__root__' | '/' | '/red-teamer' | '/search' | '/tracker' | '/workbench'
+  to:
+    | '/'
+    | '/accept-invite'
+    | '/signin'
+    | '/home'
+    | '/red-teamer'
+    | '/search'
+    | '/tracker'
+    | '/workbench'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authed'
+    | '/accept-invite'
+    | '/signin'
+    | '/_authed/home'
+    | '/_authed/red-teamer'
+    | '/_authed/search'
+    | '/_authed/tracker'
+    | '/_authed/workbench'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  RedTeamerRoute: typeof RedTeamerRoute
-  SearchRoute: typeof SearchRoute
-  TrackerRoute: typeof TrackerRoute
-  WorkbenchRoute: typeof WorkbenchRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
+  AcceptInviteRoute: typeof AcceptInviteRoute
+  SigninRoute: typeof SigninRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -88,43 +146,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/red-teamer': {
-      id: '/red-teamer'
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed/home': {
+      id: '/_authed/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof AuthedHomeRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/red-teamer': {
+      id: '/_authed/red-teamer'
       path: '/red-teamer'
       fullPath: '/red-teamer'
-      preLoaderRoute: typeof RedTeamerRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedRedTeamerRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/search': {
-      id: '/search'
+    '/_authed/search': {
+      id: '/_authed/search'
       path: '/search'
       fullPath: '/search'
-      preLoaderRoute: typeof SearchRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedSearchRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/tracker': {
-      id: '/tracker'
+    '/_authed/tracker': {
+      id: '/_authed/tracker'
       path: '/tracker'
       fullPath: '/tracker'
-      preLoaderRoute: typeof TrackerRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedTrackerRouteImport
+      parentRoute: typeof AuthedRoute
     }
-    '/workbench': {
-      id: '/workbench'
+    '/_authed/workbench': {
+      id: '/_authed/workbench'
       path: '/workbench'
       fullPath: '/workbench'
-      preLoaderRoute: typeof WorkbenchRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthedWorkbenchRouteImport
+      parentRoute: typeof AuthedRoute
     }
   }
 }
 
+interface AuthedRouteChildren {
+  AuthedHomeRoute: typeof AuthedHomeRoute
+  AuthedRedTeamerRoute: typeof AuthedRedTeamerRoute
+  AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedTrackerRoute: typeof AuthedTrackerRoute
+  AuthedWorkbenchRoute: typeof AuthedWorkbenchRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedHomeRoute: AuthedHomeRoute,
+  AuthedRedTeamerRoute: AuthedRedTeamerRoute,
+  AuthedSearchRoute: AuthedSearchRoute,
+  AuthedTrackerRoute: AuthedTrackerRoute,
+  AuthedWorkbenchRoute: AuthedWorkbenchRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  RedTeamerRoute: RedTeamerRoute,
-  SearchRoute: SearchRoute,
-  TrackerRoute: TrackerRoute,
-  WorkbenchRoute: WorkbenchRoute,
+  AuthedRoute: AuthedRouteWithChildren,
+  AcceptInviteRoute: AcceptInviteRoute,
+  SigninRoute: SigninRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

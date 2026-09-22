@@ -37,6 +37,31 @@ would raise immediately in tests (the app test role `redcase_app` is a
 non-superuser precisely so policy enforcement is real) — that error is
 the contract working, not an obstacle to route around.
 
+## Architecture note: privileged operations that cannot carry a session
+
+Three distinct patterns now exist for "privileged operations with no session" —
+choose the right one rather than discover it:
+
+1. **Per-transaction GUC scoping (background jobs)** — enumerated tenants, then
+   `SELECT set_config('app.tenant_id', $1, true)` inside each transaction
+   (the section above). Use when you already know the tenant from enumeration
+   and have a privileged service-role connection. Never bypasses RLS.
+2. **SECURITY DEFINER claim function (token bootstrap)** — `redcase_claim_invite`
+   (`0019_invite_accept.py`): a `SECURITY DEFINER` function performs an
+   **atomic conditional UPDATE** (`WHERE status = 'PENDING'`) when the caller
+   has no session and therefore **no tenant GUC** — the token *is* the tenant
+   credential, and the function's definer rights let it resolve the row without
+   RLS. Single-use is enforced in the SQL predicate, not by a read-then-update
+   race in the app layer. Use when the only credential is an unguessable token
+   (invite accepts, magic-link confirmations, one-time verification).
+3. **Fallback fail-closed** — when neither tenant-enumeration nor a token is
+   available, do not weaken RLS; treat the lookup as unauthorized and re-raise.
+
+Rule of thumb: an unauthenticated caller with only a token → pattern 2; a
+scheduled job with a privileged connection → pattern 1. Never reach for
+superuser/owner shortcuts or policy-disabling to bridge a missing session.
+
+
 ## 1. Environment variable registry (names + owning store, never values)
 
 | Env var | Secret? | Owning store |

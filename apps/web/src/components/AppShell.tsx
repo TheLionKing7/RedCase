@@ -1,8 +1,9 @@
 ﻿import { Link } from "@tanstack/react-router";
-import { Search, ShieldAlert, CalendarClock, Circle } from "lucide-react";
+import { Home, Search, ShieldAlert, CalendarClock, Circle } from "lucide-react";
 import type { ReactNode } from "react";
 
 const NAV = [
+  { to: "/home", label: "Home", sub: "Role landing", icon: Home },
   { to: "/search", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
   {
     to: "/red-teamer",
