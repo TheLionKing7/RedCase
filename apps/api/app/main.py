@@ -16,18 +16,22 @@ import asyncpg
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.assistant.router import router as assistant_router
 from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
+from app.rate_limit import PublicSignupLimiter
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
 from app.routers.conflicts import router as conflicts_router
 from app.routers.expert_chat import router as expert_chat_router
 from app.routers.internal import router as internal_router
+from app.routers.invites import router as invites_router
 from app.routers.invoicing import router as invoicing_router
 from app.routers.practice import router as practice_router
 from app.routers.query import router as query_router
 from app.routers.router import router as dual_query_router
+from app.routers.signup import router as signup_router
 from app.routers.vault_a import router as vault_a_router
 
 log = get_logger("redcase.boot")
@@ -65,6 +69,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.public_signup_limiter = PublicSignupLimiter(
+        ip_limit=settings.signup_rate_limit_per_ip,
+        email_limit=settings.signup_rate_limit_per_email,
+        window_s=settings.signup_rate_window_s,
+        verify_ip_limit=settings.verify_rate_limit_per_ip,
+    )
 
     # Dev CORS for the apps/web vite dev server (7100). Locked down to the
     # configured origin list; production serves the frontend same-origin.
@@ -82,11 +92,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(conflicts_router)
     app.include_router(audit_router)
     app.include_router(expert_chat_router)
+    app.include_router(assistant_router)
     app.include_router(internal_router)
     app.include_router(vault_a_router)
     app.include_router(practice_router)
     app.include_router(invoicing_router)
     app.include_router(dual_query_router)
+    app.include_router(signup_router)
+    app.include_router(invites_router)
     return app
 
 

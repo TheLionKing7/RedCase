@@ -154,6 +154,18 @@ class Settings(BaseSettings):
     # <2k tokens; the old 16k+ row was a passage-echo artifact, now stripped.
     answer_max_tokens: int = 4096
 
+    # --- Part 2: public signup hardening (HANDOFF §4 growth surface) ---
+    # The system's first UNAUTHENTICATED write path is rate-limited per IP and
+    # per normalized email (process-local sliding window — no Redis dependency in
+    # this phase; the in-memory store is a single-proc approximation and is
+    # documented as a production caveat behind Cloudflare, which also rate-limits).
+    signup_rate_limit_per_ip: int = 10         # applications per window per IP
+    signup_rate_limit_per_email: int = 3        # applications per window per email
+    signup_rate_window_s: int = 900             # 15-minute sliding window
+    verify_rate_limit_per_ip: int = 20           # verify attempts per window per IP
+    # Email-verification token lifetime (Part 2 DoD gate).
+    signup_verify_ttl_s: int = 86400           # 24h
+
     def require_secrets(self, *names: str) -> None:
         """Fail fast when a code path needs a secret that is not provisioned."""
         missing = [n for n in names if getattr(self, n, None) is None]

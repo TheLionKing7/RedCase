@@ -39,7 +39,9 @@ log = get_logger("redcase.entitlements")
 
 # §6: the Workbench is the premium surface. Core-tier features are simply
 # not listed here and skip the plan/seat gate (suspension still applies).
-PREMIUM_FEATURES = frozenset({"workbench.analyze", "workbench.chat"})
+PREMIUM_FEATURES = frozenset(
+    {"workbench.analyze", "workbench.chat", "workbench.assistant"}
+)
 
 _UPGRADE_COPY = {
     "DENY_PLAN": (
