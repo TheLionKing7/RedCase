@@ -1,16 +1,25 @@
 """Expert Chat — the per-user Legal Assistant (Addendum §3.2, Step D).
 
-The ONLY conversational surface in the system. Grounded in the caller's own
-analysis + both vaults, reusing the answer_question grounding contract
-(citation verification, refusal, serving-provider audit). Chat messages reuse
-query_audit (thread_id + analysis_id columns) — append-only. ZDR: the question
-is stored as a SHA-256 hash, never the question text.
+DEPRECATED (M1 consolidation, see docs/RedCase-Codebase-Audit.md §M1): this
+"analysis-scoped chat" surface is SUPERSEDED by the general per-user agent in
+``app/assistant/`` (Addendum §7.2), which is the ONE conversational surface.
+The assistant already drills into the caller's own complete analyses via its analysis
+tools (``show_overview`` / ``show_arguments`` / ``show_similar_cases`` /
+``show_law``). Do not add features here. Existing routes stay mounted for backward
+compatibility; new chat work goes in ``app/assistant/service.py``. Threads are
+migrated to the assistant's ``assistant_threads``/``assistant_messages`` at the
+next data-migration window.
+
+Historical contract: this surface was "grounded in the caller's own analysis + both
+vaults", reusing the answer_question grounding contract (citation verification,
+refusal, serving-provider audit). Chat messages reused query_audit (thread_id +
+analysis_id columns) — append-only. ZDR: the question is stored as a SHA-256
+hash, never the question text.
 
   POST /v1/analyses/{id}/chat   body {question} → grounded answer
   GET  /v1/analyses/{id}/chat   → the thread's turns (audit rows)
 
-Entitlement: require_feature("workbench.chat") — the Workbench is the premium
-per-seat surface; Expert Chat is part of it.
+Entitlement: require_feature("workbench.chat").
 """
 
 import json

@@ -41,6 +41,11 @@ ALLOWED_TOOLS = {
     "analyze_document",
     "matter_context",
     "save_to_workbench",
+    # M1 analysis drill-down (each requires an analysis_id the caller owns).
+    "show_overview",
+    "show_arguments",
+    "show_similar_cases",
+    "show_law",
 }
 _CROSS_MATTER = ("PARTNER", "ADMIN")
 
@@ -59,6 +64,10 @@ You take actions one at a time. Each turn reply with JSON only, one of:
    {{{{"action": "matter_context", "action_input": {{{{}}}}}}
    {{{{"action": "save_to_workbench", "action_input": {{{{"title": "."
         "..", "body": "...", "kind": "DRAFT"|"NOTE"}}}}}}
+   {{{{"action": "show_overview", "action_input": {{{{"analysis_id": "..."}}}}}}
+   {{{{"action": "show_arguments", "action_input": {{{{"analysis_id": "..."}}}}}}
+   {{{{"action": "show_similar_cases", "action_input": {{{{"analysis_id": "..."}}}}}}
+   {{{{"action": "show_law", "action_input": {{{{"analysis_id": "..."}}}}}}
 
 2. To answer the user:
    {{{{"final": {{{{"answer": "...", "refusal_block": null|"."
@@ -288,6 +297,135 @@ async def _load_history(
     return [{"role": r["role"], "content": r["content"]} for r in rows]
 
 
+async def _load_analysis_sections(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str, analysis_id: str
+) -> dict[str, Any] | None:
+    """Load the caller's own COMPLETE analysis output (RLS confines it to this
+    tenant; ownership is by tenant scope, matching list_analyses). Returns the
+    decoded ``output["sections"]`` dict or None when not found / not complete.
+
+    ZDR: returns only structured analysis fields (text authored by the analyser, not
+    raw document text) into memory; nothing here is persisted or logged.
+    """
+    row = await db.fetchrow(
+        "SELECT output FROM document_analyses WHERE id = $1::uuid"
+        " AND created_by = $2",
+        uuid.UUID(analysis_id),
+        user_ref,
+    )
+    if row is None or row["output"] is None:
+        return None
+    output = row["output"]
+    if isinstance(output, str):
+        try:
+            output = json.loads(output)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    sections = (output or {}).get("sections")
+    if not isinstance(sections, dict):
+        return None
+    return sections
+
+
+async def _show_overview(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str, analysis_id: str
+) -> ToolResult:
+    """Drill-down: the Overview section of one of the caller's own analyses."""
+    sections = await _load_analysis_sections(
+        db, tenant_id, user_ref, analysis_id
+    )
+    if sections is None:
+        return ToolResult(
+            tool="show_overview",
+            ok=False,
+            summary="No complete analysis found for that id in your workbench.",
+        )
+    return ToolResult(
+        tool="show_overview",
+        ok=True,
+        summary=json.dumps(
+            sections.get("overview", {}), ensure_ascii=False
+        ),
+        rows=[{"analysis_id": analysis_id, "section": "overview"}],
+    )
+
+
+async def _show_arguments(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str, analysis_id: str
+) -> ToolResult:
+    """Drill-down: the Arguments section (battle-card opposing arguments / served
+    claims / clause findings depending on pack) of one of the caller's analyses."""
+    sections = await _load_analysis_sections(
+        db, tenant_id, user_ref, analysis_id
+    )
+    if sections is None:
+        return ToolResult(
+            tool="show_arguments",
+            ok=False,
+            summary="No complete analysis found for that id in your workbench.",
+        )
+    return ToolResult(
+        tool="show_arguments",
+        ok=True,
+        summary=json.dumps(
+            sections.get("arguments", []), ensure_ascii=False
+        ),
+        rows=[{"analysis_id": analysis_id, "section": "arguments"}],
+    )
+
+
+async def _show_similar_cases(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str, analysis_id: str
+) -> ToolResult:
+    """Drill-down: comparable-cases context for one of the caller's analyses.
+    Source is the analysis output's jurisdictional/case context when present; otherwise
+    we surface an honest \"no similar-cases section\" (no fabrication)."""
+    sections = await _load_analysis_sections(
+        db, tenant_id, user_ref, analysis_id
+    )
+    if sections is None:
+        return ToolResult(
+            tool="show_similar_cases",
+            ok=False,
+            summary="No complete analysis found for that id in your workbench.",
+        )
+    similar = sections.get("similar_cases") or sections.get("jurisdictional_notes")
+    if not similar:
+        return ToolResult(
+            tool="show_similar_cases",
+            ok=False,
+            summary="This analysis has no similar-cases section recorded.",
+        )
+    return ToolResult(
+        tool="show_similar_cases",
+        ok=True,
+        summary=json.dumps(similar, ensure_ascii=False),
+        rows=[{"analysis_id": analysis_id, "section": "similar_cases"}],
+    )
+
+
+async def _show_law(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str, analysis_id: str
+) -> ToolResult:
+    """Drill-down: the Law section (LawPoint authorities) of one of the caller's
+    analyses."""
+    sections = await _load_analysis_sections(
+        db, tenant_id, user_ref, analysis_id
+    )
+    if sections is None:
+        return ToolResult(
+            tool="show_law",
+            ok=False,
+            summary="No complete analysis found for that id in your workbench.",
+        )
+    return ToolResult(
+        tool="show_law",
+        ok=True,
+        summary=json.dumps(sections.get("law", []), ensure_ascii=False),
+        rows=[{"analysis_id": analysis_id, "section": "law"}],
+    )
+
+
 def _first_line(text: str, n: int) -> str:
     line = text.strip().splitlines()[0] if text.strip() else "Untitled thread"
     return (line[:n] + "…") if len(line) > n else (line or "Untitled thread")
@@ -387,6 +525,22 @@ async def run_assistant_turn(
                 db, tenant_id, user_ref, thread_id,
                 str(inp.get("title", "Untitled")), str(inp.get("body", "")),
                 str(inp.get("kind", "NOTE")),
+            )
+        elif tool == "show_overview":
+            res = await _show_overview(
+                db, tenant_id, user_ref, str(inp.get("analysis_id", ""))
+            )
+        elif tool == "show_arguments":
+            res = await _show_arguments(
+                db, tenant_id, user_ref, str(inp.get("analysis_id", ""))
+            )
+        elif tool == "show_similar_cases":
+            res = await _show_similar_cases(
+                db, tenant_id, user_ref, str(inp.get("analysis_id", ""))
+            )
+        elif tool == "show_law":
+            res = await _show_law(
+                db, tenant_id, user_ref, str(inp.get("analysis_id", ""))
             )
         elif tool == "analyze_document":
             res = ToolResult(
