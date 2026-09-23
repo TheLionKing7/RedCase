@@ -5,8 +5,7 @@ import knowledge from "@/data/receptionist-knowledge.json";
 type Message = { role: "user" | "assistant"; text: string };
 
 const ESCALATE = "I don't want to guess — let me connect you.";
-const WELCOME =
-  "Hello — I'm RedCase's receptionist. Ask me about the platform, security, or what's shipped vs. on the roadmap.";
+const WELCOME = "Hi, I'm Rennie, RedCase's receptionist. How may I help you today?";
 
 function normalize(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -22,13 +21,30 @@ function answer(question: string): string {
     return "Talk to us.";
   }
 
+  // Identity — who is staffing the front desk.
+  if (/who are you|your name|what's your name|what is your name|rennie|about you/.test(q)) {
+    return WELCOME;
+  }
+
+  const cap = knowledge.capabilities;
+
+  // Workflow narrative — "how would my firm actually use this?" for non-technical lawyers.
+  // Rank workflow entries by how many of their keyword phrases appear in the question.
+  const workflow = knowledge.workflow
+    .map((w) => {
+      const score = w.keywords.filter((k) => q.includes(normalize(k))).length;
+      return { w, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)[0];
+  if (workflow) return workflow.w.a;
+
   const faq = knowledge.faq.find((f) => {
     const words = normalize(f.q).split(" ").filter((w) => w.length > 3);
     return words.filter((w) => q.includes(w)).length >= 2;
   });
   if (faq) return faq.a;
 
-  const cap = knowledge.capabilities;
   const hits: string[] = [];
 
   if (/train|data used|your model|model/.test(q)) hits.push("No. Every AI call is zero-retention — client conversations never touch a model provider's logs, and nothing you write is used to train anyone's model.");
@@ -48,15 +64,6 @@ function answer(question: string): string {
 
   return ESCALATE;
 }
-
-const SUGGESTIONS = [
-  "Is my data used to train your models?",
-  "Which Nigerian courts are covered?",
-  "What does page-pinned citations mean?",
-  "Is the deadline tracker available?",
-  "Is there a client portal?",
-  "What's your price?",
-];
 
 export function Receptionist() {
   const [open, setOpen] = useState(false);
@@ -163,18 +170,6 @@ export function Receptionist() {
 
           {/* Composer */}
           <div className="border-t border-border/60 p-3">
-            <div className="flex flex-wrap gap-2 px-1 pb-2">
-              { SUGGESTIONS.map((s) => (
-                <button
-                  key={ s }
-                  type="button"
-                  onClick={ () => submit(s) }
-                  className="rounded-full border border-border bg-background/40 px-3 py-1 text-xs text-muted-foreground transition-colors duration-200 hover:border-gold/40 hover:text-foreground"
-                >
-                  { s }
-                </button>
-              ))}
-            </div>
             <form
               onSubmit={ (e) => { e.preventDefault(); submit(input); } }
               className="flex items-center gap-2"

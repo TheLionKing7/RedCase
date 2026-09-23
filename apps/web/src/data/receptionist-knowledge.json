@@ -32,6 +32,54 @@
       "a": "One assistant per lawyer, bound to a Workbench. It learns your preferences from the work you do in your workbench — and converses only there, under your permissions, never in shared channels."
     }
   ],
+  "positioning": "RedCase is an AI-powered operating system for law firms — your knowledge, Nigeria's law, and your operations in one engine, built to optimize your firm's workflow end to end. That's positioning, not a feature claim: everything else I tell you about individual capabilities is exactly what's shipped today or on the roadmap.",
+  "workflow": [
+    {
+      "q": "How would a 5-lawyer litigation firm use this?",
+      "keywords": ["5 lawyer", "litigation firm", "firm use", "how would a", "in practice", "day in the life", "every day", "our firm"],
+      "a": "Picture a 5-lawyer litigation firm's day. In the morning each lawyer opens a deadline radar — every court deadline computed from validated rules, waiting for counsel to confirm — alongside overnight intake flags, with any new-client conflict already surfaced before a single engagement letter is drafted. Matter work lives in a matter channel: the team researches both vaults, asks their own Legal Assistant, and battle-cards an opposing brief so nothing is filed blind. Client intake runs a conflict check BEFORE the engagement letter goes out. And billing is captured where the work happens — time is logged in-channel, then turned into a one-click invoice in your letterhead."
+    },
+    {
+      "q": "We're not technical — is this hard to adopt?",
+      "keywords": ["technical", "adopt", "hard to use", "not technical", "easy", "complicated", "learning curve", "steep"],
+      "a": "No — you don't need to be technical. RedCase follows the way your firm already works: you talk to it in plain language, upload documents, and work in matter channels. Where do you start? Begin with the Core tier — the whole firm's engine: vaults, channels, research, deadlines, time and invoicing, conflict checks. Then give each licensed lawyer their own Workbench — their personal engine with all analysis packs and the Legal Assistant. You can be live without writing a line of code or changing how your lawyers think about a case."
+    },
+    {
+      "q": "What does it replace?",
+      "keywords": ["replace", "replaces", "instead of", "what does it"],
+      "a": "RedCase is an AI-powered operating system for law firms — your knowledge, Nigeria's law, and your operations in one engine, built to optimize your firm's workflow end to end. In practical terms it replaces the scatter of tools on a firm's desk: the shared-drive file cabinet, the binder of precedents, the spreadsheets that track time and invoices, and the separate research terminals. Those still work, but they don't talk to each other — RedCase brings the knowledge, the law, and the operations together in one place so your team stops re-teaching tools and starts trying cases."
+    },
+    {
+      "q": "What does my morning look like?",
+      "keywords": ["morning", "deadline radar", "overnight", "start of day", "today"],
+      "a": "Your morning opens with a deadline radar — every court deadline computed from validated rules, waiting for your confirmation so nothing slips — alongside overnight intake flags. Any new-client conflict is already surfaced before the engagement letter is drafted, so the day starts with a clear picture of what's due and who's safe to take on."
+    },
+    {
+      "q": "How do I work on a matter in RedCase?",
+      "keywords": ["matter", "battle card", "opposing brief", "ask the assistant", "workbench", "research a case"],
+      "a": "Matter work runs through a matter channel. You research your own knowledge and Nigerian jurisprudence in the two vaults, ask your own Legal Assistant for a grounded read, and when the other side files, you battle-card the opposing brief — procedural and jurisdictional flaws, their probable arguments strength-rated, counter-arguments pinned to binding authority. Every analysis lands in the channel by name, human-reviewable, before you act."
+    },
+    {
+      "q": "How does new client intake work?",
+      "keywords": ["intake", "new client", "conflict", "engagement letter", "onboard a client"],
+      "a": "Intake runs a conflict check FIRST — before the engagement letter goes out. The firm's existing clients, matters, and Vault A documents are searched for party-name matches at exact, fuzzy, and phonetic tiers, and any candidate is surfaced for a partner to confirm or dismiss. RedCase won't let you open a new matter and bill the hours on a conflict you didn't see."
+    },
+    {
+      "q": "How does billing work?",
+      "keywords": ["bill", "billing", "invoice", "invoic", "time", "charge", "fees"],
+      "a": "Billing is captured where the work happens. Time is logged in-channel — a lawyer drops a time entry while working in the matter channel — and at billing time those entries roll into a one-click invoice in your firm's letterhead. No toggling between a time app and an invoicing tool; the time is already there, tied to the matter."
+    },
+    {
+      "q": "Where do I start?",
+      "keywords": ["where do i start", "get started", "set up", "setup", "begin", "first step"],
+      "a": "Start with the Core tier — the whole firm's engine: vaults, channels, research, deadlines, time and invoicing, conflict checks. Then give each licensed lawyer their own Workbench — their personal engine with all analysis packs, the Legal Assistant, and saved searches. Core gets the firm running; Workbench makes it a senior strategist on every matter."
+    },
+    {
+      "q": "What is RedCase?",
+      "keywords": ["what is redcase", "what does redcase do", "operating system", "about redcase", "about the platform", "tell me about"],
+      "a": "RedCase is an AI-powered operating system for law firms — your knowledge, Nigeria's law, and your operations in one engine, built to optimize your firm's workflow end to end. It's the OS, not a chatbot: two secure vaults for your knowledge and Nigerian jurisprudence, matter channels, battle cards, deadlines, conflict checks, and billing — all working as one."
+    }
+  ],
   "plain": [
     "Your firm's brain. Nigeria's law. One engine. RedCase unites your firm's knowledge and the country's jurisprudence in two secure vaults, and answers with pinpoint citations to real authority. Never invented. Always page-pinned.",
     "Two vaults, one synthesis. Vault A holds every brief, pleading and opinion your firm has written — encrypted, permissioned, searchable by meaning. Vault B holds Nigerian jurisprudence indexed by ratio decidendi, Supreme Court to NICN, cited to page and paragraph.",
