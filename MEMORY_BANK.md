@@ -191,9 +191,27 @@ Sequential `0001`…`0017`:
   - **STILL BLOCKED (step 5c):** real `/v1/query` grounded answer needs `SUPABASE_JWT_SECRET` in `/opt/redcase/.env`
     (owner-held; absent from both local `.env` and VPS `.env` + container env). Without it `get_tenant_context` 503s.
     Owner must add `SUPABASE_JWT_SECRET` (+ signed JWT for aetoes tenant) then `docker compose restart api`.
+  - **✅ RESOLVED 2026-09-23 + PAT SMOKE RUN — API FULLY LIVE.** `SUPABASE_JWT_SECRET` + `INTERNAL_SWEEP_TOKEN`
+    provisioned in `/opt/redcase/.env`; container recreated with `docker compose up -d` (re-read env_file) → container
+    now carries the secret (89 chars). **PAT smoke against `https://api.redcase.xyz`:**
+    - Minted smoke JWT on the VPS (stdlib hmac HS256, mirroring `deps.verify_supabase_jwt`; pyjwt not installed in
+      any local venv — used stdlib instead, same crypto). `sub=smoke-test`, `app_metadata.tenant_id=a0000001-...0001`
+      `clearance=PARTNER`, `is_firm_admin=true`.
+    - Answer path (Amaechi v. INEC) → **200, refusal:false, 1 verified citation** (page 8, ¶[1,2], verified:true),
+      **zero fabrication → PASS**.
+    - Out-of-corpus (interim-injunction) → **UNDER-REFUSAL: answered** (2 verified citations, no fabrication) — **the
+      B17 under-refusal guard FAILS on live**; zero-fabrication gate holds.
+    - Cron cascade: `GET /v1/health 200` keep-alive rows in logs; `POST /v1/internal/sweep` (X-Internal-Token) →
+      **200 `{"pending":0,"embedded":0}`** + `sweep_done` audit event.
+    - **Latency on live VPS (Madukolu, n=10): p50=39.8s p95=41.6s max=41.7s, 6/10 over 20s ceiling →
+      BOTH BARS FAIL.** Root cause (logs): `ANSWER_MODEL_PRIMARY=deepseek` + `openrouter` + `cerebras` all
+      **quota_exhausted** on live → every answer burns the 20s timeout, resolves only via the funded Groq leaf; 6/10 became
+      double-timeout refusals. Recorded verbatim in `docs/calibration/phase1-jina.md` "Live VPS (Johannesburg)"; bars NOT
+      amended. Grounding/fabrication gates held throughout.
   - **Pipeline still pending the CI fix:** the on-box build + manual migrations substitute for `deploy.yml`; the CI/deploy
     workflow + GCP/CI secrets not yet provisioned (owner). Commit status: `0019` + `uv.lock` fixes are UNCOMMITTED working-tree
     changes on the laptop — must be pushed to `main` so the pipeline picks them up.
+
 - **Blocker:** Phase 1 deploy held pending owner credentials (CI secrets, GCP SA, CF zone).
 
 ### Working-tree notes
