@@ -1,22 +1,26 @@
-// RedCase Cron Worker — Cloudflare Cron Triggers (Task 1.7 step 5).
-// Two triggers (UTC; 07:00 Africa/Lagos == 06:00 UTC, no DST in Nigeria):
-//   */10 * * * *  keep-alive: GET  /v1/health (also warms scale-to-zero)
-//   0 6 * * *     daily backfill: POST /v1/internal/sweep
-// Token arrives as the INTERNAL_SWEEP_TOKEN worker secret (wrangler secret
-// put) — never hardcoded here.
-
-const HEALTH_CRON = "*/10 * * * *";
-const SWEEP_CRON = "0 6 * * *";
+// RedCase Cron Worker — Cloudflare Cron Trigger (Task 1.7 step 5).
+//
+// Single trigger to stay within the account's free-plan cron limit (5 max);
+// the daily/time-critical work is gated inside the handler on wall-clock UTC
+// (Africa/Lagos is UTC+1 year-round, no DST, so 07:00 Lagos == 06:00 UTC):
+//
+//   */5 * * * *   every 5 min  -> GET  /v1/health        (keep-alive / warm)
+//                 at 06:00 UTC -> POST /v1/internal/sweep (daily backfill)
+//
+// The sweep token arrives as the INTERNAL_SWEEP_TOKEN worker secret
+// (`wrangler secret put`), never hardcoded here.
 
 export default {
   async scheduled(event, env, ctx) {
-    if (event.cron === SWEEP_CRON) {
+    const now = new Date();
+    const isSixUtc = now.getUTCHours() === 6 && now.getUTCMinutes() === 0;
+
+    // Keep-alive on every tick (supersedes the old */10 keep-alive).
+    ctx.waitUntil(runHealth(env));
+    // Daily backfill, once per day at 06:00 UTC.
+    if (isSixUtc) {
       ctx.waitUntil(runSweep(env));
-    } else if (event.cron === HEALTH_CRON) {
-      ctx.waitUntil(runHealth(env));
     }
-    // Unknown cron expressions: fail silently rather than guess. A new
-    // trigger must be added to wrangler.toml AND this dispatch together.
   },
 };
 
