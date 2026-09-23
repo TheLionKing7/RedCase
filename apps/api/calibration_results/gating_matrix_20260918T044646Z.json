@@ -1,0 +1,211 @@
+{
+ "run_at": "20260918T044646Z",
+ "gate": 0.52,
+ "ids": [
+  "B08",
+  "B20",
+  "B45"
+ ],
+ "cells": [
+  {
+   "config": {
+    "top_k": 8,
+    "per_doc_cap": 3,
+    "ratio_exempt": true
+   },
+   "gate": 0.52,
+   "pass": 2,
+   "total": 3,
+   "pass_rate": 0.667,
+   "mean_input_tokens_est": 8422,
+   "mean_input_chars": 33690,
+   "outcomes": [
+    {
+     "id": "B08",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 58848,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B20",
+     "pass": true,
+     "reason": "answered (4 cites)",
+     "refusal": false,
+     "cited_titles": [
+      "Amaechi v. INEC 2007",
+      "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)",
+      "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law",
+      "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+     ],
+     "passages_in_prompt": 0,
+     "prompt_chars": 17018,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B45",
+     "pass": true,
+     "reason": "answered (1 cites)",
+     "refusal": false,
+     "cited_titles": [
+      "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+     ],
+     "passages_in_prompt": 0,
+     "prompt_chars": 25204,
+     "prompt_calls": 1
+    }
+   ],
+   "wall_s": 20.5
+  },
+  {
+   "config": {
+    "top_k": 8,
+    "per_doc_cap": 5,
+    "ratio_exempt": true
+   },
+   "gate": 0.52,
+   "pass": 1,
+   "total": 3,
+   "pass_rate": 0.333,
+   "mean_input_tokens_est": 9734,
+   "mean_input_chars": 38936,
+   "outcomes": [
+    {
+     "id": "B08",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 54001,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B20",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 18183,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B45",
+     "pass": true,
+     "reason": "answered (1 cites)",
+     "refusal": false,
+     "cited_titles": [
+      "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+     ],
+     "passages_in_prompt": 0,
+     "prompt_chars": 44623,
+     "prompt_calls": 1
+    }
+   ],
+   "wall_s": 16.8
+  },
+  {
+   "config": {
+    "top_k": 12,
+    "per_doc_cap": 3,
+    "ratio_exempt": true
+   },
+   "gate": 0.52,
+   "pass": 1,
+   "total": 3,
+   "pass_rate": 0.333,
+   "mean_input_tokens_est": 9930,
+   "mean_input_chars": 39722,
+   "outcomes": [
+    {
+     "id": "B08",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 70512,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B20",
+     "pass": true,
+     "reason": "answered (4 cites)",
+     "refusal": false,
+     "cited_titles": [
+      "Amaechi v. INEC 2007",
+      "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)",
+      "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law",
+      "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+     ],
+     "passages_in_prompt": 0,
+     "prompt_chars": 17018,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B45",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 31635,
+     "prompt_calls": 1
+    }
+   ],
+   "wall_s": 8.9
+  },
+  {
+   "config": {
+    "top_k": 12,
+    "per_doc_cap": 5,
+    "ratio_exempt": true
+   },
+   "gate": 0.52,
+   "pass": 1,
+   "total": 3,
+   "pass_rate": 0.333,
+   "mean_input_tokens_est": 12005,
+   "mean_input_chars": 48019,
+   "outcomes": [
+    {
+     "id": "B08",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 69325,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B20",
+     "pass": false,
+     "reason": "over-refusal",
+     "refusal": true,
+     "cited_titles": [],
+     "passages_in_prompt": 0,
+     "prompt_chars": 22923,
+     "prompt_calls": 1
+    },
+    {
+     "id": "B45",
+     "pass": true,
+     "reason": "answered (1 cites)",
+     "refusal": false,
+     "cited_titles": [
+      "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+     ],
+     "passages_in_prompt": 0,
+     "prompt_chars": 51808,
+     "prompt_calls": 1
+    }
+   ],
+   "wall_s": 12.1
+  }
+ ]
+}

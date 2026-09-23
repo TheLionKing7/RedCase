@@ -1,0 +1,54 @@
+{
+ "run_at": "2026-09-18T15:38:59.884731+00:00",
+ "prompt": "GROUNDED_SYSTEM v2",
+ "outcomes": [
+  {
+   "id": "B02",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ]
+  },
+  {
+   "id": "B13",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ]
+  },
+  {
+   "id": "B20",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ]
+  },
+  {
+   "id": "B31",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ]
+  },
+  {
+   "id": "B45",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": []
+  }
+ ]
+}

@@ -1,0 +1,252 @@
+[
+ {
+  "id": "B01",
+  "expect": "answer",
+  "gate_vsim": 0.5878586418712959
+ },
+ {
+  "id": "B02",
+  "expect": "answer",
+  "gate_vsim": 0.7240486741065979
+ },
+ {
+  "id": "B03",
+  "expect": "answer",
+  "gate_vsim": 0.7050658884683794
+ },
+ {
+  "id": "B04",
+  "expect": "answer",
+  "gate_vsim": 0.6954027232767787
+ },
+ {
+  "id": "B05",
+  "expect": "answer",
+  "gate_vsim": 0.6410400867462158
+ },
+ {
+  "id": "B06",
+  "expect": "answer",
+  "gate_vsim": 0.6803491711616516
+ },
+ {
+  "id": "B07",
+  "expect": "answer",
+  "gate_vsim": 0.6922762210533763
+ },
+ {
+  "id": "B08",
+  "expect": "answer",
+  "gate_vsim": 0.6613052689251155
+ },
+ {
+  "id": "B09",
+  "expect": "refusal",
+  "gate_vsim": 0.6287067123862125
+ },
+ {
+  "id": "B10",
+  "expect": "refusal",
+  "gate_vsim": 0.693827748298645
+ },
+ {
+  "id": "B11",
+  "expect": "answer",
+  "gate_vsim": 0.5921820049177415
+ },
+ {
+  "id": "B12",
+  "expect": "answer",
+  "gate_vsim": 0.7585768699645996
+ },
+ {
+  "id": "B13",
+  "expect": "answer",
+  "gate_vsim": 0.5999072194099426
+ },
+ {
+  "id": "B14",
+  "expect": "answer",
+  "gate_vsim": 0.5972768664360046
+ },
+ {
+  "id": "B15",
+  "expect": "answer",
+  "gate_vsim": 0.7125854067453512
+ },
+ {
+  "id": "B16",
+  "expect": "answer",
+  "gate_vsim": 0.6587986946105957
+ },
+ {
+  "id": "B17",
+  "expect": "refusal",
+  "gate_vsim": 0.6205446350249877
+ },
+ {
+  "id": "B18",
+  "expect": "answer",
+  "gate_vsim": 0.5353713631629944
+ },
+ {
+  "id": "B19",
+  "expect": "refusal",
+  "gate_vsim": 0.49035301747042137
+ },
+ {
+  "id": "B20",
+  "expect": "answer",
+  "gate_vsim": 0.6915832757949829
+ },
+ {
+  "id": "B21",
+  "expect": "answer",
+  "gate_vsim": 0.6907825058232256
+ },
+ {
+  "id": "B22",
+  "expect": "answer",
+  "gate_vsim": 0.648905873298645
+ },
+ {
+  "id": "B23",
+  "expect": "answer",
+  "gate_vsim": 0.526481095132962
+ },
+ {
+  "id": "B24",
+  "expect": "refusal",
+  "gate_vsim": 0.6008691966792704
+ },
+ {
+  "id": "B25",
+  "expect": "answer",
+  "gate_vsim": 0.6713354987702083
+ },
+ {
+  "id": "B26",
+  "expect": "answer",
+  "gate_vsim": 0.648490090623203
+ },
+ {
+  "id": "B27",
+  "expect": "answer",
+  "gate_vsim": 0.6119312047958374
+ },
+ {
+  "id": "B28",
+  "expect": "refusal",
+  "gate_vsim": 0.5404995840936777
+ },
+ {
+  "id": "B29",
+  "expect": "answer",
+  "gate_vsim": 0.5915354666571461
+ },
+ {
+  "id": "B30",
+  "expect": "refusal",
+  "gate_vsim": 0.4263998866081238
+ },
+ {
+  "id": "B31",
+  "expect": "answer",
+  "gate_vsim": 0.6323347468575695
+ },
+ {
+  "id": "B32",
+  "expect": "refusal",
+  "gate_vsim": 0.5800251960754395
+ },
+ {
+  "id": "B33",
+  "expect": "answer",
+  "gate_vsim": 0.6271205544471741
+ },
+ {
+  "id": "B34",
+  "expect": "refusal",
+  "gate_vsim": 0.5390830361296566
+ },
+ {
+  "id": "B35",
+  "expect": "answer",
+  "gate_vsim": 0.7613138414212385
+ },
+ {
+  "id": "B36",
+  "expect": "refusal",
+  "gate_vsim": 0.41496050357818604
+ },
+ {
+  "id": "B37",
+  "expect": "answer",
+  "gate_vsim": 0.588111926542295
+ },
+ {
+  "id": "B38",
+  "expect": "refusal",
+  "gate_vsim": 0.5229459404945374
+ },
+ {
+  "id": "B39",
+  "expect": "answer",
+  "gate_vsim": 0.6172784566879272
+ },
+ {
+  "id": "B40",
+  "expect": "refusal",
+  "gate_vsim": 0.4399455022795651
+ },
+ {
+  "id": "B41",
+  "expect": "answer",
+  "gate_vsim": 0.653764009475708
+ },
+ {
+  "id": "B42",
+  "expect": "refusal",
+  "gate_vsim": 0.5576808452606201
+ },
+ {
+  "id": "B43",
+  "expect": "answer",
+  "gate_vsim": 0.5987162411595535
+ },
+ {
+  "id": "B44",
+  "expect": "refusal",
+  "gate_vsim": 0.5952992794096051
+ },
+ {
+  "id": "B45",
+  "expect": "answer",
+  "gate_vsim": 0.5972996114074963
+ },
+ {
+  "id": "B46",
+  "expect": "refusal",
+  "gate_vsim": 0.5096820300627973
+ },
+ {
+  "id": "B47",
+  "expect": "answer",
+  "gate_vsim": 0.6555218891954988
+ },
+ {
+  "id": "B48",
+  "expect": "refusal",
+  "gate_vsim": 0.4645279049873352
+ },
+ {
+  "id": "B49",
+  "expect": "answer",
+  "gate_vsim": 0.6862969807563425
+ },
+ {
+  "id": "B50",
+  "expect": "refusal",
+  "gate_vsim": 0.5530561043901434
+ }
+]

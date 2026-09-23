@@ -1,0 +1,67 @@
+{
+ "run_at": "2026-09-18T14:21:23.729042+00:00",
+ "prompt": "GROUNDED_SYSTEM v2",
+ "outcomes": [
+  {
+   "id": "B01",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ]
+  },
+  {
+   "id": "B02",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ]
+  },
+  {
+   "id": "B03",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": []
+  },
+  {
+   "id": "B02",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": []
+  },
+  {
+   "id": "B13",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ]
+  },
+  {
+   "id": "B31",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (6 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)",
+    "Adegoke Motors Ltd. Vs Dr. Babatunde Adesanya (1989) LLJR-SC",
+    "Madukolu v. Nkemdilim",
+    "Amaechi v. INEC 2007",
+    "Pabiekun v. Ajayi [1966] NGSC 1",
+    "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law"
+   ]
+  }
+ ]
+}
