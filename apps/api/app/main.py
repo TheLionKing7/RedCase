@@ -13,12 +13,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import asyncpg
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.assistant.router import router as assistant_router
 from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
+from app.observability import HEALTH_DB, HEALTH_PROVIDERS, render_metrics
 from app.rate_limit import InviteAcceptLimiter, PublicSignupLimiter
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
@@ -116,6 +117,57 @@ def _v1_router() -> APIRouter:
     @router.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @router.get("/health/detail")
+    async def health_detail(request: Request) -> dict:
+        """Liveness + readiness in one probe (Task OBS).
+
+        db: "up" when a connection can run SELECT 1; "down" otherwise (never
+        raises — the probe must return a body the scraper/load-balancer can read).
+        providers: "configured" when the answer-model chain has a provisioned key;
+        "unconfigured" otherwise (rare, tests/CI where secrets are absent).
+        """
+        db = "down"
+        pool: asyncpg.Pool | None = request.app.state.db_pool
+        if pool is not None:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.fetchval("SELECT 1")
+                db = "up"
+            except Exception:
+                db = "down"
+        HEALTH_DB.set(1 if db == "up" else 0)
+        settings: Settings = request.app.state.settings
+        # Answers are configured only when at least one answer-provider credential
+        # is provisioned (answer_model_primary/fallback are just role strings; the
+        # actual readiness is a secret present). Mirror _provider_client's key set.
+        providers = (
+            "configured"
+            if any(
+                getattr(settings, k) is not None
+                for k in (
+                    "explabs_api_key",
+                    "mistral_api_key",
+                    "cerebras_api_key",
+                    "groq_api_key",
+                    "deepseek_api_key",
+                    "openrouter_api_key",
+                    "anthropic_api_key",
+                )
+            )
+            else "unconfigured"
+        )
+        HEALTH_PROVIDERS.set(1 if providers == "configured" else 0)
+        overall = "ok" if db == "up" else "degraded"
+        return {"status": overall, "db": db, "providers": providers}
+
+    @router.get("/metrics")
+    async def metrics() -> Response:
+        """Prometheus exposition (Task OBS). Unauthenticated by design — the
+        scraper authenticates via bearer token at ingress; this route only serves
+        aggregate numeric counters (ZDR: no bodies, no tenant ids)."""
+        body, content_type = render_metrics()
+        return Response(content=body, media_type=content_type)
 
     return router
 

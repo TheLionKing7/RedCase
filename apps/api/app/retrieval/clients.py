@@ -21,6 +21,7 @@ from pydantic import SecretStr
 
 from app.config import Settings
 from app.middleware.zdr import get_logger
+from app.observability import PROVIDER_FALLBACKS
 
 log = get_logger("redcase.retrieval.clients")
 
@@ -289,7 +290,12 @@ class FallbackLLM:
     async def answer(self, system: str, user: str) -> str:
         tried: list[str] = []
         last_exc: Exception | None = None
-        for name, llm in self._providers:
+        for idx, (name, llm) in enumerate(self._providers):
+            # Moving past the first provider is a genuine fallback event —
+            # record from -> to so the chain's behavior is observable.
+            if idx > 0:
+                prev = self._providers[idx - 1][0]
+                PROVIDER_FALLBACKS.labels(from_provider=prev, to_provider=name).inc()
             for rl in range(MAX_FALLBACK_RETRIES + 1):
                 try:
                     out = await llm.answer(system, user)

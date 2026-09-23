@@ -30,6 +30,11 @@ import asyncpg
 from app.config import Settings
 from app.middleware.audit import write_audit
 from app.middleware.zdr import get_logger
+from app.observability import (
+    ANSWER_REFUSALS,
+    ANSWER_TIMEOUTS,
+    FABRICATION_REFUSALS,
+)
 from app.retrieval.clients import AnswerLLM, Embedder, make_embedder, make_llm
 from app.retrieval.prompts import (
     GROUNDED_SYSTEM,
@@ -386,6 +391,7 @@ async def answer_question(
         metadata in the structlog event only — the audit table deliberately
         stores refusal rows identically (answer_text NULL), keeping the
         append-only contract free of in-place-mutable columns."""
+        ANSWER_REFUSALS.labels(reason=reason).inc()
         await write_audit(
             db,
             _with_latency(
@@ -405,6 +411,8 @@ async def answer_question(
         except CitationIntegrityError as exc:
             # §3.4: second integrity failure -> refusal. A fabricated
             # citation is never shown to the user.
+            FABRICATION_REFUSALS.inc()
+            ANSWER_REFUSALS.labels(reason="citation_integrity").inc()
             await write_audit(
                 db,
                 _with_latency(
@@ -432,6 +440,7 @@ async def answer_question(
         except TimeoutError:
             # answer_timeout_s ceiling: this attempt's answer call overran.
             # Logged as a refusal; the retry policy gets the one retry.
+            ANSWER_TIMEOUTS.inc()
             await _audit_refusal(attempt, "answer_timeout")
             continue
         if not citations:
