@@ -91,9 +91,19 @@ def upgrade() -> None:
         $fn$
         """
     )
+    # Grant EXECUTE to the app role ONLY if it exists. `redcase_app` is a
+    # non-superuser APP role created by the test harness (apps/api/tests/conftest.py)
+    # and, where applicable, by production cluster provisioning. On the live Supabase
+    # project the app connects with a different role name, so an unconditional GRANT
+    # would raise `role "redcase_app" does not exist` and roll back the whole
+    # migration (defect caught on first deploy). Guarding on pg_roles keeps the
+    # migrate step idempotent across both environments (HANDOFF.md 3).
     op.execute(
-        "GRANT EXECUTE ON FUNCTION redcase_claim_invite(TEXT, TIMESTAMPTZ)"
-        " TO redcase_app"
+        "DO $do$ BEGIN"
+        " IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'redcase_app') THEN"
+        "   EXECUTE 'GRANT EXECUTE ON FUNCTION redcase_claim_invite(TEXT, TIMESTAMPTZ) TO redcase_app';"
+        " END IF;"
+        " END $do$"
     )
 
 
