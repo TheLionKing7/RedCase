@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthedFirmCommandRouteImport } from './routes/_authed.firm-command'
 import { Route as AuthedHomeRouteImport } from './routes/_authed.home'
@@ -32,6 +33,11 @@ const AuthedRoute = AuthedRouteImport.update({
 const AcceptInviteRoute = AcceptInviteRouteImport.update({
   id: '/accept-invite',
   path: '/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SigninRoute = SigninRouteImport.update({
@@ -73,6 +79,7 @@ const AuthedWorkbenchRoute = AuthedWorkbenchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
@@ -84,6 +91,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
+  '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
+  '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/_authed/firm-command': typeof AuthedFirmCommandRoute
   '/_authed/home': typeof AuthedHomeRoute
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/accept-invite'
+    | '/onboarding'
     | '/signin'
     | '/firm-command'
     | '/home'
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/accept-invite'
+    | '/onboarding'
     | '/signin'
     | '/firm-command'
     | '/home'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authed'
     | '/accept-invite'
+    | '/onboarding'
     | '/signin'
     | '/_authed/firm-command'
     | '/_authed/home'
@@ -146,6 +158,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
+  OnboardingRoute: typeof OnboardingRoute
   SigninRoute: typeof SigninRoute
 }
 
@@ -170,6 +183,13 @@ declare module '@tanstack/react-router' {
       path: '/accept-invite'
       fullPath: '/accept-invite'
       preLoaderRoute: typeof AcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signin': {
@@ -249,6 +269,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
+  OnboardingRoute: OnboardingRoute,
   SigninRoute: SigninRoute,
 }
 export const routeTree = rootRouteImport
