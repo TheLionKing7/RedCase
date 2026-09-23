@@ -74,9 +74,9 @@ function AcceptInvitePage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="/brand/redcase-mark-crimson.svg"
+            src="/brand/redcase_firefly.svg"
             alt="RedCase"
-            className="size-12"
+            className="h-10 w-auto object-contain"
           />
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
             Accept your invite
@@ -161,7 +161,7 @@ function AcceptInvitePage() {
             to="/"
             className="text-foreground/80 underline-offset-2 hover:text-gold hover:underline"
           >
-            Back to redcase.ai
+            Back to redcase.xyz
           </Link>
         </p>
       </div>

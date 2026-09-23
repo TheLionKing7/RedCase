@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Loader2, ShieldCheck, Mail } from "lucide-react";
+import { Loader2, ShieldCheck, Mail, ArrowRight } from "lucide-react";
 import { signInWithPassword, signInWithEmail } from "@/lib/auth/supabase";
 
 export const Route = createFileRoute("/signin")({
@@ -52,9 +52,9 @@ function SignInPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="/brand/redcase-mark-crimson.svg"
+            src="/brand/redcase_firefly.svg"
             alt="RedCase"
-            className="size-12"
+            className="h-10 w-auto object-contain"
           />
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
             Sign in to RedCase
@@ -133,14 +133,28 @@ function SignInPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
+        <div className="mt-6 flex flex-col items-center gap-3">
           <Link
-            to="/"
-            className="text-foreground/80 underline-offset-2 hover:text-gold hover:underline"
+            to="/onboarding"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors duration-200 hover:text-gold"
           >
-            Back to redcase.ai
+            New firm? Start your firm <ArrowRight className="size-3.5" />
           </Link>
-        </p>
+          <div className="flex items-center gap-3">
+            <img
+              src="/brand/redcase-mark-white.svg"
+              alt=""
+              aria-hidden="true"
+              className="size-4 opacity-70"
+            />
+            <Link
+              to="/"
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-gold hover:underline"
+            >
+              Back to redcase.xyz
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

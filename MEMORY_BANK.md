@@ -162,12 +162,49 @@ Sequential `0001`…`0017`:
 
 - **Phase 3 remaining:** 3.3 battle-card rendering, 3.4 deadline rule pack (`deadlines/` module NOT YET created), 3.5 notification fan-out, 3.6 observability/Langfuse, 3.7 benchmark+calibration, 3.8 training/go-live.
 - **Backlog:** Slack connector (post-deploy), deadline sweeps, reranker (deferred with evidence).
+- **Cloudflare cron worker (Task 1.7 step 5, deployed 2026-09-23):** worker `redcase-cron`
+  deployed to owner account `e9f3f471…` → `https://redcase-cron.affos.workers.dev`.
+  Config in `cloudflare/` (commits `4380af8`, `8bbdbb9`). **Single** cron `*/5 * * * *`
+  due to free-plan 5-trigger limit (4 already used by affiliateos/pathguru); worker gates
+  daily 06:00 UTC sweep internally + health keep-alive each tick. `API_BASE_URL` var =
+  `https://api.redcase.xyz`; secret `INTERNAL_SWEEP_TOKEN` sent as `X-Internal-Token` header.
+  Verification status: API now LIVE via VPS manual deploy (2026-09-23, see below); sweep still needs owner-set
+  `INTERNAL_SWEEP_TOKEN` matching `/opt/redcase/.env` + `SUPABASE_JWT_SECRET`. Details in `docs/deploy-runbook.md` §3a.
+- **✅ FIRST MANUAL DEPLOY to VPS (2026-09-23) — api.redcase.xyz 502 RESOLVED.**
+  - **Host:** owner VPS via `ssh redcase-vps` (Cloudflare-tunneled; key `redcase_deploy`; ssh host alias uses
+    `cloudflared` ProxyCommand `C:\Program Files (x86)\cloudflared\cloudflared.exe`).
+  - **Deploy method:** image BUILT ON-BOX. Repo cloned to `/opt/redcase/src` (public). `docker-compose.yml`
+    in `/opt/redcase` uses `build: context /opt/redcase/src, dockerfile apps/api/Dockerfile`, `127.0.0.1:8000:8080`
+    (app listens on 8080 per Dockerfile CMD — NOT 8000), `env_file /opt/redcase/.env`, `restart: unless-stopped`,
+    healthcheck on `http://localhost:8080/v1/health`. Container `redcase-api` **Up (healthy)**.
+  - **Migrations:** ran FIRST from laptop venv `apps/api/.venv` against the LIVE Supabase project
+    (`alembic upgrade head`), 0010→0020, confirmed `alembic_version = 0020 (head)`.
+  - **DEFECT FIXED (first-deploy catch):** migration `0019_invite_accept.py` did unguarded
+    `GRANT ... TO redcase_app` but that role EXISTS ONLY in test fixtures (created by conftest.py), not the live
+    Supabase project → transaction rolled back (DB stayed at 0010). Fixed by wrapping the GRANT in a `DO $do$ ...
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='redcase_app')` guard. **Also synced the fixed 0019 + regenerated
+    `uv.lock` (0019 was missing prometheus-client → `uv sync --locked` failed the docker build) to the VPS clone.**
+  - **Verified live:** `GET /v1/health` → 200 `{"status":"ok"}`; `GET /v1/metrics` → Prometheus exposition;
+    locally-bound `/v1/query` enforces auth (401 missing Bearer).
+  - **STILL BLOCKED (step 5c):** real `/v1/query` grounded answer needs `SUPABASE_JWT_SECRET` in `/opt/redcase/.env`
+    (owner-held; absent from both local `.env` and VPS `.env` + container env). Without it `get_tenant_context` 503s.
+    Owner must add `SUPABASE_JWT_SECRET` (+ signed JWT for aetoes tenant) then `docker compose restart api`.
+  - **Pipeline still pending the CI fix:** the on-box build + manual migrations substitute for `deploy.yml`; the CI/deploy
+    workflow + GCP/CI secrets not yet provisioned (owner). Commit status: `0019` + `uv.lock` fixes are UNCOMMITTED working-tree
+    changes on the laptop — must be pushed to `main` so the pipeline picks them up.
 - **Blocker:** Phase 1 deploy held pending owner credentials (CI secrets, GCP SA, CF zone).
 
 ### Working-tree notes
 - `MEMORY_BANK.md` + `.gitignore` negation committed (`4dc9bb4`); the `.md` ignore now exempts MEMORY_BANK.md so future commits need no force-add.
-- `MEMORY_BANK.md` file tracks current intent; **drift caveat applies** — run `git status` before assuming the map is current.
-- Uncommitted: `HANDOFF.md`, `apps/web/public/brand/redcase-mark-white.svg`, `docs/RedCase-Phase1/Phase3-Design.md` (design backport docs), plus calibration artifacts.
+
+### Session S10 progress (2026-09-23)
+- **SLICE 0 (S10-0) — sign-in bug sweep + PRODUCTS band ✅ COMPLETED:**
+  - `routes/signin.tsx`: "Back to redcase.ai" → `redcase.xyz`; logo `<img>` → `/brand/redcase_firefly.svg` (copied from `docs/RedCaseSVG/`, `h-10 w-auto object-contain`, not stretched); added "New firm? Start your firm →" link → `/onboarding`; bottom mark → `/brand/redcase-mark-white.svg`.
+  - `routes/accept-invite.tsx`: logo → firefly (same sizing); "Back to redcase.ai" → `redcase.xyz` (same bug class).
+  - `routes/__root.tsx`: favicon → `/brand/redcase-mark-favicon.svg` (was `redcase-mark-crimson.svg`).
+  - Landing `routes/index.tsx` + new `components/marketing/Products.tsx`: **PRODUCTS band** between DualVault and Trust — eyebrow "THE PRODUCT", H2 "Four surfaces. One engine.", 4 preview cards (Vault Search / Red-Teamer / Legal Assistant / Firm Ops).
+  - `apps/web/public/brand/redcase_firefly.svg` = byte-identical copy of `docs/RedCaseSVG/redcase_firefly.svg` (hash A94AF47…; 754,908 B).
+  - **DoD verified:** `npm run build` GREEN (only pre-existing rolldown "use client" directive warnings). No `redcase.ai` refs remain in web routes; `onboarding.tsx` crimson logo pending full rewrite in SLICE 1.
 
 ---
 
