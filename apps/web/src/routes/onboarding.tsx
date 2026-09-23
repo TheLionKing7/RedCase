@@ -4,8 +4,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Briefcase,
+  Building2,
   Check,
-  Landmark,
   Loader2,
   Mail,
   PartyPopper,
@@ -18,9 +18,16 @@ export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
-type Step = 0 | 1 | 2 | 3 | 4;
+type Step = 0 | 1 | 2 | 3 | 4 | 5;
 
-const STEPS = ["Account", "Workspace", "First matter", "Teammates", "Done"];
+const STEPS = [
+  "Account",
+  "Firm identity",
+  "KYC",
+  "First matter",
+  "Teammates",
+  "Done",
+];
 
 const PRACTICE_AREAS = [
   "Litigation",
@@ -32,14 +39,21 @@ const PRACTICE_AREAS = [
   "Other",
 ];
 
+const ID_DOCUMENT_TYPES = ["passport", "national_id", "driver_license"];
+
 const STORAGE_KEY = "redcase.onboarding";
 
 interface FormState {
   name: string;
   email: string;
   firm: string;
+  logoPath: string;
   practice: string;
   jurisdiction: string;
+  rcPath: string;
+  idDocumentPath: string;
+  idDocumentType: string;
+  firmWebsite: string;
   matter: string;
   teammates: string[];
 }
@@ -48,8 +62,13 @@ const EMPTY: FormState = {
   name: "",
   email: "",
   firm: "",
+  logoPath: "",
   practice: PRACTICE_AREAS[0],
   jurisdiction: "",
+  rcPath: "",
+  idDocumentPath: "",
+  idDocumentType: ID_DOCUMENT_TYPES[0],
+  firmWebsite: "",
   matter: "",
   teammates: [],
 };
@@ -109,11 +128,13 @@ function OnboardingPage() {
     setBusy(true);
     try {
       // No public self-service signup endpoint exists: seats are provisioned via firm
-      // invites. The wizard captures onboarding preferences locally (workspace, practice,
-      // optional first matter + teammates) and hands off to the sign-in gate where the
-      // account is actually activated. Kept non-destructive.
+      // invites. The wizard captures onboarding preferences locally (firm identity, KYC
+      // document paths, optional first matter + teammates) and hands off to the sign-in
+      // gate where the account is actually activated. KYC uploads are intentionally NOT
+      // performed in this slice — document bytes belong in private storage and are
+      // handled by firm admin flows; here we capture storage paths + status only.
       await new Promise((r) => setTimeout(r, 400));
-      setStep(4);
+      setStep(5);
     } finally {
       setBusy(false);
     }
@@ -124,24 +145,24 @@ function OnboardingPage() {
       <div className="w-full max-w-xl">
         <div className="mb-8 flex flex-col items-center text-center">
           <img
-            src="/brand/redcase-mark-crimson.svg"
+            src={form.logoPath || "/brand/redcase-mark-crimson.svg"}
             alt="RedCase"
-            className="size-12"
+            className="size-12 rounded-full object-contain"
           />
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
-            {step === 4 ? "You're all set" : "Set up your workspace"}
+            {step === 5 ? "You're all set" : "Set up your firm"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {step === 4
+            {step === 5
               ? "Finish by signing in to activate your seat."
-              : "A guided five-minute setup. You can skip anything."}
+              : "A guided setup. You can skip anything you are not ready for."}
           </p>
         </div>
 
         {/* Stepper */}
-        {step < 4 && (
+        {step < 5 && (
           <ol className="mb-8 flex items-center justify-center gap-2">
-            {STEPS.slice(0, 4).map((label, i) => (
+            {STEPS.slice(0, 5).map((label, i) => (
               <li key={label} className="flex items-center gap-2">
                 {i > 0 && (
                   <div
@@ -183,18 +204,21 @@ function OnboardingPage() {
             />
           )}
           {step === 1 && (
-            <StepWorkspace
+            <StepFirm
               form={form}
               onChange={(p) => persist({ ...form, ...p })}
             />
           )}
           {step === 2 && (
+            <StepKyc form={form} onChange={(p) => persist({ ...form, ...p })} />
+          )}
+          {step === 3 && (
             <StepMatter
               form={form}
               onChange={(p) => persist({ ...form, ...p })}
             />
           )}
-          {step === 3 && (
+          {step === 4 && (
             <StepTeammates
               form={form}
               draft={emailDraft}
@@ -208,7 +232,7 @@ function OnboardingPage() {
               }
             />
           )}
-          {step === 4 && <StepDone email={form.email} name={form.name} />}
+          {step === 5 && <StepDone email={form.email} name={form.name} />}
 
           {error && (
             <p className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -216,7 +240,8 @@ function OnboardingPage() {
             </p>
           )}
 
-          {step < 4 && (
+
+          {step < 5 && (
             <div className="mt-6 flex items-center justify-between">
               <button
                 type="button"
@@ -227,7 +252,7 @@ function OnboardingPage() {
                 <ArrowLeft className="size-4" /> Back
               </button>
               <div className="flex items-center gap-3">
-                {step >= 2 && (
+                {step >= 2 && step < 5 && (
                   <button
                     type="button"
                     onClick={skip}
@@ -236,7 +261,7 @@ function OnboardingPage() {
                     Skip
                   </button>
                 )}
-                {step < 3 ? (
+                {step < 4 ? (
                   <button
                     type="button"
                     onClick={next}
@@ -276,6 +301,7 @@ function Label({ children }: { children: string }) {
   );
 }
 
+
 function StepAccount({
   form,
   onChange,
@@ -302,18 +328,13 @@ function StepAccount({
           onChange={(e) => onChange({ email: e.target.value })}
           className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
           placeholder="alex@firm.com"
-          autoComplete="email"
         />
       </label>
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck className="size-4 text-gold" />
-        Seats are provisioned by a firm administrator.
-      </p>
     </div>
   );
 }
 
-function StepWorkspace({
+function StepFirm({
   form,
   onChange,
 }: {
@@ -322,44 +343,113 @@ function StepWorkspace({
 }) {
   return (
     <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 text-sm text-muted-foreground">
+        <Building2 className="mt-0.5 size-4 shrink-0 text-gold" />
+        <p>
+          Your firm identity — a display name and logo — appears across the
+          workspace and on documents you send clients.
+        </p>
+      </div>
+      {form.logoPath && (
+        <div className="flex items-center justify-center">
+          <img
+            src={form.logoPath}
+            alt="Firm logo preview"
+            className="size-20 rounded-xl border border-border object-contain p-2"
+          />
+        </div>
+      )}
       <label className="block">
         <Label>Firm name</Label>
         <input
           value={form.firm}
           onChange={(e) => onChange({ firm: e.target.value })}
           className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          placeholder="Rivera &amp; Associates"
+          placeholder="Rivera &amp; Partners LLP"
         />
       </label>
       <label className="block">
-        <Label>Primary practice area</Label>
+        <Label>Logo (storage path)</Label>
+        <input
+          value={form.logoPath}
+          onChange={(e) => onChange({ logoPath: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs"
+          placeholder="logos/aetoes/logo.svg"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          The logo is stored in private storage; this wizard only records where
+          it lives. Uploads are handled by firm admin flows.
+        </p>
+      </label>
+    </div>
+  );
+}
+
+function StepKyc({
+  form,
+  onChange,
+}: {
+  form: FormState;
+  onChange: (p: Partial<FormState>) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 text-sm text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-gold" />
+        <p>
+          To comply with practice rules we verify your firm and one managing
+          member. Documents are kept confidential and reviewed manually.
+        </p>
+      </div>
+      <label className="block">
+        <Label>Firm registration certificate (RC) — storage path</Label>
+        <input
+          value={form.rcPath}
+          onChange={(e) => onChange({ rcPath: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono"
+          placeholder="kyc/your-firm/rc.pdf"
+        />
+        <span className="mt-1 block text-xs text-muted-foreground">
+          Document bytes are stored privately — only the reference path is kept.
+        </span>
+      </label>
+      <label className="block">
+        <Label>Managing member ID — storage path</Label>
+        <input
+          value={form.idDocumentPath}
+          onChange={(e) => onChange({ idDocumentPath: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono"
+          placeholder="kyc/your-firm/admin-id.pdf"
+        />
+      </label>
+      <label className="block">
+        <Label>ID document type</Label>
         <select
-          value={form.practice}
-          onChange={(e) => onChange({ practice: e.target.value })}
+          value={form.idDocumentType}
+          onChange={(e) => onChange({ idDocumentType: e.target.value })}
           className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
         >
-          {PRACTICE_AREAS.map((p) => (
-            <option key={p}>{p}</option>
+          {ID_DOCUMENT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t.replace(/_/g, " ")}
+            </option>
           ))}
         </select>
       </label>
       <label className="block">
-        <Label>Jurisdiction</Label>
+        <Label>Firm website (optional)</Label>
         <input
-          value={form.jurisdiction}
-          onChange={(e) => onChange({ jurisdiction: e.target.value })}
+          type="url"
+          value={form.firmWebsite}
+          onChange={(e) => onChange({ firmWebsite: e.target.value })}
           className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          placeholder="England &amp; Wales"
+          placeholder="https://firm.com"
         />
       </label>
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Landmark className="size-4 text-gold" />
-        Your firm&rsquo;s vaults cannot be accessed until an administrator
-        provisions them.
-      </p>
     </div>
   );
 }
+
 
 function StepMatter({
   form,
@@ -371,7 +461,30 @@ function StepMatter({
   return (
     <div className="space-y-4">
       <label className="block">
-        <Label>First matter name (optional)</Label>
+        <Label>Practice area</Label>
+        <select
+          value={form.practice}
+          onChange={(e) => onChange({ practice: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+        >
+          {PRACTICE_AREAS.map((area) => (
+            <option key={area} value={area}>
+              {area}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block">
+        <Label>Primary jurisdiction</Label>
+        <input
+          value={form.jurisdiction}
+          onChange={(e) => onChange({ jurisdiction: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          placeholder="e.g. federal — England &amp; Wales"
+        />
+      </label>
+      <label className="block">
+        <Label>First matter (optional)</Label>
         <input
           value={form.matter}
           onChange={(e) => onChange({ matter: e.target.value })}
@@ -465,8 +578,8 @@ function StepDone({ name, email }: { name: string; email: string }) {
         Thanks{name ? `, ${name.split(" ")[0]}` : ""}
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Your preferences are saved. A firm administrator activates seats — sign
-        in
+        Your preferences are saved. A firm administrator activates seats and
+        verifies your KYC — sign in
         {email ? ` with ${email}` : ""} to get started.
       </p>
       <Link
@@ -478,3 +591,4 @@ function StepDone({ name, email }: { name: string; email: string }) {
     </div>
   );
 }
+

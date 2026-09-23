@@ -83,14 +83,16 @@ apps/api (FastAPI, Python 3.12, port 8000)
 | `practice.py` | `POST/GET /v1/matters/{matter_id}/time` | Time capture (3.9 sub-task 1). `ops.time` CORE entitlement; matter tenancy validated; idempotency on (tenant_id, idempotency_key); minutes>0; returns total_minutes. |
 | `invoicing.py` | `POST /v1/matters/{id}/invoice`, `GET /v1/matters/{id}/invoices`, `GET/POST /v1/invoices/{id}`, `POST /v1/invoices/{id}/send`, `GET /v1/invoices/{id}.pdf`, `POST /v1/invoices/{id}/payments`, `GET /v1/receivables/aging` | Invoicing + payments (3.9 sub-task 2). `ops.invoicing` premium gate; per-tenant `RC-<N>` numbering; line amount = minutes/60 × hourly rate_ngn; DRAFT→SENT (send, `sent_at`), payment → PARTIAL/PAID; PDF via `app.invoicing_pdf` (pymupdf, brand letterhead); aging buckets for receivables. |
 | `_load_invoice` helper | (in invoicing.py) | Fetches invoice + `paid_ngn`/`balance_ngn` + optional lines; 404 on foreign/unknown. |
+| `kyc.py` | `GET/POST /v1/firm/kyc` | Firm KYC (S10-1). Gated by `deps.require_firm_admin` (orthogonal `is_firm_admin` JWT flag). Upsert with PENDING reset; ops-only VERIFIED/REJECTED. Store refs/paths only (PARTNER_RESTRICTED-class). |
 
 
 ### Migrations — `infra/supabase/migrations/versions/`
 
 Sequential `0001`…`0017`:
-`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`, `0015_invoicing`, `0016_conflict_check`, `0017_assistant`.
+`0001_phase1_core`, `0002_query_audit_rls`, `0003_workbench_tables`, `0004_entitlements`, `0005_channels`, `0006_embedding_2048`, `0007_embedding_1024_jina`, `0008_vault_a_clearance`, `0009_clearance_ladder`, `0010_provider_provenance`, `0011_channels_v2`, `0012_agent_participation`, `0013_expert_chat_thread`, `0014_time_entries`, `0015_invoicing`, `0016_conflict_check`, `0017_assistant`, `0018_public_signup`, `0019_invite_accept`, `0020_firm_admins`, `0021_firm_kyc`.
 - `0014_time_entries.py`: `time_entries` (tenant_id, matter_id FK→matters, user_ref, description, minutes>0, rate_ngn, billed, idempotency_key, created_at, worked_at) + (tenant_id, matter_id) idx + unique (tenant_id, idempotency_key) idx + RLS tenant_isolation.
 - `0015_invoicing.py`: `invoices` (tenant_id, matter_id, number, status DRAFT/SENT/PARTIAL/PAID, amount_ngn, due_date, sent_at, created_at) + `invoice_line_items` (snapshot of each billed entry) + `payments` (invoice_id, amount_ngn, method, received_at) + RLS on all three. Per-tenant `RC-<N>` invoice number sequence.
+- `0021_firm_kyc.py` (S10-1): `tenants.logo_path` column; `firm_kyc` (id, tenant_id UNIQUE→tenants, cac_number, rc_document_path, admin_id_type, admin_id_document_path, id_document_type, firm_website, verification_status CHECK PENDING/VERIFIED/REJECTED DEFAULT PENDING, submitted_at, reviewed_by, reviewed_at) + tenant-scoped RLS + firm-admin gate (reads `app.is_firm_admin` GUC); `redcase_app` GRANTs in idempotent `pg_roles` guard. Storage-refs only (docs stay in private bucket; PARTNER_RESTRICTED-class).
 
 ### Tests — `apps/api/tests/` (pytest)
 
@@ -205,6 +207,14 @@ Sequential `0001`…`0017`:
   - Landing `routes/index.tsx` + new `components/marketing/Products.tsx`: **PRODUCTS band** between DualVault and Trust — eyebrow "THE PRODUCT", H2 "Four surfaces. One engine.", 4 preview cards (Vault Search / Red-Teamer / Legal Assistant / Firm Ops).
   - `apps/web/public/brand/redcase_firefly.svg` = byte-identical copy of `docs/RedCaseSVG/redcase_firefly.svg` (hash A94AF47…; 754,908 B).
   - **DoD verified:** `npm run build` GREEN (only pre-existing rolldown "use client" directive warnings). No `redcase.ai` refs remain in web routes; `onboarding.tsx` crimson logo pending full rewrite in SLICE 1.
+- **SLICE 1 (S10-1) — firm identity + KYC funnel ✅ COMPLETED (2026-09-23):**
+  - **Migration `0021_firm_kyc.py`:** `tenants.logo_path` column; new `firm_kyc` table (id, tenant_id UNIQUE, cac_number, rc_document_path, admin_id_type, admin_id_document_path, firm_website, verification_status CHECK PENDING/VERIFIED/REJECTED DEFAULT PENDING, submitted_at, reviewed_by, reviewed_at) with tenant-scoped RLS policy + firm-admin gate (reads `app.is_firm_admin` GUC, PARTNER_RESTRICTED-analog); `id_document_type` added (spec guards NIN/DRIVER_LICENSE/INTL_PASSPORT). `redcase_app` GRANTs in idempotent `pg_roles` guard (pattern from 0019). Storage **paths only** — bytes never stored; KYC doc class = PARTNER_RESTRICTED.
+  - **`config.py`:** added `storage_kyc_bucket="firm-kyc"`, `storage_kyc_prefix="kyc"`.
+  - **`app/routers/kyc.py`** (new, mounted in `main.py`): `GET /v1/firm/kyc` (returns row or 404) + `POST /v1/firm/kyc` (upsert; requires BOTH rc_path + id_document_path → 422 otherwise; resets `verification_status` to PENDING on every submit; no client path to VERIFIED/REJECTED — ops-only for tenant zero); both gated by `deps.require_firm_admin` (orthogonal `is_firm_admin` JWT flag, fail-closed). ZDR-clean (paths + status only).
+  - **`tests/test_kyc.py`** (new, 5 tests GREEN): non-admin 403 (incl. PARTNER w/o flag), both-docs-required 422, submit+read-back PENDING, tenant-RLS 404 for another tenant's admin, upsert resets PENDING after ops VERIFIED.
+  - **`onboarding.tsx`** (rewritten): wizard now 6 steps — Account → **Firm identity** (firm name, logo path preview + storage-path input, juris→practice, website) → **KYC** (RC path, admin ID path, ID document type select, website) → First matter → Teammates → Done. Logo shows in the wizard header; KYC captures storage **paths only** (no upload in this slice). Handoff to `/signin`.
+  - **DoD:** `pytest tests/test_kyc.py` = 5/5 GREEN; `npm run build` GREEN (only pre-existing rolldown "use client" warnings); `docs/RedCase-Feature-Addendum-S10.md` §10.6 S10-1 marked ✅ DONE.
+
 
 ---
 

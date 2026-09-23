@@ -92,7 +92,7 @@ ALTER TABLE matters ADD COLUMN progress_note TEXT;
 | Slice | Content |
 |---|---|
 | S10-0 | Sign-in bug sweep: `redcase.ai`→`redcase.xyz` link; logo → `docs/RedCaseSVG/redcase_firefly.svg` (properly sized); bottom mark → `apps/web/public/brand/redcase-mark-white.svg`; favicon → `apps/web/public/brand/redcase-mark-favicon.svg`; "New firm? Start your firm →" link | ✅ DONE (2026-09-23) — also landed the PRODUCTS band on `/`; `npm run build` GREEN |
-| S10-1 | Wizard extensions: firm identity (logo/jurisdiction/website) + KYC (firm_kyc table + uploads + storage) |
+| S10-1 | Wizard extensions: firm identity (logo/jurisdiction/website) + KYC (firm_kyc table + uploads + storage) | ✅ DONE (2026-09-23) — `0021_firm_kyc` (tenants.logo_path + firm_kyc table, tenant-scoped RLS + firm-admin gate, storage-path-only design, `id_document_type`), `GET/POST /v1/firm/kyc` (firm-admin gated, upsert resets to PENDING, ops-only VERIFIED/REJECTED), `storage_kyc_bucket`/`storage_kyc_prefix` config, `test_kyc.py` (5 tests incl. tenant RLS + admin gate) GREEN, onboarding wizard gains Firm identity + KYC steps (paths only — no upload in this slice); `npm run build` GREEN |
 | S10-2 | Agent persona (table + onboarding step + workbench settings + prompt injection) + practice-area lens |
 | S10-3 | Matter assignment (column + endpoint + DIRECT channel) + Firm Command matter-progress panel |
 
