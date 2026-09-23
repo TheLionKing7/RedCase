@@ -113,15 +113,56 @@ class of issue entirely once it lands.
 - [ ] Apply the Secret Manager values above (names only here).
 - [ ] Create the two jobs from `apps/api/deploy/cloudrun-jobs.yaml`
       (`deploy.yml` does this on first run).
-- [ ] Cloudflare: create the worker from `cloudflare/` (`npx wrangler deploy`),
-      set `API_BASE_URL` var to the proxied api. origin, set
-      `INTERNAL_SWEEP_TOKEN` secret.
+- [x] **Cloudflare: worker `redcase-cron` deployed** from `cloudflare/`; `API_BASE_URL`
+      var set; `INTERNAL_SWEEP_TOKEN` secret set (owner-run — see §3a).
 - [ ] DNS: `app.` CNAME -> Vercel; `api.` CNAME -> Cloud Run (proxied).
 - [ ] **Cloudflare Access** policy on both hostnames for PAT (owner-side).
 - [ ] GitHub: create the `production` environment with required reviewers
       (the step-6 deploy hold); add secrets `GCP_SA_KEY`, `GCP_PROJECT_ID`,
       `BATTERY_DATABASE_URL`, `SUPABASE_JWT_SECRET`, `JINA_API_KEY`,
       `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY`.
+
+## 3a. Cloudflare Cron Worker — deployed state (2026-09-23)
+
+Deployed into the owner's Cloudflare account (Account ID
+`e9f3f471d36767a364e4fe96c69a1328`, `Don.toscoleorne@gmail.com`).
+
+| Item | Value |
+|---|---|
+| Worker name | `redcase-cron` |
+| Main | `cloudflare/worker.js` (git-tracked) |
+| Config | `cloudflare/wrangler.toml` (git-tracked; commit `4380af8`) |
+| Runtime URL | `https://redcase-cron.affos.workers.dev` |
+| Cron schedule | **single** trigger `*/5 * * * *` (UTC) |
+| `API_BASE_URL` var | `https://api.redcase.xyz` (points at the proxied `api.` host) |
+| Secrets (names only) | `INTERNAL_SWEEP_TOKEN` (worker secret; must byte-match `INTERNAL_SWEEP_TOKEN` in `/opt/redcase/.env` on the VPS) |
+
+**Single-trigger consolidation (why not the original two triggers):** the account is on
+the Workers **Free plan = max 5 cron triggers per account**, and 4 were already in use
+(`affiliateos-edge`: `*/5 * * * *`; `pathguru-webhooks`: `0 4 * * *`, `0 6 * * *`,
+`*/5 * * * *`) — adding two more would have hit the hard `10072` limit. Per owner ruling,
+`redcase-cron` uses one `*/5 * * * *` trigger and the worker gates internally:
+- every tick → `GET {API_BASE_URL}/v1/health` (keep-alive / warm, supersedes `*/10`);
+- when UTC hour==6 && minute==0 → `POST {API_BASE_URL}/v1/internal/sweep` (daily
+  06:00 UTC = 07:00 Africa/Lagos).
+
+Auth note: the API authenticates the sweep via the **`X-Internal-Token`** header
+(constant-time `hmac.compare_digest` in `app/routers/internal.py`), NOT
+`Authorization: Bearer`; the worker sends `X-Internal-Token` correctly. Responds 403 on
+mismatch, 503 if DB unprovisioned.
+
+**Verification evidence (recorded 2026-09-23):**
+- Deployed versions: `e43d091a…` (initial), `2f4af557…` (single-trigger), `17132b36…`
+  (`API_BASE_URL=https://api.redcase.xyz`). Cron schedule confirmed registered
+  (`schedule: */5 * * * *`).
+- Manual `GET https://api.redcase.xyz/v1/health` → **502 Bad Gateway** (origin/tunnel
+  not serving yet). Re-check once the API is live, expecting 200.
+- Manual sweep execution → **PENDING**: requires `INTERNAL_SWEEP_TOKEN` set (owner-run
+  `wrangler secret put`) AND a reachable API. Expect 2xx + `pending`/`embedded` JSON
+  and an entry in the audit log (`query_audit`/maintenance path) once live.
+- Cron count now at the 5/5 free-plan limit — adding any further cron trigger requires a
+  Workers Paid upgrade or freeing one of the existing 4.
+
 
 ## 4. Owner-side ZDR / data-processing verification items (agent cannot do these)
 
