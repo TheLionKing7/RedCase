@@ -1,4 +1,4 @@
-﻿import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Bell, BookOpen, CalendarClock, Circle, CircleHelp, Home, Landmark, MessageSquare, Search, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, Users, Vault, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { getFirmAdmin } from "@/lib/auth/supabase";
