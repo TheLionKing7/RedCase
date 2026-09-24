@@ -32,6 +32,7 @@ from fastapi import (
 from pydantic import BaseModel
 
 from app.config import Settings
+from app.deadline_detector import detect_deadlines
 from app.deps import TenantContext, get_tenant_context
 from app.entitlements import require_feature
 from app.middleware.audit import write_audit
@@ -98,6 +99,12 @@ async def _run_analysis_worker(
                     " WHERE id = $1",
                     uuid.UUID(analysis_id),
                     json.dumps(output_json),
+                )
+                await detect_deadlines(
+                    conn,
+                    tenant_id=tenant_id,
+                    document_id=document_id,
+                    text=json.dumps(output_json),
                 )
                 await write_audit(
                     conn,

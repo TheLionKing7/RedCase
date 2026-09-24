@@ -128,6 +128,10 @@ Sequential `0001`…`0017`:
 
 ## [State of Play]
 
+- **Deadline engine / Scheduler / Court Diary update (2026-09-24):** detector remains analysis-wired and counsel-rule matched; migration `0026` preserves normalized `STATE_HIGH_COURT` matching (document-facing label `State High Court`); migration `0027` adds tenant-scoped `court_diary_entries`; `/v1/court-diary/entries` provides read/create access; the internal `/v1/internal/sweep` runs idempotent T-14/T-7/T-2/T-0 in-app channel fan-out via `deadline_scheduler.py`. No `documents.metadata` or `matters.court_level` columns were added — the existing `documents.court_level` is used.
+- **Validation status:** implementation complete; web build GREEN (exit 0); `compileall -q app` GREEN; focused deadline pytest (6 passed) confirmed earlier. Migration `0026` typo fix (`hight`→`High`) applied. Commit/push pending.
+
+
 **Branch:** `main` (ahead of origin — NOT pushed).
 
 ### Completed
@@ -244,6 +248,15 @@ Sequential `0001`…`0017`:
   - **`tests/test_persona.py`** (rewritten from scratch): 11 tests GREEN. **`test_assistant.py`:** `fetchrow`→None added to both `_FakeDB` classes (needed by `_fetch_persona` in `run_assistant_turn`). Full suite 251 tests pass.
   - **Frontend:** `lib/api/client.ts` — `apiPut<TResponse, TRequest>`. `lib/api/persona.ts` (new) — types (Persona/PersonaInput/TonePreset/PERSONA_TONES) + hooks (usePersona/usePracticeAreas/useSavePersona).
   - **Onboarding (`routes/onboarding.tsx`):** Assistant step at index 4 (0 Account, 1 Firm, 2 KYC, 3 Matter, **4 Assistant**, 5 Teammates, 6 Done). FormState gained agentName/tone/rules/practiceTags; StepAssistant form (name, tone select, rules textarea, practice tags comma-input); finish() persists via savePersona (try/catch, non-fatal).
+- **UX/IA follow-up — UX-5, access workflow, archive enforcement, shell UX-1 (implemented 2026-09-24):**
+  - `apps/web/src/components/CommandPalette.tsx` adds a global `cmdk` palette with Ctrl/Cmd+K, fuzzy/recent-first navigation, P1 routes (Home, Workbench, Vault, Tracker, Channels), P2 quick actions (access requests, directory, Assistant, density), and keyboard guidance. `AppShell` mounts it and the header search trigger now opens it; rail state synchronizes with URL changes.
+  - `apps/web/src/routes/_authed.access-requests.tsx` is the requester-facing access workflow: document/grantee/grant-level/reason form, operational-reason guard copy, request history, loading/error/empty states. Existing Firm Command remains the approval/denial surface. Vault panel links to it.
+  - `apps/web/src/lib/api/collaboration.ts` models `Channel.is_archived`; `CollaborationWorkspace` labels concluded channels and disables composition with an explicit read-only archive state.
+  - `apps/api/app/routers/channels.py` derives archive state from `matters.status IN (CONCLUDED, ARCHIVED)` and rejects message POSTs with 409, preventing UI bypass. API module compile check passed.
+- **Deadline engine integration (in progress, 2026-09-24):** `app/deadline_detector.py` extracts only explicit ISO ruling/judgment delivery dates from analysis output, matches enabled `deadline_rules` by stored document `court_level` plus CSV trigger event, inserts idempotent `deadline_events`, and fans out one row each at T-7/T-2/T-0 per matter channel. `routers/deadlines.py` exposes `/v1/deadlines/events` with counsel provenance. The analysis worker invokes detection after output persistence. Migration `0026` now tenant-scopes notifications, uses normalized `STATE_HIGH_COURT`, and seeds provenance `Tomiwa Akindoyin, Aetoes Legal` / `2026-09-24` / `docs/table-1790261132382.csv`. Tracker uses the real API shape, retains `BETA`, and renders provenance instead of invented local rules. Focused deadline/detector tests passed 6/6 in `pytest_deadline.txt`. Full API suite was attempted twice with `.venv312\\Scripts\\python.exe -m pytest -q > pytest_full.txt 2>&1`; both wrapper invocations exited 1 before pytest output, and `pytest_full.txt` remained empty. Per task discipline, commit/push and Luna battery are blocked pending a usable full-suite run.
+  - Core role-shaped shell remains server-authority-safe: Firm Ops is still gated by orthogonal `is_firm_admin` and departments; functional-role destinations are represented only where existing routes exist, while Phase 4 finance/payroll/attendance modules remain intentionally deferred per IA spec.
+  - `apps/web` build passed (`npm run build`); only existing rolldown module-level `use client` warnings remain.
+
 - **SLICE 0 identity fallback (S10-0 continuation) — IMPLEMENTED, build verified (2026-09-24):**
   - `apps/web/src/lib/identity.ts`: centralized display identity chain: membership full name → capitalized JWT email local-part → `Counsel`; no `ANON` rendering. Provides firm/role/clearance metadata and header eyebrow.
   - `apps/web/src/lib/api/members.ts` + `lib/api/dev/members.ts`: typed `/v1/members/me` client with explicit `VITE_API_DEV_ADAPTER=1` persona (`Tosin Adebayo`, `Managing Partner`, `Aetoes Legal`, `PARTNER`) for offline/demo verification.

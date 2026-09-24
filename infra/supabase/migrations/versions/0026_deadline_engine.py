@@ -41,9 +41,10 @@ def upgrade() -> None:
     """)
     op.execute("""
     CREATE TABLE deadline_notifications (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), event_id UUID NOT NULL REFERENCES deadline_events(id) ON DELETE CASCADE,
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID NOT NULL REFERENCES tenants(id),
+      event_id UUID NOT NULL REFERENCES deadline_events(id) ON DELETE CASCADE,
       channel_id UUID NOT NULL REFERENCES channels(id) ON DELETE CASCADE, lead_days INTEGER NOT NULL,
-      sent_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (event_id, channel_id, lead_days)
+       sent_at TIMESTAMPTZ, UNIQUE (tenant_id, event_id, channel_id, lead_days)
     )
     """)
     op.execute("CREATE INDEX deadline_rules_lookup ON deadline_rules (court_level, trigger_event, enabled)")
@@ -60,8 +61,8 @@ def upgrade() -> None:
     VALUES
       ('NG','COURT_OF_APPEAL','interlocutory_appeal','delivery/date of ruling','FIXED_DAYS',14,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv'),
       ('NG','COURT_OF_APPEAL','final_judgment_appeal','delivery/date of judgment','FIXED_DAYS',30,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv'),
-      ('NG','STATE_HIGH_COURT (Lagos)','default_judgment_set_aside','delivery/date of judgment','OPEN_ENDED',NULL,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv'),
-      ('NG','ALL','computation_general','—','OPEN_ENDED',NULL,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv')
+      ('NG','STATE_HIGH_COURT','default_judgment_set_aside','delivery/date of judgment','FIXED_DAYS',14,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv; label: State High Court'),
+      ('NG','ALL','computation_general','—','FIXED_DAYS',0,'CALENDAR_INCLUSIVE','{VALIDATED_BY}','{VALIDATED_AT}','docs/table-1790261132382.csv')
     """)
 
 

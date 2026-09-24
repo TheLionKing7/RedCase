@@ -15,7 +15,7 @@ export const COURT_LEVELS: FilterOption[] = [
   { label: "All Courts", value: "" },
   { label: "Supreme Court", value: "SUPREME_COURT" },
   { label: "Court of Appeal", value: "COURT_OF_APPEAL" },
-  { label: "Federal High Court", value: "FEDERAL_HIGH_COURT" },
+  { label: "State hight Court", value: "STATE_HIGH_COURT" },
   { label: "State High Court", value: "STATE_HIGH_COURT" },
   { label: "National Industrial Court", value: "NICN" },
 ];

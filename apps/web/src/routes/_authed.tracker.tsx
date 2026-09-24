@@ -12,17 +12,18 @@ import { AppShell } from "@/components/AppShell";
 import { ApiError } from "@/lib/api/client";
 import { useDeadlineEvents } from "@/lib/api/deadlines";
 import type { DeadlineEvent } from "@/lib/api/deadlines";
+import { useCourtDiaryEntries } from "@/lib/api/court-diary";
 
 export const Route = createFileRoute("/_authed/tracker")({
   head: () => ({
     meta: [
-      { title: "Statutory Tracker — RedCase" },
+      { title: "Statutory Tracker GÇö RedCase" },
       {
         name: "description",
         content:
           "Automatic filing-deadline computation under Nigerian Court Rules with a live calendar of upcoming court dates and alert statuses.",
       },
-      { property: "og:title", content: "Statutory Tracker — RedCase" },
+      { property: "og:title", content: "Statutory Tracker GÇö RedCase" },
       {
         property: "og:description",
         content:
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/_authed/tracker")({
   component: Tracker,
 });
 
-// Display urgency derived from §3.1 status + due_date — no fields invented.
+// Display urgency derived from -º3.1 status + due_date GÇö no fields invented.
 type Urgency =
   "overdue" | "due-soon" | "pending" | "notified" | "dismissed" | "missed";
 
@@ -59,37 +60,37 @@ function urgencyOf(ev: DeadlineEvent, today: Date): Urgency {
 
 const DAY_MS = 86400000;
 
-/** Starter rule-pack presets for the local calculator. Per Phase3 §3.1 these
- *  ship UNVALIDATED — they move to the deadline_rules table and stay disabled
+/** Starter rule-pack presets for the local calculator. Per Phase3 -º3.1 these
+ *  ship UNVALIDATED GÇö they move to the deadline_rules table and stay disabled
  *  until Nigerian counsel validates them. */
 const RULE_PRESETS = [
   {
-    label: "Memorandum of Appearance — FHC (14 days)",
+    label: "Memorandum of Appearance GÇö FHC (14 days)",
     days: 14,
     source: "Order 9 Rule 1, FHC Rules 2019",
   },
   {
-    label: "Statement of Defence — Lagos HC (42 days)",
+    label: "Statement of Defence GÇö Lagos HC (42 days)",
     days: 42,
     source: "Order 15 Rule 1, Lagos HC Rules 2019",
   },
   {
-    label: "Notice of Appeal, interlocutory — CA (14 days)",
+    label: "Notice of Appeal, interlocutory GÇö CA (14 days)",
     days: 14,
     source: "S.24(2)(a) Court of Appeal Act",
   },
   {
-    label: "Notice of Appeal, final — CA (90 days)",
+    label: "Notice of Appeal, final GÇö CA (90 days)",
     days: 90,
     source: "S.24(2)(b) Court of Appeal Act",
   },
   {
-    label: "Record of Appeal transmission — CA (60 days)",
+    label: "Record of Appeal transmission GÇö CA (60 days)",
     days: 60,
     source: "Order 8 Rule 1, CA Rules 2021",
   },
   {
-    label: "Reply on points of law — Lagos HC (7 days)",
+    label: "Reply on points of law GÇö Lagos HC (7 days)",
     days: 7,
     source: "Order 26 Rule 5, Lagos HC Rules 2019",
   },
@@ -102,6 +103,14 @@ function Tracker() {
   const [preset, setPreset] = useState(RULE_PRESETS[0]!.label);
 
   const eventsQuery = useDeadlineEvents();
+  const diaryQuery = useCourtDiaryEntries();
+  const diaryEntries = useMemo(
+    () =>
+      [...(diaryQuery.data ?? [])].sort((a, b) =>
+        a.starts_at.localeCompare(b.starts_at),
+      ),
+    [diaryQuery.data],
+  );
   const events = useMemo(
     () =>
       [...(eventsQuery.data ?? [])].sort((a, b) =>
@@ -110,7 +119,7 @@ function Tracker() {
     [eventsQuery.data],
   );
 
-  // Real "today" — the MVP's hardcoded 2026-08-13 is gone.
+  // Real "today" GÇö the MVP's hardcoded 2026-08-13 is gone.
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -217,7 +226,7 @@ function Tracker() {
           {/* Calendar */}
           <section className="panel p-6">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <CalendarClock className="size-4 text-gold" /> {monthName} — Court
+              <CalendarClock className="size-4 text-gold" /> {monthName} GÇö Court
               Diary
             </h2>
             <div className="mt-5 grid grid-cols-7 gap-1 text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -266,8 +275,8 @@ function Tracker() {
             </div>
           </section>
 
-          {/* Calculator — local convenience; real computation is rule-pack
-              driven server-side in Phase 3 (§3.1). */}
+          {/* Calculator GÇö local convenience; real computation is rule-pack
+              driven server-side in Phase 3 (-º3.1). */}
           <section className="panel p-6">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
               <Calculator className="size-4 text-steel" /> Deadline Calculator
@@ -322,17 +331,83 @@ function Tracker() {
               <div className="mt-2 text-xs text-muted-foreground">
                 {computed.days} calendar days from trigger
                 {computed.rolled
-                  ? " · rolled forward from a weekend"
-                  : ""} · {computed.source}
+                  ? " -+ rolled forward from a weekend"
+                  : ""} -+ {computed.source}
               </div>
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-warning">
-                ⚠ Unvalidated rule — counsel review pending (Phase3 §3.1)
+                GÜá Unvalidated rule GÇö counsel review pending (Phase3 -º3.1)
               </div>
             </div>
           </section>
         </div>
 
         {/* List */}
+        <section className="panel overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+            <Clock className="size-4 text-gold" />
+            <h2 className="text-lg font-semibold">
+              Upcoming Court Dates & Filings
+            </h2>
+          </div>
+          <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+            <CalendarClock className="size-4 text-gold" />
+            <h2 className="text-lg font-semibold">Scheduled Court Diary</h2>
+            <span className="rounded-full bg-steel/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-steel">
+              {diaryEntries.length} upcoming
+            </span>
+          </div>
+          {diaryQuery.isPending ? (
+            <div className="space-y-2 p-6">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-16 animate-pulse rounded bg-surface-raised/60"
+                />
+              ))}
+            </div>
+          ) : diaryEntries.length === 0 ? (
+            <div className="p-6">
+              <p className="text-sm text-muted-foreground">
+                No scheduled court activities yet.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {diaryEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex flex-wrap items-start gap-4 px-6 py-4"
+                >
+                  <div className="w-28 shrink-0 font-mono text-xs text-muted-foreground">
+                    <div>
+                      {new Date(entry.starts_at).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </div>
+                    <div>
+                      {new Date(entry.starts_at).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">{entry.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {entry.entry_type} · Matter {entry.matter_id.slice(0, 8)}
+                      {entry.courtroom ? ` · ${entry.courtroom}` : ""}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-steel/10 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-steel">
+                    {entry.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
         <section className="panel overflow-hidden">
           <div className="flex items-center gap-2 border-b border-border px-6 py-4">
             <Clock className="size-4 text-gold" />
@@ -400,12 +475,12 @@ function Tracker() {
                         </span>
                       </div>
                       <div className="font-mono text-[11px] text-muted-foreground">
-                        Matter {d.matter_id.slice(0, 8)} ·{" "}
+                        Matter {d.matter_id.slice(0, 8)} -+{" "}
                         {d.event_type.replaceAll("_", " ")}
                       </div>
                       {d.rule_id === null && (
                         <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] uppercase tracking-widest text-warning">
-                          ⚠ Unvalidated rule
+                          GÜá Unvalidated rule
                         </div>
                       )}
                       {d.trigger_date && (
@@ -420,7 +495,7 @@ function Tracker() {
                             timeZone: "UTC",
                           })}
                           {d.confidence !== null &&
-                            ` · confidence ${(d.confidence * 100).toFixed(0)}%`}
+                            ` -+ confidence ${(d.confidence * 100).toFixed(0)}%`}
                         </div>
                       )}
                     </div>

@@ -26,11 +26,14 @@ ZDR: ids and counts only — no chunk text in logs (HANDOFF.md 2.1).
 """
 
 import hmac
+from datetime import date
+from zoneinfo import ZoneInfo
 
 import asyncpg
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from app.config import Settings
+from app.deadline_scheduler import sweep_deadline_notifications
 from app.ingestion.db import _vec_literal
 from app.middleware.zdr import get_logger
 from app.retrieval.clients import make_embedder
@@ -66,7 +69,7 @@ async def sweep(
     request: Request,
     x_internal_token: str | None = Header(default=None),
 ) -> dict:
-    """Backfill NULL-embedding chunks; returns pending/embedded counts."""
+    """Run embedding maintenance and the deadline notification fan-out."""
     settings = _require_internal_token(request, x_internal_token)
     pool: asyncpg.Pool | None = request.app.state.db_pool
     if pool is None:
@@ -130,5 +133,19 @@ async def sweep(
                 total=pending,
             )
 
-    log.info("sweep_done", pending=pending, embedded=embedded)
-    return {"pending": pending, "embedded": embedded}
+    notified = await _sweep_deadlines(pool)
+    log.info("sweep_done", pending=pending, embedded=embedded, notified=notified)
+    return {"pending": pending, "embedded": embedded, "deadline_notifications": notified}
+
+
+async def _sweep_deadlines(pool: asyncpg.Pool) -> int:
+    today = date.today()
+    total = 0
+    async with pool.acquire() as conn:
+        tenant_ids = [r["id"] for r in await conn.fetch("SELECT id FROM tenants")]
+    for tenant_id in tenant_ids:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.fetchval("SELECT set_config('app.tenant_id', $1, true)", str(tenant_id))
+                total += await sweep_deadline_notifications(conn, tenant_id=str(tenant_id), today=today)
+    return total

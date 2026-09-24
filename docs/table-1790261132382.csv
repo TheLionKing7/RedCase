@@ -1,5 +1,5 @@
 ﻿rule\_name,court,trigger,offset,computation,source
 interlocutory\_appeal,COURT\_OF\_APPEAL,delivery/date of ruling,14 days,"calendar, day-after = day 1",CA Rules (HC→CA appeals)
 final\_judgment\_appeal,COURT\_OF\_APPEAL,delivery/date of judgment,30 days,"calendar, day-after = day 1",CA Rules
-default\_judgment\_set\_aside,STATE\_HIGH\_COURT (Lagos),delivery/date of judgment,14 days *or reasonable time*,calendar,HCLSR Order 48 + computation rules
+default_judgment_set_aside,State hight Court,delivery/date of judgment,14 days *or reasonable time*,calendar,HCLSR Order 48 + computation rules
 computation\_general,all,—,—,calendar inclusive of weekends; **≤6-day periods exclude weekends/holidays**,HCLSR Order 48

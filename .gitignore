@@ -36,7 +36,17 @@ dist/
 !MEMORY_BANK.md
 
 .vite/
+.tanstack/
+
+# Build / dev artifacts
+*.log
+*.png
+
 !apps/web/.env.example
 
 # Owner-supplied benchmark corpus (copyrighted judgments) — never commit
 /fixtures/
+
+# Cline workspace files — local only
+.clinerules
+.continue/

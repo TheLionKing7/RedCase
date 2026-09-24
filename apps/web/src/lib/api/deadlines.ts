@@ -29,6 +29,9 @@ export interface DeadlineEvent {
   status: DeadlineStatus;
   assigned_to: string | null;
   created_at: string;
+  validated_by?: string;
+  validated_at?: string;
+  source_ref?: string;
 }
 
 /** §3.1 deadline_rules row — validated by counsel before go-live;
