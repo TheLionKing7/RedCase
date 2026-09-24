@@ -44,6 +44,10 @@ class PracticeAreasUpsert(BaseModel):
     tags: list[str] = Field(min_length=1, max_length=40)
 
 
+class DepartmentsUpsert(BaseModel):
+    departments: list[str] = Field(min_length=1, max_length=10)
+
+
 async def _persona_row(ctx: TenantContext):
     return await ctx.db.fetchrow(
         "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas"
@@ -140,3 +144,37 @@ async def upsert_practice_areas(
     tags = list(dict.fromkeys(t.strip() for t in body.tags if t.strip()))
     log.info("practice_areas_upserted", tenant_id=ctx.tenant_id)
     return {"tags": sorted(tags)}
+
+
+@router.get("/departments")
+async def get_departments(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict[str, Any]:
+    rows = await ctx.db.fetch(
+        "SELECT department FROM tenant_departments WHERE tenant_id = $1::uuid ORDER BY department",
+        uuid.UUID(ctx.tenant_id),
+    )
+    return {"departments": [r["department"] for r in rows]}
+
+
+@router.put("/departments")
+async def upsert_departments(
+    body: DepartmentsUpsert,
+    ctx: TenantContext = Depends(require_firm_admin),  # noqa: B008
+) -> dict[str, Any]:
+    """Firm department modules (firm-admin only). Legal Practice is mandatory."""
+    departments = list(dict.fromkeys(d.strip() for d in body.departments if d.strip()))
+    if "Legal Practice" not in departments:
+        departments.insert(0, "Legal Practice")
+    await ctx.db.execute(
+        "DELETE FROM tenant_departments WHERE tenant_id = $1::uuid",
+        uuid.UUID(ctx.tenant_id),
+    )
+    for department in departments:
+        await ctx.db.execute(
+            "INSERT INTO tenant_departments (tenant_id, department) VALUES ($1, $2)",
+            uuid.UUID(ctx.tenant_id),
+            department[:120],
+        )
+    log.info("departments_upserted", tenant_id=ctx.tenant_id)
+    return {"departments": sorted(departments)}

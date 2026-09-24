@@ -41,6 +41,10 @@ export interface PracticeAreas {
   tags: string[];
 }
 
+export interface Departments {
+  departments: string[];
+}
+
 export function getPersona(): Promise<Persona> {
   return apiGet<Persona>("/v1/persona");
 }
@@ -69,6 +73,17 @@ export function usePracticeAreas() {
     queryKey: ["persona", "practice-areas"],
     queryFn: getPracticeAreas,
   });
+}
+
+export function getDepartments(): Promise<Departments> {
+  return apiGet<Departments>("/v1/persona/departments");
+}
+
+export function saveDepartments(departments: string[]): Promise<Departments> {
+  return apiPut<Departments, { departments: string[] }>(
+    "/v1/persona/departments",
+    { departments },
+  );
 }
 
 export function useSavePersona() {

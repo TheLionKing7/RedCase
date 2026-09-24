@@ -13,19 +13,24 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { savePersona } from "@/lib/api/persona";
+import {
+  saveDepartments,
+  savePersona,
+  savePracticeAreas,
+} from "@/lib/api/persona";
 import type { TonePreset } from "@/lib/api/persona";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const STEPS = [
   "Account",
   "Firm identity",
   "KYC",
+  "Services & departments",
   "First matter",
   "Assistant",
   "Teammates",
@@ -34,12 +39,22 @@ const STEPS = [
 
 const PRACTICE_AREAS = [
   "Litigation",
-  "Corporate / M&A",
-  "Family",
+  "Corporate & Commercial",
+  "Property & Land",
   "Employment",
-  "Real estate",
-  "Intellectual property",
-  "Other",
+  "Family",
+  "Banking & Finance",
+  "Tax",
+  "Intellectual Property",
+  "Criminal",
+  "Election & Constitutional",
+];
+
+const DEPARTMENTS = [
+  "Legal Practice",
+  "Accounts & Finance",
+  "HR & Administration",
+  "Operations",
 ];
 
 const ID_DOCUMENT_TYPES = ["passport", "national_id", "driver_license"];
@@ -65,6 +80,8 @@ interface FormState {
   tone: string;
   rules: string;
   practiceTags: string[];
+  services: string[];
+  departments: string[];
 }
 
 const EMPTY: FormState = {
@@ -84,6 +101,8 @@ const EMPTY: FormState = {
   tone: "PROFESSIONAL",
   rules: "",
   practiceTags: [],
+  services: [],
+  departments: ["Legal Practice"],
 };
 
 function load(): FormState {
@@ -150,6 +169,8 @@ function OnboardingPage() {
       // lens) via GET/PUT /v1/persona. Idempotent + self-scoped; non-fatal if
       // the backend is down — persona is editable from Workbench Settings anytime.
       try {
+        await savePracticeAreas(form.services.length ? form.services : ["Legal Practice"]);
+        await saveDepartments(form.departments);
         await savePersona({
           agent_name: form.agentName || "Assistant",
           tone_preset: (form.tone as TonePreset) || "PROFESSIONAL",
@@ -160,7 +181,7 @@ function OnboardingPage() {
         // non-fatal preference — the user can set it later.
       }
       await new Promise((r) => setTimeout(r, 400));
-      setStep(6);
+      setStep(7);
     } finally {
       setBusy(false);
     }
@@ -176,19 +197,19 @@ function OnboardingPage() {
             className="size-12 rounded-full object-contain"
           />
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
-            {step === 6 ? "You're all set" : "Set up your firm"}
+            {step === 7 ? "You're all set" : "Set up your firm"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {step === 6
+            {step === 7
               ? "Finish by signing in to activate your seat."
               : "A guided setup. You can skip anything you are not ready for."}
           </p>
         </div>
 
         {/* Stepper */}
-        {step < 6 && (
+        {step < 7 && (
           <ol className="mb-8 flex items-center justify-center gap-2">
-            {STEPS.slice(0, 6).map((label, i) => (
+            {STEPS.slice(0, 7).map((label, i) => (
               <li key={label} className="flex items-center gap-2">
                 {i > 0 && (
                   <div
@@ -239,18 +260,24 @@ function OnboardingPage() {
             <StepKyc form={form} onChange={(p) => persist({ ...form, ...p })} />
           )}
           {step === 3 && (
-            <StepMatter
+            <StepServices
               form={form}
               onChange={(p) => persist({ ...form, ...p })}
             />
           )}
           {step === 4 && (
-            <StepAssistant
+            <StepMatter
               form={form}
               onChange={(p) => persist({ ...form, ...p })}
             />
           )}
           {step === 5 && (
+            <StepAssistant
+              form={form}
+              onChange={(p) => persist({ ...form, ...p })}
+            />
+          )}
+          {step === 6 && (
             <StepTeammates
               form={form}
               draft={emailDraft}
@@ -264,7 +291,7 @@ function OnboardingPage() {
               }
             />
           )}
-          {step === 6 && <StepDone email={form.email} name={form.name} />}
+          {step === 7 && <StepDone email={form.email} name={form.name} />}
 
           {error && (
             <p className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -273,7 +300,7 @@ function OnboardingPage() {
           )}
 
 
-          {step < 6 && (
+          {step < 7 && (
             <div className="mt-6 flex items-center justify-between">
               <button
                 type="button"
@@ -284,7 +311,7 @@ function OnboardingPage() {
                 <ArrowLeft className="size-4" /> Back
               </button>
               <div className="flex items-center gap-3">
-                {step >= 2 && step < 6 && (
+                {step >= 2 && step < 7 && (
                   <button
                     type="button"
                     onClick={skip}
@@ -293,7 +320,7 @@ function OnboardingPage() {
                     Skip
                   </button>
                 )}
-                {step < 5 ? (
+                {step < 6 ? (
                   <button
                     type="button"
                     onClick={next}
@@ -531,6 +558,91 @@ function StepMatter({
     </div>
   );
 }
+
+function StepServices({
+  form,
+  onChange,
+}: {
+  form: FormState;
+  onChange: (p: Partial<FormState>) => void;
+}) {
+  function toggle(key: "services" | "departments", value: string) {
+    const values = form[key];
+    if (key === "departments" && value === "Legal Practice") return;
+    onChange({
+      [key]: values.includes(value)
+        ? values.filter((item) => item !== value)
+        : [...values, value],
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="font-display text-lg font-semibold text-foreground">
+          Choose your practice &amp; departments
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Shape the modules RedCase shows your firm. You can always add or remove them later.
+        </p>
+      </div>
+      <fieldset>
+        <legend className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Services your firm offers
+        </legend>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {PRACTICE_AREAS.map((service) => {
+            const selected = form.services.includes(service);
+            return (
+              <button
+                key={service}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => toggle("services", service)}
+                className={`rounded-lg border px-3 py-3 text-left text-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${selected ? "border-gold bg-gold/10 text-foreground" : "border-border text-muted-foreground hover:border-gold/50 hover:text-foreground"}`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  {service}
+                  {selected && <Check className="size-4 text-gold" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Your firm's departments
+        </legend>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {DEPARTMENTS.map((department) => {
+            const locked = department === "Legal Practice";
+            const selected = form.departments.includes(department);
+            return (
+              <button
+                key={department}
+                type="button"
+                aria-pressed={selected}
+                aria-disabled={locked}
+                onClick={() => toggle("departments", department)}
+                className={`rounded-lg border px-3 py-3 text-left text-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${selected ? "border-gold bg-gold/10 text-foreground" : "border-border text-muted-foreground hover:border-gold/50 hover:text-foreground"}`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  {department}
+                  <span className="flex items-center gap-2">
+                    {locked && <span className="font-mono text-[9px] uppercase text-steel">Core</span>}
+                    {selected && <Check className="size-4 text-gold" />}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
 
 function StepAssistant({
   form,
