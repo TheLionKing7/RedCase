@@ -21,6 +21,7 @@ from app.config import Settings, get_settings
 from app.middleware.zdr import configure_logging, get_logger
 from app.observability import HEALTH_DB, HEALTH_PROVIDERS, render_metrics
 from app.rate_limit import InviteAcceptLimiter, PublicSignupLimiter
+from app.routers.access import router as access_router
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(_v1_router())
     app.include_router(query_router)
+    app.include_router(access_router)
     app.include_router(analyses_router)
     app.include_router(channels_router)
     app.include_router(conflicts_router)

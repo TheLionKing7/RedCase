@@ -227,6 +227,78 @@ async def start_analysis(
     return AnalyzeAccepted(analysis_id=analysis_id)
 
 
+class ChainRequest(BaseModel):
+    prompt_pack: str
+
+
+@router.post("/analyses/{analysis_id}/chain", status_code=202)
+async def chain_analysis(
+    analysis_id: str,
+    body: ChainRequest,
+    background: BackgroundTasks,
+    request: Request,
+    _: None = Depends(require_feature("workbench.analyze")),  # noqa: B008
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> AnalyzeAccepted:
+    if body.prompt_pack not in ALLOWED_PACKS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"prompt_pack must be one of {ALLOWED_PACKS} — must differ from"
+            " the source analysis's pack",
+        )
+    parent = await ctx.db.fetchrow(
+        "SELECT id, tenant_id, document_id, prompt_pack FROM document_analyses"
+        " WHERE id = $1::uuid",
+        analysis_id,
+    )
+    if parent is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, detail="analysis not found"
+        )
+    if parent["prompt_pack"] == body.prompt_pack:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Chained analysis must use a different prompt pack.",
+        )
+    child_id = str(uuid.uuid4())
+    # Same contract as /analyze: the child row must COMMIT before the 202 returns
+    # so the background worker (which updates by id) and the audit FK both resolve.
+    async with request.app.state.db_pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "SELECT set_config('app.tenant_id', $1, true)", ctx.tenant_id
+            )
+            await conn.execute(
+                "INSERT INTO document_analyses (id, tenant_id, document_id,"
+                " prompt_pack, created_by, parent_analysis_id)"
+                " VALUES ($1, $2, $3, $4, $5, $6)",
+                uuid.UUID(child_id),
+                parent["tenant_id"],
+                parent["document_id"],
+                body.prompt_pack,
+                ctx.user_ref,
+                uuid.UUID(analysis_id),
+            )
+    settings: Settings = request.app.state.settings
+    background.add_task(
+        _run_analysis_worker,
+        settings,
+        request.app.state.db_pool,
+        child_id,
+        str(parent["document_id"]),
+        ctx.tenant_id,
+        ctx.user_ref,
+        body.prompt_pack,
+    )
+    log.info(
+        "analysis_chained",
+        parent_analysis_id=analysis_id,
+        child_analysis_id=child_id,
+        prompt_pack=body.prompt_pack,
+    )
+    return AnalyzeAccepted(analysis_id=child_id)
+
+
 @router.get("/analyses", response_model=list[AnalysisStatus])
 async def list_analyses(
     ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
