@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
   Briefcase,
@@ -12,6 +12,7 @@ import { CoachMarks } from "@/components/CoachMarks";
 import { useIdentity } from "@/lib/identity";
 import { useAnalyses } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
+import { useDeadlineEvents } from "@/lib/api/deadlines";
 
 // Part 3 Slice 2 — role landing by clearance, reworked for IA §2 (2026-09-23).
 //
@@ -181,38 +182,50 @@ function PractitionerLanding() {
  * time-capture) maps onto these four.
  */
 function HomeMenu() {
+  const analyses = useAnalyses();
+  const deadlineEvents = useDeadlineEvents();
+  const today = new Date().toISOString().slice(0, 10);
+  const events = deadlineEvents.data ?? [];
+  const dueToday = events.filter((event) => event.due_date === today);
+  const upcoming = events
+    .filter((event) => event.due_date >= today && event.status !== "DISMISSED")
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {/* Time logger — Clock-in / Clock-out. Attendance is Phase 4, so this is a
-          quick in-place capture affordance (local state), not a billing entry. */}
-      <TimeLogger />
-
-      {/* Partner's Locker / Inbox — my purview, a filtered view over the firm vault. */}
-      <MenuLink
-        to="/workbench"
-        icon={Briefcase}
-        label="Partner's Locker"
-        sub="Inbox · assignments routed to me"
-      />
-
-      {/* Scheduler — day-to-day activities, meetings, court-sittings, events. Builds on
-          the deadline engine; until then Tracker shows the pending-validation state. */}
-      <MenuLink
-        to="/tracker"
-        icon={BookOpenCheck}
-        label="Scheduler"
-        sub="Meetings · court-sittings · events"
-      />
-
-      {/* My matters / My deadlines — personal workload surfaces. */}
-      <MenuLink
-        to="/workbench"
-        icon={Scale}
-        label="My matters / My deadlines"
-        sub="Personal workload · send to workbench"
-      />
-    </div>
+    <section aria-labelledby="home-inbox-heading" className="space-y-3">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-steel">Your working day</p>
+          <h2 id="home-inbox-heading" className="mt-1 font-display text-xl font-semibold">Inbox, deadlines &amp; matters</h2>
+        </div>
+        <Link to="/tracker" className="hidden text-xs font-medium text-gold transition-colors hover:text-foreground sm:inline">Open tracker <ArrowUpRight className="ml-1 inline size-3.5" /></Link>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <InboxCard icon={Briefcase} title="Inbox" detail="Assignments and recent work product">
+          {analyses.isPending ? <CardState>Loading recent work…</CardState> : analyses.isError ? <CardState>Recent work is temporarily unavailable.</CardState> : analyses.data?.length ? <CardState>{analyses.data.length} recent analysis{analyses.data.length === 1 ? "" : "es"} available in the Workbench.</CardState> : <CardState>No work product yet. Start from the Workbench.</CardState>}
+        </InboxCard>
+        <InboxCard icon={BookOpenCheck} title="Today" detail="What needs attention today">
+          {deadlineEvents.isPending ? <CardState>Loading your schedule…</CardState> : dueToday.length ? <EventList events={dueToday} /> : <CardState>No deadlines or hearings due today.</CardState>}
+        </InboxCard>
+        <InboxCard icon={Clock} title="My deadlines" detail="The next statutory dates in your queue">
+          {deadlineEvents.isPending ? <CardState>Loading upcoming dates…</CardState> : upcoming.length ? <EventList events={upcoming.slice(0, 3)} /> : <CardState>No upcoming deadlines found.</CardState>}
+        </InboxCard>
+        <InboxCard icon={Scale} title="My matters" detail="Open your personal workbench view">
+          <div className="flex items-center justify-between gap-3"><CardState>Matters are organised from the Workbench.</CardState><Link to="/workbench" className="shrink-0 rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">Open</Link></div>
+        </InboxCard>
+      </div>
+    </section>
   );
+}
+
+function InboxCard({ icon: Icon, title, detail, children }: { icon: typeof Scale; title: string; detail: string; children: ReactNode }) {
+  return <article className="rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md"><div className="flex items-start gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold"><Icon className="size-4.5" /></div><div className="min-w-0"><h3 className="text-sm font-semibold">{title}</h3><p className="mt-0.5 text-[11px] text-muted-foreground">{detail}</p></div></div><div className="mt-4">{children}</div></article>;
+}
+
+function CardState({ children }: { children: React.ReactNode }) { return <p className="text-xs leading-5 text-muted-foreground">{children}</p>; }
+
+function EventList({ events }: { events: Array<{ id: string; description: string; due_date: string }> }) {
+  return <ul className="space-y-2">{events.map((event) => <li key={event.id} className="flex items-start justify-between gap-3 text-xs"><span className="min-w-0 truncate text-foreground">{event.description}</span><time className="shrink-0 font-mono text-[10px] text-gold">{event.due_date}</time></li>)}</ul>;
 }
 
 function MenuLink({
