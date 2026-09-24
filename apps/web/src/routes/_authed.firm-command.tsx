@@ -17,6 +17,11 @@ import { useDeadlineEvents } from "@/lib/api/deadlines";
 import { useAnalyses } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
 import { useFirmOverview, useAdminLedger, useFirmSettings } from "@/lib/api/firmAdmin";
+import {
+  useAccessRequests,
+  useDecideAccessRequest,
+} from "@/lib/api/access";
+import type { AccessRequest } from "@/lib/api/access";
 
 // Part 3 Slice 2 — Firm Command (renamed from the partner dashboard).
 //
@@ -41,7 +46,7 @@ export const Route = createFileRoute("/_authed/firm-command")({
 
 const ADMIN_TOOLS = [
   { to: "/search", label: "Vault Search", sub: "Dual-vault retrieval", icon: Search },
-  { to: "/red-teamer", label: "Case Red-Teamer", sub: "Adversarial analysis", icon: ShieldAlert },
+  { to: "/red-teamer", label: "Red-Teamer", sub: "Adversarial analysis", icon: ShieldAlert },
   { to: "/tracker", label: "Statutory Tracker", sub: "Deadline computation", icon: CalendarClock },
 ] as const;
 
@@ -65,6 +70,91 @@ function AnalysisStatus({ status }: { status: Analysis["status"] }) {
     <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${s.cls}`}>
       {s.label}
     </span>
+  );
+}
+
+function AccessRequestsPanel() {
+  const requests = useAccessRequests();
+  const decide = useDecideAccessRequest();
+  const items = requests.data?.requests ?? [];
+
+  return (
+    <section className="panel p-6">
+      <h2 className="flex items-center gap-2 text-lg font-semibold">
+        <ShieldCheck className="size-4 text-gold" /> Access requests
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Named-grant requests on documents (#1.6). Approving writes a real{" "}
+        <span className="font-mono text-xs">document_grants</span> ACL row — a PARTNER/
+        ADMIN may never grant to themselves.
+      </p>
+      {requests.isPending ? (
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading requests&hellip;
+        </div>
+      ) : requests.isError ? (
+        <div className="mt-4 rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
+          Access-request service unavailable right now.
+        </div>
+      ) : items.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
+          No access requests awaiting decision.
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {items.map((r: AccessRequest) => (
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <div className="font-mono text-xs">
+                  {r.grantee_ref} · {r.grant_level}
+                </div>
+                <div className="font-mono text-[10px] text-muted-foreground">
+                  doc {r.document_id.slice(0, 8)} · by {r.requester_ref}
+                </div>
+                {r.reason && (
+                  <div className="mt-1 text-sm text-muted-foreground">{r.reason}</div>
+                )}
+              </div>
+              {r.status === "PENDING" ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={decide.isPending}
+                    onClick={() =>
+                      decide.mutate({ id: r.id, approve: true, grant_level: r.grant_level })
+                    }
+                    className="rounded-md bg-success/15 px-3 py-1.5 text-xs font-semibold text-success transition-all duration-200 hover:bg-success/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-success/50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ id: r.id, approve: false })}
+                    className="rounded-md bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+                  >
+                    Deny
+                  </button>
+                </div>
+              ) : (
+                <span
+                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${
+                    r.status === "APPROVED"
+                      ? "bg-success/15 text-success"
+                      : "bg-destructive/15 text-destructive"
+                  }`}
+                >
+                  {r.status}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -227,6 +317,8 @@ function FirmCommand() {
                 )}
               </section>
             </div>
+
+            <AccessRequestsPanel />
 
             <section className="panel p-6">
               <h2 className="flex items-center gap-2 text-lg font-semibold">

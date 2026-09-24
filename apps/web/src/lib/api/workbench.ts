@@ -5,9 +5,9 @@
 // (owner ruling 2 — no invented fields). The `list` endpoint is the per-user
 // "My Operations" surface (§6.2); `get` fetches the tabbed pack output.
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiGet } from "@/lib/api/client";
+import { apiGet, apiPost } from "@/lib/api/client";
 
 /** §3.1 status values. */
 export type AnalysisStatusValue =
@@ -55,5 +55,29 @@ export function useAnalysis(id: string | null) {
     queryKey: ["analyses", id],
     queryFn: () => getAnalysis(id!),
     enabled: !!id,
+  });
+}
+
+/**
+ * Tool hand-offs = analysis chaining (§1.7). POST /v1/analyses/{id}/chain
+ * creates a child `document_analyses` row on the SAME document with a DIFFERENT
+ * prompt pack, linked by parent_analysis_id — full provenance, no new pipeline
+ * machinery. The backend validates pack != parent pack.
+ */
+export function chainAnalysis(input: {
+  analysis_id: string;
+  prompt_pack: PromptPack;
+}): Promise<{ analysis_id: string }> {
+  return apiPost<{ analysis_id: string }, { prompt_pack: PromptPack }>(
+    `/v1/analyses/${input.analysis_id}/chain`,
+    { prompt_pack: input.prompt_pack },
+  );
+}
+
+export function useChainAnalysis() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: chainAnalysis,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["analyses", "list"] }),
   });
 }

@@ -9,13 +9,24 @@ import {
   ShieldAlert,
   CheckCircle2,
   Clock,
+  GitBranch,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CoachMarks } from "@/components/CoachMarks";
 import type { CoachStep } from "@/components/CoachMarks";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useAnalyses, useAnalysis } from "@/lib/api/workbench";
-import type { Analysis } from "@/lib/api/workbench";
+import { Button } from "@/components/ui/button";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  useAnalyses,
+  useAnalysis,
+  useChainAnalysis,
+} from "@/lib/api/workbench";
+import type { Analysis, PromptPack } from "@/lib/api/workbench";
 import {
   PERSONA_TONES,
   usePersona,
@@ -342,7 +353,10 @@ function AnalysisWorkspace({ id }: { id: string }) {
               Analysis {a.analysis_id.slice(0, 8)}
             </h2>
           </div>
-          <StatusBadge status={a.status} />
+          <div className="flex items-center gap-3">
+            {a.status === "COMPLETE" && <ReanalyzeMenu analysis={a} />}
+            <StatusBadge status={a.status} />
+          </div>
         </div>
         {a.error && <p className="mt-3 text-sm text-destructive">{a.error}</p>}
         {typeof verdict.pass === "boolean" && (
@@ -476,6 +490,62 @@ function OverviewTab({
           </ul>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The non‑current prompt packs, for "Re-analyze with…" (analysis chaining §1.7). */
+const OTHER_PACKS = (current: string): PromptPack[] =>
+  (Object.keys(PACK_LABEL) as PromptPack[]).filter((p) => p !== current);
+
+/** "Re-analyze with…" — chain a child analysis on the SAME document with a
+ *  different pack (full provenance via parent_analysis_id). Only meaningful when the
+ *  source analysis is COMPLETE and at least one other pack exists. */
+function ReanalyzeMenu({ analysis }: { analysis: Analysis }) {
+  const chain = useChainAnalysis();
+  const [pack, setPack] = useState<PromptPack | "">("");
+  const options = OTHER_PACKS(analysis.prompt_pack);
+  if (options.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={pack}
+        onChange={(e) => setPack(e.target.value as PromptPack)}
+        aria-label="Re-analyze with a different tool"
+        className="h-8 rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <option value="">Re-analyze with…</option>
+        {options.map((p) => (
+          <option key={p} value={p}>
+            {PACK_LABEL[p] ?? p}
+          </option>
+        ))}
+      </select>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={!pack || chain.isPending}
+        onClick={() => {
+          if (!pack) return;
+          chain.mutate(
+            { analysis_id: analysis.analysis_id, prompt_pack: pack },
+            {
+              onSuccess: () => setPack(""),
+              onError: () => setPack(""),
+            },
+          );
+        }}
+        className="gap-1.5"
+      >
+        {chain.isPending ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <GitBranch className="size-3" />
+        )}
+        Chain
+      </Button>
     </div>
   );
 }
