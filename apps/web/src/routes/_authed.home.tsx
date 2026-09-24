@@ -190,6 +190,7 @@ function HomeMenu() {
   const upcoming = events
     .filter((event) => event.due_date >= today && event.status !== "DISMISSED")
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const [visible, setVisible] = useState({ inbox: true, today: true, deadlines: true, matters: true });
 
   return (
     <section aria-labelledby="home-inbox-heading" className="space-y-3">
@@ -198,21 +199,32 @@ function HomeMenu() {
           <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-steel">Your working day</p>
           <h2 id="home-inbox-heading" className="mt-1 font-display text-xl font-semibold">Inbox, deadlines &amp; matters</h2>
         </div>
-        <Link to="/tracker" className="hidden text-xs font-medium text-gold transition-colors hover:text-foreground sm:inline">Open tracker <ArrowUpRight className="ml-1 inline size-3.5" /></Link>
+        <div className="flex items-center gap-3">
+          <Link to="/tracker" className="hidden text-xs font-medium text-gold transition-colors hover:text-foreground sm:inline">Open tracker <ArrowUpRight className="ml-1 inline size-3.5" /></Link>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-gold/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50">Customize home</summary>
+            <div className="absolute right-0 z-10 mt-2 w-48 rounded-xl border border-border bg-sidebar p-3 shadow-lg">
+              <p className="mb-2 text-[10px] uppercase tracking-widest text-steel">Show widgets</p>
+              <div className="space-y-2">
+                {([ ["inbox", "Inbox"], ["today", "Today"], ["deadlines", "My deadlines"], ["matters", "My matters"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={visible[key]} onChange={() => setVisible((current) => ({ ...current, [key]: !current[key] }))} className="accent-gold" />{label}</label>)}
+              </div>
+            </div>
+          </details>
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <InboxCard icon={Briefcase} title="Inbox" detail="Assignments and recent work product">
+        {visible.inbox && <InboxCard icon={Briefcase} title="Inbox" detail="Assignments and recent work product">
           {analyses.isPending ? <CardState>Loading recent work…</CardState> : analyses.isError ? <CardState>Recent work is temporarily unavailable.</CardState> : analyses.data?.length ? <CardState>{analyses.data.length} recent analysis{analyses.data.length === 1 ? "" : "es"} available in the Workbench.</CardState> : <CardState>No work product yet. Start from the Workbench.</CardState>}
-        </InboxCard>
-        <InboxCard icon={BookOpenCheck} title="Today" detail="What needs attention today">
+        </InboxCard>}
+        {visible.today && <InboxCard icon={BookOpenCheck} title="Today" detail="What needs attention today">
           {deadlineEvents.isPending ? <CardState>Loading your schedule…</CardState> : dueToday.length ? <EventList events={dueToday} /> : <CardState>No deadlines or hearings due today.</CardState>}
-        </InboxCard>
-        <InboxCard icon={Clock} title="My deadlines" detail="The next statutory dates in your queue">
+        </InboxCard>}
+        {visible.deadlines && <InboxCard icon={Clock} title="My deadlines" detail="The next statutory dates in your queue">
           {deadlineEvents.isPending ? <CardState>Loading upcoming dates…</CardState> : upcoming.length ? <EventList events={upcoming.slice(0, 3)} /> : <CardState>No upcoming deadlines found.</CardState>}
-        </InboxCard>
-        <InboxCard icon={Scale} title="My matters" detail="Open your personal workbench view">
+        </InboxCard>}
+        {visible.matters && <InboxCard icon={Scale} title="My matters" detail="Open your personal workbench view">
           <div className="flex items-center justify-between gap-3"><CardState>Matters are organised from the Workbench.</CardState><Link to="/workbench" className="shrink-0 rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">Open</Link></div>
-        </InboxCard>
+        </InboxCard>}
       </div>
     </section>
   );
