@@ -59,6 +59,7 @@ class ChannelRead(BaseModel):
     name: str
     kind: str
     matter_id: str | None
+    is_archived: bool
     created_at: str
 
 
@@ -120,6 +121,14 @@ async def post_message(
     ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
 ) -> MessageCreated:
     await _resolve_channel(ctx, channel_id)
+    archived = await ctx.db.fetchval(
+        "SELECT m.status IN ('CONCLUDED', 'ARCHIVED') "
+        "FROM channels c JOIN matters m ON m.id = c.matter_id "
+        "WHERE c.id = $1::uuid AND c.kind = 'MATTER'",
+        uuid.UUID(channel_id),
+    )
+    if archived:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Concluded matter channels are read-only.")
 
     # Slash-command surface — time capture where work happens (§9.1): a
     # `/time 30 reviewed affidavit` in a matter channel records a time entry on
@@ -240,8 +249,10 @@ async def list_channels(
 ) -> list[ChannelRead]:
     # RLS can_read_channel filters to participant/FIRM channels only.
     rows = await ctx.db.fetch(
-        "SELECT id, name, kind, matter_id, created_at FROM channels"
-        " ORDER BY created_at"
+        "SELECT c.id, c.name, c.kind, c.matter_id, c.created_at, "
+        "       (c.kind = 'MATTER' AND m.status IN ('CONCLUDED', 'ARCHIVED')) AS is_archived "
+        "FROM channels c LEFT JOIN matters m ON m.id = c.matter_id "
+        "ORDER BY c.created_at"
     )
     return [
         ChannelRead(
@@ -249,6 +260,7 @@ async def list_channels(
             name=r["name"],
             kind=r["kind"],
             matter_id=str(r["matter_id"]) if r["matter_id"] else None,
+            is_archived=bool(r["is_archived"]),
             created_at=r["created_at"].isoformat(),
         )
         for r in rows

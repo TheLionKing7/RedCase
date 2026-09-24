@@ -4,7 +4,7 @@ import { getAccessToken } from "@/lib/auth/supabase";
 
 export type Member = { user_ref: string; full_name: string; role: string | null; clearance: string | null };
 export type Pin = { id: string; resource_type: string; resource_id: string; label: string; created_at: string };
-export type Channel = { id: string; name: string; kind: string; matter_id: string | null; created_at: string };
+export type Channel = { id: string; name: string; kind: string; matter_id: string | null; is_archived: boolean; created_at: string };
 export type Message = { id: string; channel_id: string; sender_ref: string; sender_kind: string; body: string; thread_id: string | null; document_id: string | null; analysis_id: string | null; created_at: string };
 export type AssistantTurn = { id: string; role: "USER" | "ASSISTANT"; content: string; created_at: string };
 export type AssistantThreadDetail = { thread_id: string; title: string; created_at: string; turns: AssistantTurn[]; digest: Record<string, unknown> };
