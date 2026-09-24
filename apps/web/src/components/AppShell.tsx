@@ -1,14 +1,16 @@
 ﻿import { Link } from "@tanstack/react-router";
 import { Home, Search, ShieldAlert, CalendarClock, Circle, Landmark } from "lucide-react";
 import type { ReactNode } from "react";
+import { getClearance } from "@/lib/auth/supabase";
 import { getFirmAdmin } from "@/lib/auth/supabase";
+import { useMembership } from "@/lib/api/members";
 
 const NAV = [
   { to: "/home", label: "Home", sub: "Workbench landing", icon: Home },
   { to: "/search", label: "Vault Search", sub: "Dual-Vault Engine", icon: Search },
   {
     to: "/red-teamer",
-    label: "Case Red-Teamer",
+    label: "Red-Teamer",
     sub: "Adversarial analysis",
     icon: ShieldAlert,
   },
@@ -39,6 +41,7 @@ export function AppShell({
 }) {
   const firmAdmin = getFirmAdmin();
   const visibleNav = NAV.filter((item) => !("adminOnly" in item) || firmAdmin);
+  const headerIdentity = useHeaderIdentity();
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
@@ -117,9 +120,7 @@ export function AppShell({
               <span className="rounded-full border border-gold/40 px-3 py-1 font-mono text-gold">
                 CONFIDENTIAL · PRIVILEGED
               </span>
-              <span className="hidden sm:inline">
-                Tosin Adebayo · Managing Partner
-              </span>
+              <span className="hidden sm:inline">{headerIdentity}</span>
             </div>
           </div>
           <nav className="mt-4 flex gap-2 lg:hidden">
@@ -140,5 +141,18 @@ export function AppShell({
       </div>
     </div>
   );
+}
+
+/**
+ * Header identity — the user's REAL personnel name + role from /v1/members/me.
+ * Falls back to clearance when the register has no row yet (pre-provisioning), so the
+ * header never renders a hardcoded name.
+ */
+function useHeaderIdentity(): string {
+  const { data } = useMembership();
+  if (data?.full_name) {
+    return data.role ? `${data.full_name} · ${data.role}` : data.full_name;
+  }
+  return getClearance();
 }
 

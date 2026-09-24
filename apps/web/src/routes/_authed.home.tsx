@@ -1,32 +1,33 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  Search,
-  ShieldAlert,
-  CalendarClock,
   ArrowUpRight,
   Briefcase,
   Scale,
+  Clock,
+  BookOpenCheck,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CoachMarks } from "@/components/CoachMarks";
 import { getClearance } from "@/lib/auth/supabase";
+import { useMembership } from "@/lib/api/members";
 import { useAnalyses } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
 
-// Part 3 Slice 2 — role landing by clearance.
+// Part 3 Slice 2 — role landing by clearance, reworked for IA §2 (2026-09-23).
 //
-// The `_authed` pathless layout owns every authenticated surface; this is its home
-// route (POST-login landing).
+// Home is a calm, uncluttered practitioner landing. The eyebrow shows the user's REAL
+// personnel identity from the firm register (members/me) — "Tosin Adebayo · Aetoes
+// Legal" — never a hardcoded "ANON" or a bare clearance swing. That identity is the
+// human's name, deliberately SEPARATE from the agent persona (unless the user authors it).
 //
-// §8.5 (audit H3): admin capability is an ORTHOGONAL, grantable flag (JWT
-// `app_metadata.is_firm_admin`), NOT derived from clearance. So home dispatches
-// EVERYONE to the practitioner workbench compose; the run-the-firm surface lives on
-// its own admin-gated route (`/firm-command`) and is surfaced to admins only via the
-// AppShell nav.
+// §8.5: admin capability is an ORTHOGONAL, grantable flag (`is_firm_admin`), so
+// home is the practitioner landing for EVERYONE. The Workbench hero card preserves the
+// shortcut into the workbench; beneath it sits the Home menu (design doc §2: inbox,
+// today's schedule, my deadlines, quick time-capture).
 //
-// This compose uses EXISTING typed clients only (analyses) plus quick links into the
-// other authenticated pages — no new endpoint is invented here.
+// This compose uses EXISTING typed clients only (analyses + members) plus links into the
+// other authenticated pages — no invented endpoint.
 
 export const Route = createFileRoute("/_authed/home")({
   head: () => ({
@@ -42,15 +43,9 @@ export const Route = createFileRoute("/_authed/home")({
   component: AuthenticatedHome,
 });
 
-const GLANCE_LINKS = [
-  { to: "/search", label: "Vault Search", sub: "Dual-vault retrieval", icon: Search },
-  { to: "/red-teamer", label: "Case Red-Teamer", sub: "Adversarial analysis", icon: ShieldAlert },
-  { to: "/tracker", label: "Statutory Tracker", sub: "Deadline computation", icon: CalendarClock },
-  { to: "/workbench", label: "Legal Workbench", sub: "Arguments · law · cases", icon: Briefcase },
-] as const;
-
 function AuthenticatedHome() {
   const clearance = getClearance();
+  const membership = useMembership();
   return (
     <>
       <CoachMarks
@@ -66,15 +61,15 @@ function AuthenticatedHome() {
             body: "Keep an eye on overdue and upcoming statutory deadlines so nothing slips. Missed dates surface here so they can't hide.",
           },
           {
-            title: "Jump straight to work",
-            body: "Open Vault Search, the Workbench, the Red-Teamer or the Tracker from here.",
+            title: "Jump to a tool",
+            body: "Open the Workbench, Red-Teamer, or Vault Search from right here.",
           },
         ]}
       />
-      {/* §8.5: admin capability is orthagonal to clearance, so home is now the
-          practitioner landing for EVERYONE. The run-the-firm surface moved to its own
-          admin-gated route (/firm-command). */}
-      <PractitionerLanding clearance={clearance} />
+      <PractitionerLanding
+        clearance={clearance}
+        member={membership.data ?? null}
+      />
     </>
   );
 }
@@ -109,8 +104,18 @@ const PACK_LABEL: Record<string, string> = {
   RED_TEAM: "Red-teamer",
 };
 
-function PractitionerLanding({ clearance }: { clearance: string }) {
+function PractitionerLanding({
+  clearance,
+  member,
+}: {
+  clearance: string;
+  member: { full_name: string; firm_name: string; role: string | null } | null;
+}) {
   const analyses = useAnalyses();
+
+  const identity = member
+    ? `${member.full_name} · ${member.firm_name}`
+    : `${clearance} · redcase`;
 
   const myRecent = useMemo(() => {
     const items = analyses.data ?? [];
@@ -118,13 +123,16 @@ function PractitionerLanding({ clearance }: { clearance: string }) {
   }, [analyses.data]);
 
   return (
-    <AppShell eyebrow="Legal Workbench" title={`Welcome, ${clearance}`}>
+    <AppShell
+      eyebrow={identity}
+      title={`Welcome, ${member?.full_name ?? clearance}`}
+    >
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="panel glow-gold p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
-                {clearance} · redcase
+                {identity}
               </div>
               <h2 className="mt-1 text-2xl font-semibold">
                 Workbench — your matters, your authority
@@ -170,33 +178,111 @@ function PractitionerLanding({ clearance }: { clearance: string }) {
             </section>
           ))}
 
-        <QuickLinks title="Jump to a tool" />
+        <HomeMenu />
       </div>
     </AppShell>
   );
 }
 
-function QuickLinks({ title }: { title: string }) {
+/**
+ * The practitioner's home menu — four quiet shortcuts under the hero. No header label:
+ * the user knows they're on Home. Each card is a jump into a real surface; the design
+ * document's Home = Inbox (assignments · today's schedule · my deadlines · quick
+ * time-capture) maps onto these four.
+ */
+function HomeMenu() {
   return (
-    <section>
-      <h2 className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-        {title}
-      </h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {GLANCE_LINKS.map(({ to, label, sub, icon: Icon }) => (
-          <Link
-            key={to}
-            to={to}
-            className="group flex items-start gap-3 rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
-          >
-            <Icon className="mt-0.5 size-4 shrink-0 text-steel transition-colors group-hover:text-gold" />
-            <span>
-              <span className="block text-sm font-medium">{label}</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">{sub}</span>
-            </span>
-          </Link>
-        ))}
+    <div className="grid gap-3 sm:grid-cols-2">
+      {/* Time logger — Clock-in / Clock-out. Attendance is Phase 4, so this is a
+          quick in-place capture affordance (local state), not a billing entry. */}
+      <TimeLogger />
+
+      {/* Partner's Locker / Inbox — my purview, a filtered view over the firm vault. */}
+      <MenuLink
+        to="/workbench"
+        icon={Briefcase}
+        label="Partner's Locker"
+        sub="Inbox · assignments routed to me"
+      />
+
+      {/* Scheduler — day-to-day activities, meetings, court-sittings, events. Builds on
+          the deadline engine; until then Tracker shows the pending-validation state. */}
+      <MenuLink
+        to="/tracker"
+        icon={BookOpenCheck}
+        label="Scheduler"
+        sub="Meetings · court-sittings · events"
+      />
+
+      {/* My matters / My deadlines — personal workload surfaces. */}
+      <MenuLink
+        to="/workbench"
+        icon={Scale}
+        label="My matters / My deadlines"
+        sub="Personal workload · send to workbench"
+      />
+    </div>
+  );
+}
+
+function MenuLink({
+  to,
+  icon: Icon,
+  label,
+  sub,
+}: {
+  to: string;
+  icon: typeof Scale;
+  label: string;
+  sub: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-center gap-4 rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+        <Icon className="size-5" />
       </div>
-    </section>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{sub}</span>
+      </span>
+    </Link>
+  );
+}
+
+function TimeLogger() {
+  const [clockedIn, setClockedIn] = useState(false);
+  const toggle = () => setClockedIn((v) => !v);
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md">
+      <div className="flex items-center gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+          <Clock className="size-5" />
+        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">Time logger</span>
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+            {clockedIn ? "Clocked in — tap Clock-out when done" : "Attendance capture"}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={toggle}
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
+            clockedIn
+              ? "bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
+              : "bg-gold text-background hover:bg-gold/90"
+          }`}
+        >
+          {clockedIn ? "Clock-out" : "Clock-in"}
+        </button>
+      </div>
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Attendance (Phase 4) — this is a capture affordance, kept separate from billable
+        time entries per design correction §1.2.
+      </p>
+    </div>
   );
 }

@@ -20,13 +20,13 @@ import type { BattleCard, BattleSeverity } from "@/lib/api/redteam";
 export const Route = createFileRoute("/_authed/red-teamer")({
   head: () => ({
     meta: [
-      { title: "Case Red-Teamer — RedCase" },
+      { title: "Red-Teamer — RedCase" },
       {
         name: "description",
         content:
           "Upload an opposing party's brief and generate a Battle Card of procedural flaws, argument strength ratings and binding counter-precedents.",
       },
-      { property: "og:title", content: "Case Red-Teamer — RedCase" },
+      { property: "og:title", content: "Red-Teamer — RedCase" },
       {
         property: "og:description",
         content:
@@ -86,7 +86,7 @@ function RedTeamer() {
   }
 
   return (
-    <AppShell eyebrow="Adversarial Analysis" title="Case Red-Teamer">
+    <AppShell eyebrow="Adversarial Analysis" title="Red-Teamer">
       <div className="mx-auto max-w-6xl space-y-6">
         <div
           onDragOver={(e) => {
