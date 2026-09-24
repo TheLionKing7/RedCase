@@ -20,6 +20,27 @@ from app.deps import TenantContext, get_tenant_context
 router = APIRouter(prefix="/v1", tags=["members"])
 
 
+@router.get("/members")
+async def list_members(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> list[dict]:
+    """Return the caller-visible firm directory without crossing tenant boundaries."""
+    rows = await ctx.db.fetch(
+        "SELECT user_ref, full_name, role, clearance"
+        " FROM firm_members WHERE tenant_id = $1::uuid ORDER BY full_name, user_ref",
+        uuid.UUID(ctx.tenant_id),
+    )
+    return [
+        {
+            "user_ref": row["user_ref"],
+            "full_name": row["full_name"],
+            "role": row["role"],
+            "clearance": row["clearance"],
+        }
+        for row in rows
+    ]
+
+
 @router.get("/members/me")
 async def my_membership(
     ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008

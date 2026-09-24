@@ -19,11 +19,14 @@ export const useThread = (id: string) => useQuery({ queryKey: ["assistant-thread
 export async function sendAssistantMessage(id: string, message: string): Promise<string> {
   const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:8000"}/v1/assistant/threads/${id}/messages`, { method: "POST", headers: { "content-type": "application/json", ...(getAccessToken() ? { authorization: `Bearer ${getAccessToken()}` } : {}) }, body: JSON.stringify({ message }) });
   if (!response.ok || !response.body) throw new Error("Unable to send assistant message");
-  const reader = response.body.getReader(); const decoder = new TextDecoder(); let result = "";
-  while (true) { const next = await reader.read(); if (next.done) break; for (const line of decoder.decode(next.value).split("\n")) { if (!line.startsWith("data: ")) continue; try { const event = JSON.parse(line.slice(6)) as { event?: string; content?: string }; if (event.event === "assistant_reply") result = event.content ?? ""; } catch { /* incomplete SSE frame */ } } }
+  const reader = response.body.getReader(); const decoder = new TextDecoder(); let result = ""; let buffer = "";
+  const consume = (frame: string) => { const line = frame.split("\\n").find((entry) => entry.startsWith("data: ")); if (!line) return; try { const event = JSON.parse(line.slice(6)) as { event?: string; content?: string }; if (event.event === "assistant_reply") result = event.content ?? ""; } catch { /* ignore malformed SSE frames */ } };
+  while (true) { const next = await reader.read(); buffer += decoder.decode(next.value ?? new Uint8Array(), { stream: !next.done }); let boundary = buffer.indexOf("\\n\\n"); while (boundary >= 0) { consume(buffer.slice(0, boundary)); buffer = buffer.slice(boundary + 2); boundary = buffer.indexOf("\\n\\n"); } if (next.done) break; }
+  if (buffer.trim()) consume(buffer);
   return result;
 }
 export function useCreatePin() { const qc = useQueryClient(); return useMutation({ mutationFn: (body: { resource_type: string; resource_id: string; label: string }) => apiPost<Pin, typeof body>("/v1/pins", body), onSuccess: () => qc.invalidateQueries({ queryKey: ["pins"] }) }); }
 export function useDeletePin() { const qc = useQueryClient(); return useMutation({ mutationFn: (id: string) => apiDelete(`/v1/pins/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["pins"] }) }); }
 export function useSendMessage(channelId: string) { const qc = useQueryClient(); return useMutation({ mutationFn: (body: { body: string }) => apiPost(`/v1/channels/${channelId}/messages`, body), onSuccess: () => qc.invalidateQueries({ queryKey: ["messages", channelId] }) }); }
+export function useCreateDirectChannel() { const qc = useQueryClient(); return useMutation({ mutationFn: (other_user_ref: string) => apiPost<{ id: string; kind: string }, { kind: "DIRECT"; other_user_ref: string }>("/v1/channels", { kind: "DIRECT", other_user_ref }), onSuccess: () => qc.invalidateQueries({ queryKey: ["channels"] }) }); }
 export function useCreateThread() { const qc = useQueryClient(); return useMutation({ mutationFn: (title: string) => apiPost<{ thread_id: string }, { title: string }>("/v1/assistant/threads", { title }), onSuccess: () => qc.invalidateQueries({ queryKey: ["assistant-threads"] }) }); }

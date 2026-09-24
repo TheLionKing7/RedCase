@@ -35,11 +35,10 @@ async def create_pin(body: PinCreate, ctx: TenantContext = Depends(get_tenant_co
 
 @router.delete("/pins/{pin_id}", status_code=204)
 async def delete_pin(pin_id: str, ctx: TenantContext = Depends(get_tenant_context)) -> None:
-    result = await ctx.db.execute("DELETE FROM user_pins WHERE id = $1::uuid", pin_id)
-    if result.endswith("0"):
+    try:
+        parsed_id = uuid.UUID(pin_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="pin_id must be a UUID") from exc
+    result = await ctx.db.execute("DELETE FROM user_pins WHERE id = $1", parsed_id)
+    if result != "DELETE 1":
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="pin not found")
-
-@router.get("/members")
-async def list_members(ctx: TenantContext = Depends(get_tenant_context)) -> list[dict]:
-    rows = await ctx.db.fetch("SELECT user_ref, full_name, role, clearance FROM firm_members WHERE tenant_id = $1::uuid ORDER BY full_name", uuid.UUID(ctx.tenant_id))
-    return [{"user_ref": r["user_ref"], "full_name": r["full_name"], "role": r["role"], "clearance": r["clearance"]} for r in rows]

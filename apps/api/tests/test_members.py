@@ -77,6 +77,19 @@ async def _members(app_db_url: str, full_name: str, tenant: str, user_ref: str):
         await conn.close()
 
 
+class TestDirectory:
+    def test_directory_is_tenant_scoped_and_sorted(self, app_db_url):
+        asyncio.run(_members(app_db_url, "Zara B", SEED_TENANT_AETOES, "directory-zara"))
+        asyncio.run(_members(app_db_url, "Amina A", SEED_TENANT_AETOES, "directory-amina"))
+        asyncio.run(_members(app_db_url, "Other Firm", TENANT_B, "directory-other"))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            response = client.get("/v1/members", headers=_auth(sub="directory-amina"))
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert [member["full_name"] for member in body] == ["Amina A", "Tosin Adebayo", "Zara B"]
+        assert all(member["full_name"] != "Other Firm" for member in body)
+
+
 class TestMyMembership:
     def test_return_personnel_identity_and_firm_name(self, app_db_url):
         # The managing partner is seeded in migration 0024 for tenant zero.
