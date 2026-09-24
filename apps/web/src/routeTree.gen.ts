@@ -14,12 +14,18 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as AuthedChannelsRouteImport } from './routes/_authed.channels'
+import { Route as AuthedChatsRouteImport } from './routes/_authed.chats'
+import { Route as AuthedContactsRouteImport } from './routes/_authed.contacts'
 import { Route as AuthedFirmCommandRouteImport } from './routes/_authed.firm-command'
 import { Route as AuthedHomeRouteImport } from './routes/_authed.home'
+import { Route as AuthedPinsRouteImport } from './routes/_authed.pins'
 import { Route as AuthedRedTeamerRouteImport } from './routes/_authed.red-teamer'
 import { Route as AuthedSearchRouteImport } from './routes/_authed.search'
+import { Route as AuthedThreadsRouteImport } from './routes/_authed.threads'
 import { Route as AuthedTrackerRouteImport } from './routes/_authed.tracker'
 import { Route as AuthedWorkbenchRouteImport } from './routes/_authed.workbench'
+import { Route as AuthedThreadsThreadIdRouteImport } from './routes/_authed.threads.$threadId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -45,6 +51,21 @@ const SigninRoute = SigninRouteImport.update({
   path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedChannelsRoute = AuthedChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedChatsRoute = AuthedChatsRouteImport.update({
+  id: '/chats',
+  path: '/chats',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedContactsRoute = AuthedContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedFirmCommandRoute = AuthedFirmCommandRouteImport.update({
   id: '/firm-command',
   path: '/firm-command',
@@ -53,6 +74,11 @@ const AuthedFirmCommandRoute = AuthedFirmCommandRouteImport.update({
 const AuthedHomeRoute = AuthedHomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedPinsRoute = AuthedPinsRouteImport.update({
+  id: '/pins',
+  path: '/pins',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedRedTeamerRoute = AuthedRedTeamerRouteImport.update({
@@ -65,6 +91,11 @@ const AuthedSearchRoute = AuthedSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedThreadsRoute = AuthedThreadsRouteImport.update({
+  id: '/threads',
+  path: '/threads',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedTrackerRoute = AuthedTrackerRouteImport.update({
   id: '/tracker',
   path: '/tracker',
@@ -75,30 +106,47 @@ const AuthedWorkbenchRoute = AuthedWorkbenchRouteImport.update({
   path: '/workbench',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedThreadsThreadIdRoute = AuthedThreadsThreadIdRouteImport.update({
+  id: '/$threadId',
+  path: '/$threadId',
+  getParentRoute: () => AuthedThreadsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
+  '/channels': typeof AuthedChannelsRoute
+  '/chats': typeof AuthedChatsRoute
+  '/contacts': typeof AuthedContactsRoute
   '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
+  '/pins': typeof AuthedPinsRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
+  '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
   '/workbench': typeof AuthedWorkbenchRoute
+  '/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
+  '/channels': typeof AuthedChannelsRoute
+  '/chats': typeof AuthedChatsRoute
+  '/contacts': typeof AuthedContactsRoute
   '/firm-command': typeof AuthedFirmCommandRoute
   '/home': typeof AuthedHomeRoute
+  '/pins': typeof AuthedPinsRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
+  '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
   '/workbench': typeof AuthedWorkbenchRoute
+  '/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,12 +155,18 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
+  '/_authed/channels': typeof AuthedChannelsRoute
+  '/_authed/chats': typeof AuthedChatsRoute
+  '/_authed/contacts': typeof AuthedContactsRoute
   '/_authed/firm-command': typeof AuthedFirmCommandRoute
   '/_authed/home': typeof AuthedHomeRoute
+  '/_authed/pins': typeof AuthedPinsRoute
   '/_authed/red-teamer': typeof AuthedRedTeamerRoute
   '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/threads': typeof AuthedThreadsRouteWithChildren
   '/_authed/tracker': typeof AuthedTrackerRoute
   '/_authed/workbench': typeof AuthedWorkbenchRoute
+  '/_authed/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,24 +175,36 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/onboarding'
     | '/signin'
+    | '/channels'
+    | '/chats'
+    | '/contacts'
     | '/firm-command'
     | '/home'
+    | '/pins'
     | '/red-teamer'
     | '/search'
+    | '/threads'
     | '/tracker'
     | '/workbench'
+    | '/threads/$threadId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/accept-invite'
     | '/onboarding'
     | '/signin'
+    | '/channels'
+    | '/chats'
+    | '/contacts'
     | '/firm-command'
     | '/home'
+    | '/pins'
     | '/red-teamer'
     | '/search'
+    | '/threads'
     | '/tracker'
     | '/workbench'
+    | '/threads/$threadId'
   id:
     | '__root__'
     | '/'
@@ -146,12 +212,18 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/onboarding'
     | '/signin'
+    | '/_authed/channels'
+    | '/_authed/chats'
+    | '/_authed/contacts'
     | '/_authed/firm-command'
     | '/_authed/home'
+    | '/_authed/pins'
     | '/_authed/red-teamer'
     | '/_authed/search'
+    | '/_authed/threads'
     | '/_authed/tracker'
     | '/_authed/workbench'
+    | '/_authed/threads/$threadId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -199,6 +271,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/channels': {
+      id: '/_authed/channels'
+      path: '/channels'
+      fullPath: '/channels'
+      preLoaderRoute: typeof AuthedChannelsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/chats': {
+      id: '/_authed/chats'
+      path: '/chats'
+      fullPath: '/chats'
+      preLoaderRoute: typeof AuthedChatsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/contacts': {
+      id: '/_authed/contacts'
+      path: '/contacts'
+      fullPath: '/contacts'
+      preLoaderRoute: typeof AuthedContactsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/firm-command': {
       id: '/_authed/firm-command'
       path: '/firm-command'
@@ -211,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/home'
       fullPath: '/home'
       preLoaderRoute: typeof AuthedHomeRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/pins': {
+      id: '/_authed/pins'
+      path: '/pins'
+      fullPath: '/pins'
+      preLoaderRoute: typeof AuthedPinsRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/red-teamer': {
@@ -227,6 +327,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSearchRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/threads': {
+      id: '/_authed/threads'
+      path: '/threads'
+      fullPath: '/threads'
+      preLoaderRoute: typeof AuthedThreadsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/tracker': {
       id: '/_authed/tracker'
       path: '/tracker'
@@ -241,23 +348,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedWorkbenchRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/threads/$threadId': {
+      id: '/_authed/threads/$threadId'
+      path: '/$threadId'
+      fullPath: '/threads/$threadId'
+      preLoaderRoute: typeof AuthedThreadsThreadIdRouteImport
+      parentRoute: typeof AuthedThreadsRoute
+    }
   }
 }
 
+interface AuthedThreadsRouteChildren {
+  AuthedThreadsThreadIdRoute: typeof AuthedThreadsThreadIdRoute
+}
+
+const AuthedThreadsRouteChildren: AuthedThreadsRouteChildren = {
+  AuthedThreadsThreadIdRoute: AuthedThreadsThreadIdRoute,
+}
+
+const AuthedThreadsRouteWithChildren = AuthedThreadsRoute._addFileChildren(
+  AuthedThreadsRouteChildren,
+)
+
 interface AuthedRouteChildren {
+  AuthedChannelsRoute: typeof AuthedChannelsRoute
+  AuthedChatsRoute: typeof AuthedChatsRoute
+  AuthedContactsRoute: typeof AuthedContactsRoute
   AuthedFirmCommandRoute: typeof AuthedFirmCommandRoute
   AuthedHomeRoute: typeof AuthedHomeRoute
+  AuthedPinsRoute: typeof AuthedPinsRoute
   AuthedRedTeamerRoute: typeof AuthedRedTeamerRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedThreadsRoute: typeof AuthedThreadsRouteWithChildren
   AuthedTrackerRoute: typeof AuthedTrackerRoute
   AuthedWorkbenchRoute: typeof AuthedWorkbenchRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedChannelsRoute: AuthedChannelsRoute,
+  AuthedChatsRoute: AuthedChatsRoute,
+  AuthedContactsRoute: AuthedContactsRoute,
   AuthedFirmCommandRoute: AuthedFirmCommandRoute,
   AuthedHomeRoute: AuthedHomeRoute,
+  AuthedPinsRoute: AuthedPinsRoute,
   AuthedRedTeamerRoute: AuthedRedTeamerRoute,
   AuthedSearchRoute: AuthedSearchRoute,
+  AuthedThreadsRoute: AuthedThreadsRouteWithChildren,
   AuthedTrackerRoute: AuthedTrackerRoute,
   AuthedWorkbenchRoute: AuthedWorkbenchRoute,
 }
