@@ -1,9 +1,8 @@
 ﻿import { Link } from "@tanstack/react-router";
 import { Home, Search, ShieldAlert, CalendarClock, Circle, Landmark } from "lucide-react";
 import type { ReactNode } from "react";
-import { getClearance } from "@/lib/auth/supabase";
 import { getFirmAdmin } from "@/lib/auth/supabase";
-import { useMembership } from "@/lib/api/members";
+import { useIdentity } from "@/lib/identity";
 
 const NAV = [
   { to: "/home", label: "Home", sub: "Workbench landing", icon: Home },
@@ -41,7 +40,7 @@ export function AppShell({
 }) {
   const firmAdmin = getFirmAdmin();
   const visibleNav = NAV.filter((item) => !("adminOnly" in item) || firmAdmin);
-  const headerIdentity = useHeaderIdentity();
+  const identity = useIdentity();
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
@@ -107,7 +106,7 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 border-b border-border bg-background/80 px-6 py-5 backdrop-blur-xl lg:px-10">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
                 {eyebrow}
@@ -117,10 +116,16 @@ export function AppShell({
               </h1>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="rounded-full border border-gold/40 px-3 py-1 font-mono text-gold">
+              <span className="hidden rounded-full border border-gold/40 px-3 py-1 font-mono text-gold sm:inline">
                 CONFIDENTIAL · PRIVILEGED
               </span>
-              <span className="hidden sm:inline">{headerIdentity}</span>
+              {/* Top-right identity chip — real name (never "ANON"). */}
+              <span className="flex items-center gap-2 rounded-full border border-border/70 bg-sidebar px-2.5 py-1">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gold/20 text-[9px] font-bold text-gold">
+                  {identity.name.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="font-medium text-foreground">{identity.name}</span>
+              </span>
             </div>
           </div>
           <nav className="mt-4 flex gap-2 lg:hidden">
@@ -141,18 +146,5 @@ export function AppShell({
       </div>
     </div>
   );
-}
-
-/**
- * Header identity — the user's REAL personnel name + role from /v1/members/me.
- * Falls back to clearance when the register has no row yet (pre-provisioning), so the
- * header never renders a hardcoded name.
- */
-function useHeaderIdentity(): string {
-  const { data } = useMembership();
-  if (data?.full_name) {
-    return data.role ? `${data.full_name} · ${data.role}` : data.full_name;
-  }
-  return getClearance();
 }
 

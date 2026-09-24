@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CoachMarks } from "@/components/CoachMarks";
-import { getClearance } from "@/lib/auth/supabase";
-import { useMembership } from "@/lib/api/members";
+import { useIdentity } from "@/lib/identity";
 import { useAnalyses } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
 
@@ -44,8 +43,6 @@ export const Route = createFileRoute("/_authed/home")({
 });
 
 function AuthenticatedHome() {
-  const clearance = getClearance();
-  const membership = useMembership();
   return (
     <>
       <CoachMarks
@@ -66,10 +63,7 @@ function AuthenticatedHome() {
           },
         ]}
       />
-      <PractitionerLanding
-        clearance={clearance}
-        member={membership.data ?? null}
-      />
+      <PractitionerLanding />
     </>
   );
 }
@@ -104,18 +98,14 @@ const PACK_LABEL: Record<string, string> = {
   RED_TEAM: "Red-teamer",
 };
 
-function PractitionerLanding({
-  clearance,
-  member,
-}: {
-  clearance: string;
-  member: { full_name: string; firm_name: string; role: string | null } | null;
-}) {
+function PractitionerLanding() {
   const analyses = useAnalyses();
+  const identity = useIdentity();
 
-  const identity = member
-    ? `${member.full_name} · ${member.firm_name}`
-    : `${clearance} · redcase`;
+  const eyebrow =
+    identity.role && identity.firmName
+      ? `${identity.name} · ${identity.role} · ${identity.firmName}`
+      : identity.eyebrow;
 
   const myRecent = useMemo(() => {
     const items = analyses.data ?? [];
@@ -124,15 +114,15 @@ function PractitionerLanding({
 
   return (
     <AppShell
-      eyebrow={identity}
-      title={`Welcome, ${member?.full_name ?? clearance}`}
+      eyebrow={eyebrow}
+      title={`Welcome, ${identity.name}`}
     >
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="panel glow-gold p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
-                {identity}
+                {eyebrow}
               </div>
               <h2 className="mt-1 text-2xl font-semibold">
                 Workbench — your matters, your authority

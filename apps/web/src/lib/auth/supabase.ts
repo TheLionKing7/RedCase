@@ -197,6 +197,25 @@ export function getAccessToken(): string | null {
   return getSession()?.access_token ?? null;
 }
 
+/**
+ * The sign-in email from the current session's JWT `email` claim (Supabase sets it
+ * on the token). Used as the identity fallback chain's "email local-part" source —
+ * never the string "ANON" (Shell-UX-Spec §0). Returns null when there is no
+ * session or no email claim (e.g. dev-adapter mode).
+ */
+export function getSignInEmail(): string | null {
+  const token = getAccessToken();
+  if (!token) return null;
+  try {
+    const payloadB64 = token.split(".")[1] ?? "";
+    const pad = "=".repeat(-payloadB64.length % 4);
+    const payload = JSON.parse(atob(payloadB64)) as { email?: string };
+    return typeof payload.email === "string" && payload.email ? payload.email : null;
+  } catch {
+    return null;
+  }
+}
+
 export function signOut(): void {
   if (typeof window !== "undefined")
     window.localStorage.removeItem(STORAGE_KEY);

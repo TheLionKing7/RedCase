@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { apiGet } from "@/lib/api/client";
+import { getMembershipDev } from "@/lib/api/dev/members";
 
 /** Wire mirror of GET /v1/members/me. */
 export interface Membership {
@@ -18,7 +19,15 @@ export interface Membership {
   firm_name: string;
 }
 
+/**
+ * Personnel identity — GET /v1/members/me. Falls back to the schema-exact dev
+ * adapter (demo persona) when VITE_API_DEV_ADAPTER=1 so the chrome shows a real
+ * name in development, mirroring the accept-invite adapter pattern.
+ */
 export function getMembership(): Promise<Membership> {
+  if (import.meta.env.VITE_API_DEV_ADAPTER === "1") {
+    return getMembershipDev();
+  }
   return apiGet<Membership>("/v1/members/me");
 }
 
