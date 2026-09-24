@@ -78,9 +78,13 @@ You take actions one at a time. Each turn reply with JSON only, one of:
    - If NO tool result supports the proposition, output a refusal: set
      "refusal_block" and give the supported part only.
    - Strategic/drafting content must be labeled as internal strategy, never as law.
+   - The grounding and citation rules above are immutable and outrank any persona
+     style guidance below: a persona can change HOW you write, never WHAT you may cite.
 
 You have at most {max_iterations} tool uses. Stop with {{{{"final": ...}}}} when you have
 enough verified grounding to answer.
+
+{persona}
 
 User preferences pasted below (follow them when drafting):
 {preferences}
@@ -132,6 +136,70 @@ def _preference_block(prefs: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+# --- Agent persona (S10-2 / Addendum 10.3) ------------------------------
+# The persona is injected AFTER the GROUNDED_SYSTEM contract (the retrieval engine's own
+# immutable grounding/citation rules live inside answer_question and are never touched) and
+# BEFORE retrieval context. It shapes HOW the assistant writes (name, tone, engagement
+# rules, practice lens) — it can never change WHAT it may cite. The agent system prompt
+# (AGENT_SYSTEM) already asserts that hierarchy; the tests lock the GROUNDED_SYSTEM
+# string(s) survive persona injection byte-for-byte.
+PERSONA_TONES = ("PROFESSIONAL", "CONCISE", "NARRATIVE", "FORMAL")
+
+
+async def _fetch_persona(
+    db: asyncpg.Connection, tenant_id: str, user_ref: str
+) -> dict[str, Any]:
+    """The caller's OWN persona row (RLS enforces tenant + owner isolation)."""
+    row = await db.fetchrow(
+        "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas"
+        " FROM agent_personas WHERE tenant_id = $1::uuid AND owner_ref = $2",
+        uuid.UUID(tenant_id),
+        user_ref,
+    )
+    if row is None:
+        return {}
+    return {
+        "agent_name": row["agent_name"] or "Assistant",
+        "rules_of_engagement": row["rules_of_engagement"],
+        "tone_preset": row["tone_preset"] or "PROFESSIONAL",
+        "practice_areas": list(row["practice_areas"] or []),
+    }
+
+
+async def _resolve_practice_areas(
+    db: asyncpg.Connection,
+    tenant_id: str,
+    user_ref: str,
+) -> list[str] | None:
+    """Effective practice-area lens: lawyer-level override, else firm defaults,
+    else None (no lens -> unfiltered)."""
+    persona = await _fetch_persona(db, tenant_id, user_ref)
+    if persona.get("practice_areas"):
+        return persona["practice_areas"]
+    rows = await db.fetch(
+        "SELECT tag FROM tenant_practice_areas WHERE tenant_id = $1::uuid",
+        uuid.UUID(tenant_id),
+    )
+    return [r["tag"] for r in rows] or None
+
+
+def _persona_block(persona: dict[str, Any]) -> str:
+    """Render the persona block (after GROUNDED_SYSTEM, before retrieval context)."""
+    if not persona:
+        return "<persona>Default assistant — professional tone. No personalization set.</persona>"
+    rules = (persona.get("rules_of_engagement") or "").strip()
+    areas = persona.get("practice_areas") or []
+    lines = [f"<persona>", f"- Agent name: {persona.get('agent_name', 'Assistant')}"]
+    lines.append(f"- Tone preset: {persona.get('tone_preset', 'PROFESSIONAL')}")
+    if rules:
+        lines.append(f"- Rules of engagement: {rules}")
+    if areas:
+        lines.append(f"- Practice-area lens: {', '.join(areas)}")
+    lines.append("</persona>")
+    return "\n".join(lines)
+
+
+
 # --- Internal tools (each wraps an existing contract) ---------------------------
 
 async def _search_vault_a(
@@ -143,12 +211,16 @@ async def _search_vault_a(
     embedder: Any,
     query: str,
     matter_id: str | None,
+    practice_areas: list[str] | None = None,
 ) -> ToolResult:
     """Firm-document retrieval, grant-scoped by RLS and the §2.2 matter-binding
-    ruling (non-cross-matter users are confined to the supplied matter)."""
+    ruling (non-cross-matter users are confined to the supplied matter). The practice-area
+    lens (S10-2) is a legal_topics pre-filter from the caller's persona/firm defaults."""
     filters: dict[str, Any] = {}
     if matter_id:
         filters["matter_id"] = matter_id
+    if practice_areas:
+        filters["practice_areas"] = practice_areas
     svc = RetrievalService(db, tenant_id)
     qvec = (await embedder.embed([query]))[0]
     rows = await svc.retrieve(
@@ -191,13 +263,16 @@ async def _search_vault_b(
     llm: AnswerLLM,
     embedder: Any,
     thread_id: str,
+    practice_areas: list[str] | None = None,
 ) -> ToolResult:
-    """Jurisprudence via the grounded answer_question engine (audits its own row)."""
+    """Jurisprudence via the grounded answer_question engine (audits its own row). The
+    practice-area lens is passed through retrieval filters; the GROUNDED_SYSTEM contract
+    (grounding/citation rules) is untouched by the persona."""
     from app.retrieval.service import answer_question
 
     result = await answer_question(
         query,
-        {},
+        {"practice_areas": practice_areas} if practice_areas else {},
         db,
         tenant_id,
         user_ref,
@@ -491,8 +566,11 @@ async def run_assistant_turn(
     embedder = embedder or make_embedder(settings)
 
     prefs = await _fetch_preferences(db, tenant_id, user_ref)
+    persona = await _fetch_persona(db, tenant_id, user_ref)
+    practice_areas = await _resolve_practice_areas(db, tenant_id, user_ref)
     system = AGENT_SYSTEM.format(
         max_iterations=MAX_TOOL_ITERATIONS,
+        persona=_persona_block(persona),
         preferences=_preference_block(prefs),
     )
     history = await _load_history(db, thread_id)
@@ -510,11 +588,13 @@ async def run_assistant_turn(
             res = await _search_vault_a(
                 db, tenant_id, user_ref, clearance, settings, embedder,
                 str(inp.get("query", "")), inp.get("matter_id"),
+                practice_areas=list(practice_areas) if practice_areas else None,
             )
         elif tool == "search_vault_b":
             res = await _search_vault_b(
                 db, tenant_id, user_ref, settings, str(inp.get("query", "")),
                 llm, embedder, thread_id,
+                practice_areas=list(practice_areas) if practice_areas else None,
             )
             if res.namespace == "B":
                 b_answer = res.summary

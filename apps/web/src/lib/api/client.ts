@@ -84,3 +84,33 @@ export async function apiGet<TResponse>(
   if (!res.ok) throw new ApiError(res.status, text);
   return JSON.parse(text) as TResponse;
 }
+
+/** PUT variant for idempotent create-or-update endpoints (e.g. /v1/persona). */
+export async function apiPut<TResponse, TRequest>(
+  path: string,
+  body: TRequest,
+  opts: { signal?: AbortSignal } = {},
+): Promise<TResponse> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  const token = getAccessToken();
+  if (token) headers["authorization"] = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+      signal: opts.signal ?? null,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new ApiError(0, "network unreachable — is the FastAPI backend up?");
+  }
+
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, text);
+  return JSON.parse(text) as TResponse;
+}

@@ -13,18 +13,21 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import { savePersona } from "@/lib/api/persona";
+import type { TonePreset } from "@/lib/api/persona";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
-type Step = 0 | 1 | 2 | 3 | 4 | 5;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 const STEPS = [
   "Account",
   "Firm identity",
   "KYC",
   "First matter",
+  "Assistant",
   "Teammates",
   "Done",
 ];
@@ -41,6 +44,8 @@ const PRACTICE_AREAS = [
 
 const ID_DOCUMENT_TYPES = ["passport", "national_id", "driver_license"];
 
+const PERSONA_TONE_OPTIONS = ["PROFESSIONAL", "CONCISE", "NARRATIVE", "FORMAL"];
+
 const STORAGE_KEY = "redcase.onboarding";
 
 interface FormState {
@@ -56,6 +61,10 @@ interface FormState {
   firmWebsite: string;
   matter: string;
   teammates: string[];
+  agentName: string;
+  tone: string;
+  rules: string;
+  practiceTags: string[];
 }
 
 const EMPTY: FormState = {
@@ -63,14 +72,18 @@ const EMPTY: FormState = {
   email: "",
   firm: "",
   logoPath: "",
-  practice: PRACTICE_AREAS[0],
+  practice: PRACTICE_AREAS[0] ?? "",
   jurisdiction: "",
   rcPath: "",
   idDocumentPath: "",
-  idDocumentType: ID_DOCUMENT_TYPES[0],
+  idDocumentType: ID_DOCUMENT_TYPES[0] ?? "passport",
   firmWebsite: "",
   matter: "",
   teammates: [],
+  agentName: "Assistant",
+  tone: "PROFESSIONAL",
+  rules: "",
+  practiceTags: [],
 };
 
 function load(): FormState {
@@ -133,8 +146,21 @@ function OnboardingPage() {
       // gate where the account is actually activated. KYC uploads are intentionally NOT
       // performed in this slice — document bytes belong in private storage and are
       // handled by firm admin flows; here we capture storage paths + status only.
+      // Persist the assistant persona (agent name, tone, engagement rules, practice-area
+      // lens) via GET/PUT /v1/persona. Idempotent + self-scoped; non-fatal if
+      // the backend is down — persona is editable from Workbench Settings anytime.
+      try {
+        await savePersona({
+          agent_name: form.agentName || "Assistant",
+          tone_preset: (form.tone as TonePreset) || "PROFESSIONAL",
+          rules_of_engagement: form.rules.trim() || null,
+          practice_areas: form.practiceTags,
+        });
+      } catch {
+        // non-fatal preference — the user can set it later.
+      }
       await new Promise((r) => setTimeout(r, 400));
-      setStep(5);
+      setStep(6);
     } finally {
       setBusy(false);
     }
@@ -150,19 +176,19 @@ function OnboardingPage() {
             className="size-12 rounded-full object-contain"
           />
           <h1 className="mt-4 font-display text-2xl font-semibold text-foreground">
-            {step === 5 ? "You're all set" : "Set up your firm"}
+            {step === 6 ? "You're all set" : "Set up your firm"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {step === 5
+            {step === 6
               ? "Finish by signing in to activate your seat."
               : "A guided setup. You can skip anything you are not ready for."}
           </p>
         </div>
 
         {/* Stepper */}
-        {step < 5 && (
+        {step < 6 && (
           <ol className="mb-8 flex items-center justify-center gap-2">
-            {STEPS.slice(0, 5).map((label, i) => (
+            {STEPS.slice(0, 6).map((label, i) => (
               <li key={label} className="flex items-center gap-2">
                 {i > 0 && (
                   <div
@@ -219,6 +245,12 @@ function OnboardingPage() {
             />
           )}
           {step === 4 && (
+            <StepAssistant
+              form={form}
+              onChange={(p) => persist({ ...form, ...p })}
+            />
+          )}
+          {step === 5 && (
             <StepTeammates
               form={form}
               draft={emailDraft}
@@ -232,7 +264,7 @@ function OnboardingPage() {
               }
             />
           )}
-          {step === 5 && <StepDone email={form.email} name={form.name} />}
+          {step === 6 && <StepDone email={form.email} name={form.name} />}
 
           {error && (
             <p className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -241,7 +273,7 @@ function OnboardingPage() {
           )}
 
 
-          {step < 5 && (
+          {step < 6 && (
             <div className="mt-6 flex items-center justify-between">
               <button
                 type="button"
@@ -252,7 +284,7 @@ function OnboardingPage() {
                 <ArrowLeft className="size-4" /> Back
               </button>
               <div className="flex items-center gap-3">
-                {step >= 2 && step < 5 && (
+                {step >= 2 && step < 6 && (
                   <button
                     type="button"
                     onClick={skip}
@@ -261,7 +293,7 @@ function OnboardingPage() {
                     Skip
                   </button>
                 )}
-                {step < 4 ? (
+                {step < 5 ? (
                   <button
                     type="button"
                     onClick={next}
@@ -496,6 +528,80 @@ function StepMatter({
         <Briefcase className="size-4 text-gold" />
         You can skip this and create matters later from the workbench.
       </p>
+    </div>
+  );
+}
+
+function StepAssistant({
+  form,
+  onChange,
+}: {
+  form: FormState;
+  onChange: (p: Partial<FormState>) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-3 rounded-lg border border-border/60 bg-background/50 px-3 py-2.5 text-sm text-muted-foreground">
+        <Briefcase className="mt-0.5 size-4 shrink-0 text-gold" />
+        <p>
+          Your assistant persona names the agent, sets its tone and engagement
+          rules, and scopes its research to your practice areas — it shapes HOW the
+          assistant writes, never what it may cite.
+        </p>
+      </div>
+      <label className="block">
+        <Label>Assistant name</Label>
+        <input
+          value={form.agentName}
+          onChange={(e) => onChange({ agentName: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          placeholder="Assistant"
+        />
+      </label>
+      <label className="block">
+        <Label>Tone preset</Label>
+        <select
+          value={form.tone}
+          onChange={(e) => onChange({ tone: e.target.value })}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+        >
+          {PERSONA_TONE_OPTIONS.map((t) => (
+            <option key={t} value={t}>
+              {t[0]}
+              {t.slice(1).toLowerCase()}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block">
+        <Label>Rules of engagement</Label>
+        <textarea
+          value={form.rules}
+          onChange={(e) => onChange({ rules: e.target.value })}
+          rows={3}
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          placeholder="e.g. Prefer primary authorities; start every analysis with a one-line bottom line."
+        />
+      </label>
+      <label className="block">
+        <Label>Practice areas (research lens)</Label>
+        <input
+          value={form.practiceTags.join(", ")}
+          onChange={(e) =>
+            onChange({
+              practiceTags: e.target.value
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            })
+          }
+          className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          placeholder="Litigation, Tax"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Comma-separated. Maps to a research pre-filter when you run matters.
+        </p>
+      </label>
     </div>
   );
 }

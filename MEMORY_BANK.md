@@ -232,6 +232,15 @@ Sequential `0001`…`0017`:
   - **`tests/test_kyc.py`** (new, 5 tests GREEN): non-admin 403 (incl. PARTNER w/o flag), both-docs-required 422, submit+read-back PENDING, tenant-RLS 404 for another tenant's admin, upsert resets PENDING after ops VERIFIED.
   - **`onboarding.tsx`** (rewritten): wizard now 6 steps — Account → **Firm identity** (firm name, logo path preview + storage-path input, juris→practice, website) → **KYC** (RC path, admin ID path, ID document type select, website) → First matter → Teammates → Done. Logo shows in the wizard header; KYC captures storage **paths only** (no upload in this slice). Handoff to `/signin`.
   - **DoD:** `pytest tests/test_kyc.py` = 5/5 GREEN; `npm run build` GREEN (only pre-existing rolldown "use client" warnings); `docs/RedCase-Feature-Addendum-S10.md` §10.6 S10-1 marked ✅ DONE.
+- **SLICE 2 (S10-2) — agent persona (per-user agent_name, rules_of_engagement, tone_preset) w/ practice-area lens ✅ COMPLETED (2026-09-23):**
+  - **Migration `0022_practice_areas_personas.py`:** new `practice_areas` + `user_personas` tables; practice-area lens = `legal_topics && $10` array-overlap pre-filter in BOTH vector + FTS branches of HYBRID_SQL. Verified via alembic upgrade head fixture. `_show_similar_cases` NOT filtered by practice areas (stored analysis sections already scoped).
+  - **`app/routers/persona.py`:** `GET /v1/persona` (open), `PUT /v1/persona` (firm-admin gated), `GET/PUT /v1/persona/practice-areas` — PUT returns SORTED tags (consistent with GET). Persona injected as `{persona}` AFTER grounding rules — GROUNDED_SYSTEM contract survives byte-for-byte.
+  - **`tests/test_persona.py`** (rewritten from scratch): 11 tests GREEN. **`test_assistant.py`:** `fetchrow`→None added to both `_FakeDB` classes (needed by `_fetch_persona` in `run_assistant_turn`). Full suite 251 tests pass.
+  - **Frontend:** `lib/api/client.ts` — `apiPut<TResponse, TRequest>`. `lib/api/persona.ts` (new) — types (Persona/PersonaInput/TonePreset/PERSONA_TONES) + hooks (usePersona/usePracticeAreas/useSavePersona).
+  - **Onboarding (`routes/onboarding.tsx`):** Assistant step at index 4 (0 Account, 1 Firm, 2 KYC, 3 Matter, **4 Assistant**, 5 Teammates, 6 Done). FormState gained agentName/tone/rules/practiceTags; StepAssistant form (name, tone select, rules textarea, practice tags comma-input); finish() persists via savePersona (try/catch, non-fatal).
+  - **Workbench (`routes/_authed.workbench.tsx`):** `PersonaSettings` panel under the container — loads usePersona/usePracticeAreas (useEffect populate), saves via useSavePersona.mutate, success/error flash. Discoverable on Workbench page.
+  - **DoD:** `npx tsc --noEmit` — persona/onboarding/workbench files CLEAN; `npm run build` GREEN (only pre-existing rolldown "use client" warnings + pre-existing AnalysisSectionCard tsc error outside S10-2 scope). 251 backend tests pass (incl. 11 persona).
+
 
 
 ---

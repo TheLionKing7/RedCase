@@ -392,6 +392,9 @@ class TestReActLoop:
             async def fetch(self, *a, **k):
                 return []
 
+            async def fetchrow(self, *a, **k):
+                return None
+
         async def _run():
             return await service_module.run_assistant_turn(
                 thread_id=tid,
@@ -434,6 +437,9 @@ class TestReActLoop:
         class _FakeDB:
             async def fetch(self, *a, **k):
                 return []
+
+            async def fetchrow(self, *a, **k):
+                return None
 
         async def _run():
             return await service_module.run_assistant_turn(

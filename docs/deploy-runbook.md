@@ -188,6 +188,33 @@ mismatch, 503 if DB unprovisioned.
   smoke test. All deploy steps sit behind the `production` environment
   approval.
 
+### First manual deploy (2026-09-23) — CI/docker migrate job fix still PENDING
+
+The FIRST deploy to the VPS used an ON-BOX build (`docker compose build` in `/opt/redcase`,
+image `redcase-api:latest` from `/opt/redcase/src`) against the LIVE Supabase DB, not the
+Cloud Run / `deploy.yml` path. Two genuine first-deploy defects were found and fixed in the
+working tree (uncommitted) — **these MUST be pushed to `main` so the pipeline's
+`deploy.yml` migrate + build jobs do not reproduce them:**
+
+1. **`infra/supabase/migrations/versions/0019_invite_accept.py`** — unguarded
+   `GRANT EXECUTE ON FUNCTION ... TO redcase_app`; the `redcase_app` role exists only in
+   test fixtures (conftest.py), not the live Supabase project → the migration transaction
+   rolled back (DB stuck at 0010). Wrapped the GRANT in a `DO $do$ ... IF EXISTS (
+   SELECT 1 FROM pg_roles WHERE rolname='redcase_app')` guard. **The pipeline's migrate job
+   would fail the same way** until this is merged and re-locked.
+2. **`apps/api/uv.lock`** — out of sync with `pyproject.toml` (missing
+   `prometheus-client`), so the Dockerfile's `uv sync --locked` failed the build. Regenerated
+   with `uv lock`. **The pipeline's build step needs this lock + the guard above merged.**
+
+VPS compose detail (for the record): the API listens on **8080** (Dockerfile CMD), so the
+port map must be `127.0.0.1:8000:8080` and the healthcheck must hit
+`http://localhost:8080/v1/health` (not `:8000` / `/health`). This is VPS-local
+(`/opt/redcase/docker-compose.yml`), not a repo file.
+
+Live status: `/v1/health` 200, `/v1/metrics` OK, container `redcase-api` healthy.
+`/v1/query` still 503s until owner provisions `SUPABASE_JWT_SECRET` in `/opt/redcase/.env`.
+See MEMORY_BANK "first manual deploy" entry.
+
 ## 6. Latency bars
 
 Amended for the pilot window, owner framework 2026-09-19 — measured basis

@@ -94,6 +94,7 @@ HYBRID_SQL = """
           AND ($4::int IS NULL OR d.year >= $4)
           AND ($5::int IS NULL OR d.year <= $5)
           AND ($6::text IS NULL OR $6 = ANY(d.ratio_decidendi))
+          AND ($10::text[] IS NULL OR d.legal_topics && $10)
         ORDER BY dc.embedding <=> $2::vector
         LIMIT 40
     ),
@@ -105,6 +106,7 @@ HYBRID_SQL = """
         JOIN vaults v ON v.id = d.vault_id
         WHERE d.tenant_id = $1 AND v.vault_type = $8::text
           AND ($9::uuid IS NULL OR d.matter_id = $9)
+          AND ($10::text[] IS NULL OR d.legal_topics && $10)
           AND dc.fts @@ plainto_tsquery('english', $7)
         LIMIT 40
     )
@@ -152,6 +154,10 @@ class RetrievalService:
         # never sets it, so its SQL shape is unchanged. Vault A dual-vault
         # retrieval sets it when a matter-scoped (non-partner) user asks.
         mid = filters.get("matter_id")
+        # Practice-area lens (S10-2): a lawyer-level override (or the firm
+        # default) filters by legal_topics overlap. NULL means no persona lens set —
+        # the unfiltered shape is unchanged.
+        practices = filters.get("practice_areas")
         rows = [
             dict(r)
             for r in await self.db.fetch(
@@ -165,6 +171,7 @@ class RetrievalService:
                 question,
                 "firm" if vault == "firm" else "juris",
                 uuid.UUID(str(mid)) if mid else None,
+                list(practices) if practices else None,
             )
         ]
         # §3.4 refusal: no rows, or best vsim below the gate. NULL vsim

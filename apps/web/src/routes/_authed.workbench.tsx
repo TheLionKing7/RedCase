@@ -1,5 +1,5 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Swords,
@@ -16,6 +16,13 @@ import type { CoachStep } from "@/components/CoachMarks";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAnalyses, useAnalysis } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
+import {
+  PERSONA_TONES,
+  usePersona,
+  usePracticeAreas,
+  useSavePersona,
+} from "@/lib/api/persona";
+import { type TonePreset } from "@/lib/api/persona";
 
 export const Route = createFileRoute("/_authed/workbench")({
   head: () => ({
@@ -158,7 +165,118 @@ function Workbench() {
           </section>
         </div>
       </div>
+      <PersonaSettings />
     </AppShell>
+  );
+}
+
+function PersonaSettings() {
+  const persona = usePersona();
+  const save = useSavePersona();
+  const practiceAreas = usePracticeAreas();
+  const [agentName, setAgentName] = useState<string>("Assistant");
+  const [tone, setTone] = useState<TonePreset>("PROFESSIONAL");
+  const [rules, setRules] = useState("");
+  const [tags, setTags] = useState("");
+  const [flash, setFlash] = useState<string | null>(null);
+  const [flashType, setFlashType] = useState<"ok" | "err">("ok");
+
+  useEffect(() => {
+    if (persona.data) {
+      setAgentName(persona.data.agent_name ?? "Assistant");
+      setTone(persona.data.tone_preset ?? "PROFESSIONAL");
+      setRules(persona.data.rules_of_engagement ?? "");
+      setTags(persona.data.practice_areas?.join(", ") ?? "");
+    }
+  }, [persona.data]);
+
+  return (
+    <section className="mx-auto mt-8 max-w-5xl space-y-6 border-t border-border pt-8">
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
+          Assistant Persona
+        </div>
+        <h2 className="mt-1 text-xl font-semibold">How your assistant communicates</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Saved per user. Shapes HOW the assistant writes — it can never change what it may cite.
+        </p>
+      </div>
+
+      {flash && (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            flashType === "ok"
+              ? "border-success/40 bg-success/10 text-success"
+              : "border-destructive/40 bg-destructive/10 text-destructive"
+          }`}
+        >
+          {flash}
+        </div>
+      )}
+
+      {(persona.isLoading || practiceAreas.isLoading) && (
+        <div className="panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading your persona…
+        </div>
+      )}
+
+      {persona.data && practiceAreas.data && (
+        <form
+          className="panel space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate(
+              {
+                agent_name: agentName.trim() || "Assistant",
+                tone_preset: tone,
+                rules_of_engagement: rules.trim() || null,
+                practice_areas: tags.split(",").map((s) => s.trim()).filter(Boolean),
+              },
+              {
+                onSuccess: () => { setFlash("Persona saved."); setFlashType("ok"); },
+                onError: (err: unknown) => {
+                  setFlash(
+                    err instanceof Error ? `Could not save: ${err.message}` : "Could not save persona.",
+                  );
+                  setFlashType("err");
+                },
+              },
+            );
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Agent name</span>
+              <input value={agentName} onChange={(e) => setAgentName(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Assistant" />
+            </label>
+            <label className="block">
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Tone preset</span>
+              <select value={tone} onChange={(e) => setTone(e.target.value as TonePreset)}
+                className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                {PERSONA_TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="block">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Rules of engagement</span>
+            <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={3}
+              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              placeholder="How should the assistant approach matters?" />
+          </label>
+          <label className="block">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Practice areas (research lens)</span>
+            <input value={tags} onChange={(e) => setTags(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Litigation, Tax" />
+          </label>
+          <button type="submit" disabled={save.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-60">
+            {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            {save.isPending ? "Saving…" : "Save persona"}
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 
