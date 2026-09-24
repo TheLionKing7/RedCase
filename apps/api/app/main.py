@@ -33,6 +33,7 @@ from app.routers.invites import router as invites_router
 from app.routers.invoicing import router as invoicing_router
 from app.routers.kyc import router as kyc_router
 from app.routers.matters import router as matters_router
+from app.routers.members import router as members_router
 from app.routers.persona import router as persona_router
 from app.routers.practice import router as practice_router
 from app.routers.query import router as query_router
@@ -114,6 +115,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(invites_router)
     app.include_router(firm_admin_router)
     app.include_router(matters_router)
+    app.include_router(members_router)
     app.include_router(kyc_router)
     app.include_router(persona_router)
     return app
