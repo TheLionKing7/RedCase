@@ -129,10 +129,9 @@ Sequential `0001`…`0017`:
 ## [State of Play]
 
 - **Deadline engine / Scheduler / Court Diary update (2026-09-24):** detector remains analysis-wired and counsel-rule matched; migration `0026` preserves normalized `STATE_HIGH_COURT` matching (document-facing label `State High Court`); migration `0027` adds tenant-scoped `court_diary_entries`; `/v1/court-diary/entries` provides read/create access; the internal `/v1/internal/sweep` runs idempotent T-14/T-7/T-2/T-0 in-app channel fan-out via `deadline_scheduler.py`. No `documents.metadata` or `matters.court_level` columns were added — the existing `documents.court_level` is used.
-- **Validation status:** implementation complete; web build GREEN (exit 0); `compileall -q app` GREEN; focused deadline pytest (6 passed) confirmed earlier. Migration `0026` typo fix (`hight`→`High`) applied. Commit/push pending.
+- **Validation status:** implementation complete; web build GREEN (exit 0); `compileall -q app` GREEN; focused deadline pytest (6 passed) confirmed earlier. Migration `0026` typo fix (`hight`→`High`) applied. **Committed `41ce0a1` and pushed to `origin/main`.**
 
-
-**Branch:** `main` (ahead of origin — NOT pushed).
+**Branch:** `main` (in sync — pushed `41ce0a1`).
 
 ### Completed
 - **OBS — Pragmatic Observability ✅ COMPLETED (committed + pushed `87ddbe8`):** `app/observability.py` (Prometheus registry, counters ANSWER_REFUSALS/ANSWER_TIMEOUTS/FABRICATION_REFUSALS/PROVIDER_FALLBACKS, gauges HEALTH_DB/HEALTH_PROVIDERS); `/v1/metrics` + `/v1/health/detail` added to `main.py`; instrumentation in `retrieval/service.py` (refusal/timeout/fabrication counters) + `retrieval/clients.py` (`FallbackLLM` provider-fallback counter); `prometheus-client>=0.21.1` in `pyproject.toml`; `docs/alert-rules.md` (moved from `apps/api/deploy/` — `.md` gitignored except `docs/**`); `tests/test_observability.py` 7/7. Notes: delta-based counter assertions (counters persist in-process); `_isolated_settings()` (`Settings(_env_file=None)`) keeps tests hermetic vs dev `.env`; counter `_name` strips `_total`; health providers checks real API keys (explabs/mistral/cerebras/groq/deepseek/openrouter/anthropic). **uv lock NOT refreshed** (network blocked) — pyproject updated, CI/next dev regenerates.
