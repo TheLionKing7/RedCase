@@ -85,6 +85,14 @@ export async function apiGet<TResponse>(
   return JSON.parse(text) as TResponse;
 }
 
+export async function apiDelete<TResponse = void>(path: string, opts: { signal?: AbortSignal } = {}): Promise<TResponse> {
+  const token = getAccessToken();
+  const res = await fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: token ? { authorization: `Bearer ${token}` } : {}, signal: opts.signal ?? null });
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, text);
+  return (text ? JSON.parse(text) : undefined) as TResponse;
+}
+
 /** PUT variant for idempotent create-or-update endpoints (e.g. /v1/persona). */
 export async function apiPut<TResponse, TRequest>(
   path: string,

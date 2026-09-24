@@ -78,6 +78,14 @@ async def create_thread(
     return ThreadCreated(thread_id=str(thread_id))
 
 
+@router.get("/threads")
+async def list_threads(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> list[dict[str, Any]]:
+    rows = await ctx.db.fetch("SELECT id, title, created_at, updated_at FROM assistant_threads ORDER BY updated_at DESC")
+    return [{"thread_id": str(r["id"]), "title": r["title"], "created_at": r["created_at"].isoformat(), "updated_at": r["updated_at"].isoformat()} for r in rows]
+
+
 @router.get("/threads/{thread_id}")
 async def get_thread(
     thread_id: str,

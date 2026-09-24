@@ -25,6 +25,7 @@ from app.routers.access import router as access_router
 from app.routers.analyses import router as analyses_router
 from app.routers.audit import router as audit_router
 from app.routers.channels import router as channels_router
+from app.routers.collaboration import router as collaboration_router
 from app.routers.conflicts import router as conflicts_router
 from app.routers.expert_chat import router as expert_chat_router
 from app.routers.firm_admin import router as firm_admin_router
@@ -102,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(access_router)
     app.include_router(analyses_router)
     app.include_router(channels_router)
+    app.include_router(collaboration_router)
     app.include_router(conflicts_router)
     app.include_router(audit_router)
     app.include_router(expert_chat_router)
