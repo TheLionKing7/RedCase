@@ -75,6 +75,13 @@ export function usePracticeAreas() {
   });
 }
 
+export function useDepartments() {
+  return useQuery({
+    queryKey: ["persona", "departments"],
+    queryFn: getDepartments,
+  });
+}
+
 export function getDepartments(): Promise<Departments> {
   return apiGet<Departments>("/v1/persona/departments");
 }

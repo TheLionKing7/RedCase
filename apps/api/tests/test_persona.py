@@ -134,3 +134,49 @@ class TestPersonaBlock:
     def test_persona_tones_constant(self):
         assert svc.PERSONA_TONES == ("PROFESSIONAL", "CONCISE", "NARRATIVE", "FORMAL")
     
+
+
+class TestDepartmentsModules:
+    def test_firm_admin_replaces_departments_and_keeps_legal_practice(self, app_db_url):
+        asyncio.run(_ensure_tenant(app_db_url, SEED_TENANT_AETOES))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            saved = client.put(
+                "/v1/persona/departments",
+                json={"departments": ["Operations", "Operations", ""]},
+                headers=_auth(sub="lawyer-a", is_admin=True),
+            )
+            assert saved.status_code == 200, saved.text
+            assert saved.json()["departments"] == ["Legal Practice", "Operations"]
+            got = client.get(
+                "/v1/persona/departments", headers=_auth(sub="lawyer-b")
+            )
+            assert got.status_code == 200
+            assert got.json()["departments"] == ["Legal Practice", "Operations"]
+
+    def test_non_admin_cannot_change_departments(self, app_db_url):
+        asyncio.run(_ensure_tenant(app_db_url, SEED_TENANT_AETOES))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            denied = client.put(
+                "/v1/persona/departments",
+                json={"departments": ["Operations"]},
+                headers=_auth(sub="lawyer-b"),
+            )
+            assert denied.status_code == 403
+
+    def test_departments_are_tenant_scoped(self, app_db_url):
+        other_tenant = str(uuid.uuid4())
+        asyncio.run(_ensure_tenant(app_db_url, SEED_TENANT_AETOES))
+        asyncio.run(_ensure_tenant(app_db_url, other_tenant))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            client.put(
+                "/v1/persona/departments",
+                json={"departments": ["Operations"]},
+                headers=_auth(sub="lawyer-a", tenant=SEED_TENANT_AETOES, is_admin=True),
+            )
+            got = client.get(
+                "/v1/persona/departments",
+                headers=_auth(sub="lawyer-a", tenant=other_tenant),
+            )
+            assert got.status_code == 200
+            assert got.json()["departments"] == []
+

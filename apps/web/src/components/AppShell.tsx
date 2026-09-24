@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Bell, BookOpen, CalendarClock, Circle, CircleHelp, Home, Landmark, MessageSquare, Search, Settings2, ShieldAlert, SlidersHorizontal, Sparkles, Users, Vault, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { getFirmAdmin } from "@/lib/auth/supabase";
+import { useDepartments } from "@/lib/api/persona";
 import { useIdentity } from "@/lib/identity";
 
 type ShellRoute = "/home" | "/workbench" | "/search" | "/tracker" | "/firm-command" | "/red-teamer";
@@ -32,12 +33,18 @@ function TaskBarItem({ icon: Icon, label, to, badge }: { icon: typeof Home; labe
 export function AppShell({ title, eyebrow, children }: { title: string; eyebrow: string; children: ReactNode }) {
   const firmAdmin = getFirmAdmin();
   const identity = useIdentity();
+  const departments = useDepartments();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const current = RAIL.find((item) => item.to && pathname.startsWith(item.to))?.label ?? "Home";
   const [activeRail, setActiveRail] = useState(current);
   const [panelOpen, setPanelOpen] = useState(true);
   const [compact, setCompact] = useState(false);
-  const visibleRail = RAIL.filter((item) => !item.adminOnly || firmAdmin);
+  const hasFirmOps = departments.data?.departments.some((department) =>
+    ["Accounts & Finance", "HR & Administration", "Operations"].includes(department),
+  ) ?? true;
+  const visibleRail = RAIL.filter(
+    (item) => !item.adminOnly || (firmAdmin && hasFirmOps),
+  );
   const activeItem = visibleRail.find((item) => item.label === activeRail) ?? visibleRail[0];
   const panelItems = PANELS[activeItem?.label ?? "Home"] ?? [];
 
