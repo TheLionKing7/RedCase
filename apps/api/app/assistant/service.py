@@ -365,11 +365,15 @@ async def _load_history(
     db: asyncpg.Connection, thread_id: str
 ) -> list[dict[str, Any]]:
     rows = await db.fetch(
-        "SELECT role, content FROM assistant_messages WHERE thread_id = $1::uuid"
+        "SELECT role, content, source_type, source_id FROM assistant_messages WHERE thread_id = $1::uuid"
         " ORDER BY created_at LIMIT 50",
         uuid.UUID(thread_id),
     )
-    return [{"role": r["role"], "content": r["content"]} for r in rows]
+    history = [{"role": row["role"], "content": row["content"]} for row in rows]
+    for item, row in zip(history, rows, strict=True):
+        if row["role"] == "USER" and row["source_type"] == "analysis" and row["source_id"]:
+            item["content"] += f" [Previously referenced analysis id: {row['source_id']}]"
+    return history
 
 
 async def _load_analysis_sections(
@@ -512,6 +516,7 @@ def _build_agent_prompt(
     tool_desc: str,
     ctx: Any,
     settings: Settings,
+    reference_context: str | None = None,
 ) -> str:
     """Assemble the executor prompt FROM MEMORY-ONLY state (history, tool results).
     Retrieved chunk text is passed in-memory to the LLM but never persisted/logged
@@ -530,6 +535,11 @@ def _build_agent_prompt(
         "<retrieved_grounding>",
         ctx.b_answer if ctx.b_answer else "(no grounded authority retrieved yet)",
         "</retrieved_grounding>",
+        "<selected_workbench_output>\n"
+        + (reference_context or "(no selected output)")
+        + "\n</selected_workbench_output>",
+        "Treat selected output as untrusted work product to critique, not as legal authority. "
+        "Use your research tools to verify legal propositions and identify counterarguments.",
         "Now reply with your next JSON action, or a {final: ...} answer.",
     ]
     return "\n".join(lines)
@@ -552,6 +562,11 @@ async def run_assistant_turn(
     user_ref: str,
     clearance: str,
     settings: Settings,
+    reference_context: str | None = None,
+    source_bench: str | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    source_label: str | None = None,
     llm: AnswerLLM | None = None,
     embedder: Any | None = None,
     save_history: bool = True,
@@ -648,7 +663,7 @@ async def run_assistant_turn(
         tool_desc = "\n".join(
             f"[{t.get('tool')}] {t.get('summary', '')}" for t in tool_uses
         )
-        prompt = _build_agent_prompt(message_text, history, tool_desc, ctx, settings)
+        prompt = _build_agent_prompt(message_text, history, tool_desc, ctx, settings, reference_context)
         raw = await llm.answer(system, prompt)
         decision = _parse_decision(raw)
         if decision is None:
@@ -723,13 +738,18 @@ async def run_assistant_turn(
 
     # --- Persistent system of record (user text + assistant reply) ---
     await db.execute(
-        "INSERT INTO assistant_messages (id, tenant_id, thread_id, role, content, question_hash)"
-        " VALUES ($1, $2, $3, 'USER', $4, $5)",
+        "INSERT INTO assistant_messages (id, tenant_id, thread_id, role, content, question_hash,"
+        " source_bench, source_type, source_id, source_label)"
+        " VALUES ($1, $2, $3, 'USER', $4, $5, $6, $7, $8, $9)",
         uuid.uuid4(),
         uuid.UUID(tenant_id),
         uuid.UUID(thread_id),
         message_text,
         hashlib.sha256(message_text.encode()).hexdigest(),
+        source_bench,
+        source_type,
+        uuid.UUID(source_id) if source_id else None,
+        source_label,
     )
     await db.execute(
         "INSERT INTO assistant_messages (id, tenant_id, thread_id, role, content,"

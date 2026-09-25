@@ -1,0 +1,161 @@
+{
+ "run_at": "2026-09-24T22:08:50.043006+00:00",
+ "prompt": "GROUNDED_SYSTEM current (v2.1)",
+ "provider": "explabs",
+ "model": "claude-opus-5.5",
+ "pace_s": 30.0,
+ "outcomes": [
+  {
+   "id": "B01",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B02",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B03",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Adegoke Motors Ltd. Vs Dr. Babatunde Adesanya (1989) LLJR-SC"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B04",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B05",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B06",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B07",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B08",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B09",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B10",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B11",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B12",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B13",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  },
+  {
+   "id": "B14",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "claude-opus-5.5"
+  }
+ ]
+}

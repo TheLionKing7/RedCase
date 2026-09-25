@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.assistant.service import MAX_TOOL_ITERATIONS, run_assistant_turn
 from app.deps import TenantContext, get_tenant_context
@@ -41,8 +41,24 @@ class ThreadCreated(BaseModel):
     thread_id: str
 
 
+class AssistantReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = Field(pattern="^analysis$")
+    id: str = Field(min_length=1, max_length=64)
+    label: str = Field(min_length=1, max_length=200)
+
+
+class AssistantMessageContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bench: str = Field(pattern="^(SmartBrief|Red-Teamer|Deck|Researcher|Reviewer|Home)$")
+    reference: AssistantReference | None = None
+
+
 class MessageSend(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
+    context: AssistantMessageContext | None = None
 
 
 class FeedbackCreate(BaseModel):
@@ -100,6 +116,7 @@ async def get_thread(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="thread not found")
     msgs = await ctx.db.fetch(
         "SELECT id, role, content, citations, tool_uses, serving_provider,"
+        " source_bench, source_type, source_id, source_label,"
         " serving_model, created_at FROM assistant_messages"
         " WHERE thread_id = $1::uuid ORDER BY created_at",
         uuid.UUID(thread_id),
@@ -108,13 +125,17 @@ async def get_thread(
     for r in msgs:
         turns.append(
             {
-                "message_id": str(r["id"]),
+                "id": str(r["id"]),
                 "role": r["role"],
                 "content": r["content"],
                 "citations": _json(r["citations"]),
                 "tool_uses": _json(r["tool_uses"]),
                 "serving_provider": r["serving_provider"],
                 "serving_model": r["serving_model"],
+                "source_bench": r["source_bench"],
+                "source_type": r["source_type"],
+                "source_id": str(r["source_id"]) if r["source_id"] else None,
+                "source_label": r["source_label"],
                 "created_at": r["created_at"].isoformat(),
             }
         )
@@ -139,6 +160,28 @@ async def send_message(
     )
     if thread is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="thread not found")
+    reference_context = None
+    source_type = source_id = source_label = None
+    source_bench = body.context.bench if body.context else None
+    if body.context and body.context.reference:
+        reference = body.context.reference
+        try:
+            reference_uuid = uuid.UUID(reference.id)
+        except ValueError:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="reference not found") from None
+        row = await ctx.db.fetchrow(
+        "SELECT id, output FROM document_analyses"
+            " WHERE id = $1::uuid AND tenant_id = $2::uuid"
+            " AND created_by = $3 AND status = 'COMPLETE'",
+            reference_uuid,
+            uuid.UUID(ctx.tenant_id),
+            ctx.user_ref,
+        )
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="reference not found")
+        reference_context = json.dumps(_json(row["output"]), ensure_ascii=False)[:24000]
+        source_type, source_id = reference.type, str(row["id"])
+        source_label = reference.label[:200]
     settings = request.app.state.settings
 
     async def _stream():
@@ -146,6 +189,11 @@ async def send_message(
         reply = await run_assistant_turn(
             thread_id=thread_id,
             message_text=body.message,
+            reference_context=reference_context,
+            source_bench=source_bench,
+            source_type=source_type,
+            source_id=source_id,
+            source_label=source_label,
             db=ctx.db,
             tenant_id=ctx.tenant_id,
             user_ref=ctx.user_ref,

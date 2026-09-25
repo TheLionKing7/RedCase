@@ -9,9 +9,10 @@
 
 import { getAccessToken } from "@/lib/auth/supabase";
 
-const BASE_URL: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-  "http://127.0.0.1:8000";
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? "http://127.0.0.1:8000" : "https://api.redcase.xyz");
 
 export class ApiError extends Error {
   readonly status: number;
@@ -43,7 +44,7 @@ export async function apiPost<TResponse, TRequest>(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
@@ -56,6 +57,7 @@ export async function apiPost<TResponse, TRequest>(
 
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, text);
+  if (res.status === 204 || !text) return undefined as TResponse;
   return JSON.parse(text) as TResponse;
 }
 
@@ -70,7 +72,7 @@ export async function apiGet<TResponse>(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${API_BASE_URL}${path}`, {
       method: "GET",
       headers,
       signal: opts.signal ?? null,
@@ -82,12 +84,13 @@ export async function apiGet<TResponse>(
 
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, text);
+  if (res.status === 204 || !text) return undefined as TResponse;
   return JSON.parse(text) as TResponse;
 }
 
 export async function apiDelete<TResponse = void>(path: string, opts: { signal?: AbortSignal } = {}): Promise<TResponse> {
   const token = getAccessToken();
-  const res = await fetch(`${BASE_URL}${path}`, { method: "DELETE", headers: token ? { authorization: `Bearer ${token}` } : {}, signal: opts.signal ?? null });
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE", headers: token ? { authorization: `Bearer ${token}` } : {}, signal: opts.signal ?? null });
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, text);
   return (text ? JSON.parse(text) : undefined) as TResponse;
@@ -107,7 +110,7 @@ export async function apiPut<TResponse, TRequest>(
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${API_BASE_URL}${path}`, {
       method: "PUT",
       headers,
       body: JSON.stringify(body),
@@ -120,5 +123,37 @@ export async function apiPut<TResponse, TRequest>(
 
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, text);
+  if (res.status === 204 || !text) return undefined as TResponse;
   return JSON.parse(text) as TResponse;
+}
+
+/** Raw-body upload path (no JSON serialization); progress is reported by XHR. */
+export function apiUpload<TResponse>(
+  path: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<TResponse> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE_URL}${path}`);
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader("authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network unreachable — is the FastAPI backend up?"));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new ApiError(xhr.status, xhr.responseText));
+        return;
+      }
+      try {
+        resolve(JSON.parse(xhr.responseText) as TResponse);
+      } catch {
+        reject(new ApiError(xhr.status, "invalid upload response"));
+      }
+    };
+    xhr.send(file);
+  });
 }

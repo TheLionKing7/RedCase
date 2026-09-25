@@ -1,0 +1,109 @@
+"""Run citation battery using configured provider chain; isolate only on request."""
+import argparse
+import asyncio
+import json
+import random
+import ssl
+from datetime import UTC, datetime
+from pathlib import Path
+import asyncpg
+from app.config import get_settings
+from app.retrieval.clients import RateLimitedError, make_embedder, make_llm
+from app.retrieval.service import answer_question
+from scripts.gating_matrix import TENANT, score
+
+BATTERY_PATH = Path("tests/fixtures/citation_battery.json")
+DEFAULT_OUT = Path("calibration_results/battery_v2.json")
+_MODEL_FIELD = {"explabs":"explabs_model", "mistral":"mistral_model", "cerebras":"cerebras_model", "groq":"groq_model", "deepseek":"deepseek_model", "openrouter":"llm_model"}
+_RATE_BACKOFF_SECONDS = (15.0, 30.0, 60.0)
+MAX_RATE_RETRIES = 3
+
+def _rate_backoff_delay(retry: int) -> float:
+    base = _RATE_BACKOFF_SECONDS[retry]
+    return base + random.uniform(0.0, base * 0.5)  # noqa: S311
+
+def classify_outcome(item: dict, result: dict) -> tuple[bool, str, str]:
+    """Use final refusal cause; earlier recovered timeouts do not affect score."""
+    ok, reason = score(item, result)
+    final_reason = result.get("_final_refusal_reason")
+    if result.get("refusal") and final_reason == "answer_timeout":
+        return False, "answer_timeout", "timeout_converted_refusal"
+    if result.get("refusal") and final_reason == "insufficient_grounding":
+        return ok, reason, "genuine_refusal"
+    if result.get("refusal") and final_reason == "citation_integrity":
+        return ok, reason, "integrity_refusal"
+    return ok, reason, "answer"
+
+async def _run_item(item, conn, settings, embedder, llm):
+    for attempt in range(3):
+        try:
+            await conn.execute("SELECT set_config('app.tenant_id', $1, false)", TENANT)
+            for rl in range(MAX_RATE_RETRIES + 1):
+                try:
+                    return await answer_question(item["question"], item.get("filters") or {}, conn, TENANT, "battery-v2", settings=settings, embedder=embedder, llm=llm), False
+                except RateLimitedError as exc:
+                    if rl == MAX_RATE_RETRIES:
+                        return None, True
+                    delay = exc.retry_after if exc.retry_after is not None else _rate_backoff_delay(rl)
+                    print(f"{item['id']}: rate-limited ({exc.provider}/{exc.model}), backoff {delay:.1f}s (retry {rl+1}/{MAX_RATE_RETRIES})", flush=True)
+                    await asyncio.sleep(delay)
+        except ssl.SSLError:
+            if attempt == 2:
+                raise
+    raise RuntimeError(f"{item['id']}: no result after retries")
+
+async def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--ids", nargs="*", default=None)
+    ap.add_argument("--pace", type=float, default=12.0, help="seconds between answer calls")
+    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--provider", type=str, default=None, help="override primary for model comparison")
+    ap.add_argument("--isolate", action="store_true", help="clear fallback chain explicitly (requires --provider)")
+    args = ap.parse_args()
+    if args.isolate and not args.provider:
+        ap.error("--isolate requires --provider so the isolated model is explicit")
+    battery = json.loads(BATTERY_PATH.read_text(encoding="utf-8"))
+    if args.ids:
+        items = [x for x in battery if x["id"] in args.ids]
+    else:
+        done = set(json.loads(args.out.read_text(encoding="utf-8"))["outcomes"] and [x["id"] for x in json.loads(args.out.read_text(encoding="utf-8"))["outcomes"]]) if args.out.exists() else set()
+        items = [x for x in battery if x["id"] not in done]
+    print(f"items to run: {[x['id'] for x in items]}", flush=True)
+    settings = get_settings()
+    changes = {}
+    if args.provider:
+        changes["answer_model_primary"] = args.provider
+    if args.isolate:
+        changes["answer_model_fallback"] = ""
+    if changes:
+        settings = settings.model_copy(update=changes)
+    primary, fallback = settings.answer_model_primary, settings.answer_model_fallback
+    model = getattr(settings, _MODEL_FIELD.get(primary, "llm_model"), None)
+    conn = await asyncpg.connect(settings.database_url)
+    try:
+        embedder, llm = make_embedder(settings), make_llm(settings)
+        outcomes = json.loads(args.out.read_text(encoding="utf-8"))["outcomes"] if args.out.exists() else []
+        for idx, item in enumerate(items):
+            result, limited = await _run_item(item, conn, settings, embedder, llm)
+            if limited:
+                print(f"{item['id']}: not_run_rate_limited — skipped (resume next pass)", flush=True)
+                continue
+            ok, reason, category = classify_outcome(item, result)
+            timeout_attempts = result.get("_answer_timeout_attempts", 0)
+            recovered = timeout_attempts > 0 and category != "timeout_converted_refusal"
+            served_provider = getattr(llm, "provider", primary)
+            served_model = getattr(llm, "model", model)
+            outcomes.append({"id":item["id"], "expect":item["expect"], "pass":ok, "reason":reason, "refusal":result["refusal"], "answer_timeout_attempts":timeout_attempts, "genuine_refusal_attempts":result.get("_genuine_refusal_attempts",0), "recovered":recovered, "final_outcome_category":category, "reason_category":"answer_timeout" if category == "timeout_converted_refusal" else "refusal" if category == "genuine_refusal" else category, "cited_titles":[c["case_title"] for c in result["citations"]], "provider":served_provider, "model":served_model})
+            print(f"{item['id']}: {'PASS' if ok else 'FAIL'} | {reason} | category={category} recovered={recovered} | {served_provider}/{served_model}", flush=True)
+            args.out.write_text(json.dumps({"run_at":datetime.now(UTC).isoformat(), "prompt":"GROUNDED_SYSTEM current (v2.1)", "provider":primary, "fallback":fallback, "model":model, "isolated":args.isolate, "pace_s":args.pace, "outcomes":outcomes}, indent=1), encoding="utf-8")
+            if args.pace > 0 and idx < len(items)-1:
+                await asyncio.sleep(args.pace)
+    finally:
+        await conn.close()
+    total = len(outcomes)
+    passed = sum(1 for x in outcomes if x["pass"])
+    fabricated = [x["id"] for x in outcomes if "FABRICATED" in x["reason"]]
+    print(f"\nTOTAL {passed}/{total} | fabricated: {fabricated or 'none'}")
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -296,6 +296,44 @@ async def list_messages(
     ]
 
 
+@router.get("/channels/unread-count")
+async def direct_unread_count(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict[str, int]:
+    """Count incoming direct messages after this user's last-read cursor."""
+    count = await ctx.db.fetchval(
+        "SELECT count(*) FROM channels c"
+        " JOIN channel_participants cp ON cp.channel_id = c.id"
+        " LEFT JOIN channel_read_state rs ON rs.tenant_id = c.tenant_id"
+        "   AND rs.channel_id = c.id AND rs.user_ref = $2"
+        " JOIN channel_messages m ON m.channel_id = c.id"
+        " WHERE c.tenant_id = $1::uuid AND c.kind = 'DIRECT'"
+        "   AND cp.participant_ref = $2 AND m.sender_ref <> $2"
+        "   AND m.created_at > COALESCE(rs.last_read_at, 'epoch'::timestamptz)",
+        uuid.UUID(ctx.tenant_id),
+        ctx.user_ref,
+    )
+    return {"unread_count": int(count or 0)}
+
+
+@router.post("/channels/{channel_id}/read", status_code=204)
+async def mark_channel_read(
+    channel_id: str,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> None:
+    """Advance a user's read cursor only for a channel visible to that user."""
+    await _resolve_channel(ctx, channel_id)
+    await ctx.db.execute(
+        "INSERT INTO channel_read_state (tenant_id, channel_id, user_ref, last_read_at)"
+        " VALUES ($1::uuid, $2::uuid, $3, now())"
+        " ON CONFLICT (tenant_id, channel_id, user_ref)"
+        " DO UPDATE SET last_read_at = now()",
+        uuid.UUID(ctx.tenant_id),
+        uuid.UUID(channel_id),
+        ctx.user_ref,
+    )
+
+
 class ChannelCreate(BaseModel):
     kind: str
     other_user_ref: str

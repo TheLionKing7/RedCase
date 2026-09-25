@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -10,30 +10,30 @@ import {
   CheckCircle2,
   Clock,
   GitBranch,
+  Upload,
+  MoreHorizontal,
+  Inbox,
+  Bot,
+  ChevronRight,
 } from "lucide-react";
+import { useIdentity } from "@/lib/identity";
+import { apiGet, apiPost, apiUpload } from "@/lib/api/client";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { CoachMarks } from "@/components/CoachMarks";
 import type { CoachStep } from "@/components/CoachMarks";
 import { Button } from "@/components/ui/button";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   useAnalyses,
   useAnalysis,
   useChainAnalysis,
 } from "@/lib/api/workbench";
 import type { Analysis, PromptPack } from "@/lib/api/workbench";
-import {
-  PERSONA_TONES,
-  usePersona,
-  usePracticeAreas,
-  useSavePersona,
-} from "@/lib/api/persona";
-import { type TonePreset } from "@/lib/api/persona";
+import type { AssistantBench } from "@/lib/api/assistantContext";
+import { useCourtDiaryEntries } from "@/lib/api/court-diary";
+import { useMembership } from "@/lib/api/members";
+import { sendAssistantMessage, useThreads } from "@/lib/api/collaboration";
 
 export const Route = createFileRoute("/_authed/workbench")({
   head: () => ({
@@ -94,7 +94,34 @@ function StatusBadge({ status }: { status: Analysis["status"] }) {
 
 function Workbench() {
   const analyses = useAnalyses();
+  const identity = useIdentity();
+  const membership = useMembership();
+  const threads = useThreads();
+  const matters = useQuery({
+    queryKey: ["matters", "my"],
+    queryFn: () =>
+      apiGet<{ matters: Array<{ id: string; matter_ref: string }> }>(
+        "/v1/matters/my",
+      ),
+  });
+  const diary = useCourtDiaryEntries();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [bench, setBench] = useState<AssistantBench>("SmartBrief");
+  const [uploadMatter, setUploadMatter] = useState("");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const requestedMatter = sessionStorage.getItem("redcase:workbench-matter");
+    const availableMatters = matters.data?.matters ?? [];
+    if (
+      !requestedMatter ||
+      !availableMatters.some((matter) => matter.id === requestedMatter)
+    )
+      return;
+    setUploadMatter(requestedMatter);
+    sessionStorage.removeItem("redcase:workbench-matter");
+  }, [matters.data]);
 
   const coachSteps: CoachStep[] = [
     {
@@ -112,13 +139,115 @@ function Workbench() {
   ];
 
   return (
-    <AppShell eyebrow="Legal Workbench" title="Workbench">
+    <AppShell
+      eyebrow="LEGAL WORKBENCH"
+      title={`${identity.name}${identity.role ? ` · ${identity.role}` : ""}`}
+      assistantContext={{
+        bench,
+        ...(selectedId &&
+        analyses.data?.find((item) => item.analysis_id === selectedId)
+          ?.status === "COMPLETE"
+          ? {
+              reference: {
+                type: "analysis",
+                id: selectedId,
+                label:
+                  PACK_LABEL[
+                    analyses.data.find(
+                      (item) => item.analysis_id === selectedId,
+                    )!.prompt_pack
+                  ] ?? "SmartBrief output",
+              },
+            }
+          : {}),
+      }}
+    >
       <CoachMarks surface="workbench" steps={coachSteps} />
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <div className="mx-auto max-w-7xl space-y-6 pb-28">
+        <p className="-mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          {membership.data?.full_name ?? identity.name}
+          {membership.data?.role ? ` · ${membership.data.role}` : ""}
+        </p>
+        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="space-y-3">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
+              <Upload className="size-4" />
+              Upload PDF to a matter
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="sr-only"
+                disabled={uploading}
+                onChange={async (event) => {
+                  const file = event.currentTarget.files?.[0];
+                  if (!file) return;
+                  if (!uploadMatter) {
+                    setUploadMessage("Choose a matter below before uploading.");
+                    event.currentTarget.value = "";
+                    return;
+                  }
+                  if (
+                    file.type !== "application/pdf" &&
+                    !file.name.toLowerCase().endsWith(".pdf")
+                  ) {
+                    setUploadMessage(
+                      "Only PDF uploads are currently supported by the secure matter-ingestion API.",
+                    );
+                    event.currentTarget.value = "";
+                    return;
+                  }
+                  setUploading(true);
+                  setUploadMessage("");
+                  try {
+                    await apiUpload(
+                      `/v1/matters/${uploadMatter}/documents?title=${encodeURIComponent(file.name)}`,
+                      file,
+                      () => undefined,
+                    );
+                    setUploadMessage(
+                      "Document uploaded to the matter's private vault.",
+                    );
+                  } catch (error) {
+                    setUploadMessage(
+                      error instanceof Error ? error.message : "Upload failed.",
+                    );
+                  } finally {
+                    setUploading(false);
+                    event.currentTarget.value = "";
+                  }
+                }}
+              />
+            </label>
+            {matters.data?.matters.length ? (
+              <select
+                aria-label="Matter for upload"
+                value={uploadMatter}
+                onChange={(event) => setUploadMatter(event.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+              >
+                <option value="">Choose matter for upload</option>
+                {matters.data.matters.map((matter) => (
+                  <option key={matter.id} value={matter.id}>
+                    {matter.matter_ref}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Upload requires an assigned matter. DOCX is not supported by the
+                current ingestion API.
+              </p>
+            )}
+            {uploadMessage && (
+              <p role="status" className="text-xs text-muted-foreground">
+                {uploading ? "Uploading…" : uploadMessage}
+              </p>
+            )}
             <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-              My Analyses
+              Deck{" "}
+              <span className="normal-case tracking-normal">
+                · finished / in-progress / drafts
+              </span>
             </div>
             {analyses.isPending ? (
               <div className="panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
@@ -138,156 +267,284 @@ function Workbench() {
                   </div>
                 )}
                 {analyses.data!.map((a) => (
-                  <button
+                  <div
                     key={a.analysis_id}
-                    onClick={() => setSelectedId(a.analysis_id)}
-                    className={`panel w-full p-4 text-left transition-colors ${selectedId === a.analysis_id ? "glow-gold border-gold/50" : "hover:border-steel/40"}`}
+                    className={`panel p-3 transition-all duration-200 ${selectedId === a.analysis_id ? "glow-gold border-gold/50" : "hover:border-steel/40"}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">
-                        {PACK_LABEL[a.prompt_pack] ?? a.prompt_pack}
+                    <button
+                      onClick={() => setSelectedId(a.analysis_id)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">
+                          {PACK_LABEL[a.prompt_pack] ?? a.prompt_pack}
+                        </span>
+                        <StatusBadge status={a.status} />
+                      </div>
+                      <div className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
+                        {a.analysis_id.slice(0, 8)} ·{" "}
+                        {new Date(a.created_at).toLocaleDateString("en-GB")}
+                      </div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70">
+                        doc {a.document_id.slice(0, 8)}
+                      </div>
+                    </button>
+                    <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {a.status === "COMPLETE"
+                          ? "Finished"
+                          : a.status === "RUNNING"
+                            ? "In progress"
+                            : "Draft / review"}
                       </span>
-                      <StatusBadge status={a.status} />
+                      <details className="relative">
+                        <summary
+                          aria-label="Deck item actions"
+                          className="list-none cursor-pointer rounded-md p-1 text-muted-foreground transition-all duration-200 hover:bg-surface hover:text-foreground"
+                        >
+                          <MoreHorizontal className="size-4" />
+                        </summary>
+                        <div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-border bg-sidebar p-1 shadow-lg">
+                          <p className="px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-steel">
+                            Send to Assistant inbox
+                          </p>
+                          {threads.data?.length ? (
+                            threads.data.map((thread) => (
+                              <button
+                                type="button"
+                                key={thread.thread_id}
+                                onClick={() => {
+                                  void sendAssistantMessage(
+                                    thread.thread_id,
+                                    `Please review the referenced SmartBrief output ${a.analysis_id}.`,
+                                    {
+                                      bench: "Deck",
+                                      reference: {
+                                        type: "analysis",
+                                        id: a.analysis_id,
+                                        label:
+                                          PACK_LABEL[a.prompt_pack] ??
+                                          "SmartBrief output",
+                                      },
+                                    },
+                                  ).then(
+                                    () =>
+                                      setUploadMessage(
+                                        `Sent reference to “${thread.title}”.`,
+                                      ),
+                                    () =>
+                                      setUploadMessage(
+                                        "Could not send output reference. Please retry.",
+                                      ),
+                                  );
+                                }}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-all duration-200 hover:bg-surface"
+                              >
+                                <Inbox className="size-3.5" />
+                                {thread.title}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="px-2 py-2 text-xs text-muted-foreground">
+                              Create a thread in the Assistant first.
+                            </p>
+                          )}
+                        </div>
+                      </details>
                     </div>
-                    <div className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
-                      {a.analysis_id.slice(0, 8)} ·{" "}
-                      {new Date(a.created_at).toLocaleDateString("en-GB")}
-                    </div>
-                    <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70">
-                      doc {a.document_id.slice(0, 8)}
-                    </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
           </aside>
-          <section>
-            {selectedId ? (
-              <AnalysisWorkspace id={selectedId} />
-            ) : (
-              <div className="panel flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-                <LayoutDashboard className="size-8 text-steel" />
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Select an analysis to open its tabbed workspace — Overview,
-                  Arguments, Similar Cases and Law.
-                </p>
+          <section className="panel min-w-0 p-5">
+            <nav
+              aria-label="Workbench benches"
+              className="mb-5 flex gap-2 overflow-x-auto border-b border-border pb-3"
+            >
+              {(
+                [
+                  "SmartBrief",
+                  "Red-Teamer",
+                  "Deck",
+                  "Researcher",
+                  "Reviewer",
+                ] as AssistantBench[]
+              ).map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => {
+                    setBench(item);
+                    if (item !== "SmartBrief") setSelectedId(null);
+                  }}
+                  aria-current={bench === item ? "page" : undefined}
+                  className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 ${bench === item ? "bg-gold text-background" : "text-muted-foreground hover:bg-surface hover:text-foreground"}`}
+                >
+                  {item}
+                </button>
+              ))}
+            </nav>
+            {bench === "SmartBrief" && selectedId ? (
+              <div className="min-h-[60vh]">
+                <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
+                  <LayoutDashboard className="size-4 text-gold" />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-steel">
+                    SmartBrief output
+                  </span>
+                </div>
+                <AnalysisWorkspace id={selectedId} />
               </div>
+            ) : (
+              <BenchView
+                bench={bench}
+                analyses={analyses.data ?? []}
+                diary={diary.data ?? []}
+                onSelect={setSelectedId}
+                onAssistant={() =>
+                  window.dispatchEvent(new Event("redcase:assistant-open"))
+                }
+              />
             )}
           </section>
         </div>
       </div>
-      <PersonaSettings />
     </AppShell>
   );
 }
 
-function PersonaSettings() {
-  const persona = usePersona();
-  const save = useSavePersona();
-  const practiceAreas = usePracticeAreas();
-  const [agentName, setAgentName] = useState<string>("Assistant");
-  const [tone, setTone] = useState<TonePreset>("PROFESSIONAL");
-  const [rules, setRules] = useState("");
-  const [tags, setTags] = useState("");
-  const [flash, setFlash] = useState<string | null>(null);
-  const [flashType, setFlashType] = useState<"ok" | "err">("ok");
-
-  useEffect(() => {
-    if (persona.data) {
-      setAgentName(persona.data.agent_name ?? "Assistant");
-      setTone(persona.data.tone_preset ?? "PROFESSIONAL");
-      setRules(persona.data.rules_of_engagement ?? "");
-      setTags(persona.data.practice_areas?.join(", ") ?? "");
-    }
-  }, [persona.data]);
-
-  return (
-    <section className="mx-auto mt-8 max-w-5xl space-y-6 border-t border-border pt-8">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
-          Assistant Persona
-        </div>
-        <h2 className="mt-1 text-xl font-semibold">How your assistant communicates</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Saved per user. Shapes HOW the assistant writes — it can never change what it may cite.
-        </p>
-      </div>
-
-      {flash && (
-        <div
-          className={`rounded-lg border px-3 py-2 text-sm ${
-            flashType === "ok"
-              ? "border-success/40 bg-success/10 text-success"
-              : "border-destructive/40 bg-destructive/10 text-destructive"
-          }`}
-        >
-          {flash}
-        </div>
-      )}
-
-      {(persona.isLoading || practiceAreas.isLoading) && (
-        <div className="panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Loading your persona…
-        </div>
-      )}
-
-      {persona.data && practiceAreas.data && (
-        <form
-          className="panel space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate(
-              {
-                agent_name: agentName.trim() || "Assistant",
-                tone_preset: tone,
-                rules_of_engagement: rules.trim() || null,
-                practice_areas: tags.split(",").map((s) => s.trim()).filter(Boolean),
-              },
-              {
-                onSuccess: () => { setFlash("Persona saved."); setFlashType("ok"); },
-                onError: (err: unknown) => {
-                  setFlash(
-                    err instanceof Error ? `Could not save: ${err.message}` : "Could not save persona.",
-                  );
-                  setFlashType("err");
-                },
-              },
-            );
-          }}
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Agent name</span>
-              <input value={agentName} onChange={(e) => setAgentName(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Assistant" />
-            </label>
-            <label className="block">
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Tone preset</span>
-              <select value={tone} onChange={(e) => setTone(e.target.value as TonePreset)}
-                className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                {PERSONA_TONES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
+function BenchView({
+  bench,
+  analyses,
+  diary,
+  onSelect,
+  onAssistant,
+}: {
+  bench: string;
+  analyses: Analysis[];
+  diary: Array<{
+    id: string;
+    title: string;
+    entry_type: string;
+    starts_at: string;
+    status: string;
+  }>;
+  onSelect: (id: string) => void;
+  onAssistant: () => void;
+}) {
+  if (bench === "Deck")
+    return (
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Deck outputs</h2>
+        {analyses.length ? (
+          analyses.map((analysis) => (
+            <button
+              key={analysis.analysis_id}
+              type="button"
+              onClick={() => onSelect(analysis.analysis_id)}
+              className="flex w-full items-center justify-between rounded-xl border border-border p-4 text-left transition-all duration-200 hover:border-gold/50"
+            >
+              <span>
+                <span className="block text-sm font-medium">
+                  {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {analysis.analysis_id}
+                </span>
+              </span>
+              <StatusBadge status={analysis.status} />
+            </button>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Your SmartBrief outputs will appear in the Deck.
           </div>
-          <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Rules of engagement</span>
-            <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={3}
-              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              placeholder="How should the assistant approach matters?" />
-          </label>
-          <label className="block">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Practice areas (research lens)</span>
-            <input value={tags} onChange={(e) => setTags(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm" placeholder="Litigation, Tax" />
-          </label>
-          <button type="submit" disabled={save.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:opacity-60">
-            {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-            {save.isPending ? "Saving…" : "Save persona"}
-          </button>
-        </form>
-      )}
-    </section>
+        )}
+      </div>
+    );
+  if (bench === "Red-Teamer")
+    return (
+      <div className="rounded-xl border border-border bg-background/60 p-6">
+        <div className="flex items-center gap-3">
+          <Swords className="size-5 text-gold" />
+          <h2 className="text-lg font-semibold">Red-Teamer</h2>
+        </div>
+        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+          Review strategy and challenge assumptions. Open a battle card from the
+          Red-Teamer bench, then ask the Personal Assistant to probe its
+          reasoning and counter-arguments.
+        </p>
+        <Link
+          to="/red-teamer"
+          className="mt-4 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90"
+        >
+          Open Red-Teamer <ChevronRight className="ml-2 size-4" />
+        </Link>
+        <button
+          type="button"
+          onClick={onAssistant}
+          className="ml-3 mt-4 inline-flex rounded-lg border border-border px-4 py-2 text-sm transition-all duration-200 hover:border-gold/50"
+        >
+          Question current output
+        </button>
+      </div>
+    );
+  if (bench === "Researcher")
+    return (
+      <div className="rounded-xl border border-border bg-background/60 p-6">
+        <div className="flex items-center gap-3">
+          <Scale className="size-5 text-gold" />
+          <h2 className="text-lg font-semibold">Researcher</h2>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Search firm documents and Nigerian authorities, then reference a
+          result in the Assistant.
+        </p>
+        <Link
+          to="/search"
+          className="mt-4 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90"
+        >
+          Open research <ChevronRight className="ml-2 size-4" />
+        </Link>
+      </div>
+    );
+  if (bench === "Reviewer")
+    return (
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">Hearings &amp; reviews</h2>
+        {diary.length ? (
+          diary.map((entry) => (
+            <article
+              key={entry.id}
+              className="rounded-xl border border-border p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium">{entry.title}</span>
+                <span className="text-[10px] uppercase text-gold">
+                  {entry.entry_type}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {new Date(entry.starts_at).toLocaleString()} · {entry.status}
+              </p>
+            </article>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No court diary entries available.
+          </div>
+        )}
+      </div>
+    );
+  return (
+    <div className="panel flex min-h-[60vh] flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+      <LayoutDashboard className="size-8 text-steel" />
+      <h2 className="text-lg font-semibold">SmartBrief</h2>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        Select a Deck output to open the Overview, Arguments, Similar Cases and
+        Law sections.
+      </p>
+    </div>
   );
 }
 
@@ -411,13 +668,7 @@ function AnalysisWorkspace({ id }: { id: string }) {
   );
 }
 
-function OverviewTab({
-  output,
-  sections,
-}: {
-  output: any;
-  sections: any;
-}) {
+function OverviewTab({ output, sections }: { output: any; sections: any }) {
   const overview = sections.overview ?? {};
 
   const items: Array<[string, string]> = [];
