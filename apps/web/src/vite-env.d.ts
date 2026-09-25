@@ -2,6 +2,8 @@
 
 // Vite env typing for the RedCase frontend (see .env.example).
 interface ImportMetaEnv {
+  /** FastAPI backend base URL, e.g. https://api.redcase.xyz. */
+  readonly VITE_API_URL?: string;
   /** FastAPI backend base URL, e.g. http://127.0.0.1:8000 */
   readonly VITE_API_BASE_URL?: string;
   /** Supabase project URL for Auth (magic link). */

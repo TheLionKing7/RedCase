@@ -23,6 +23,7 @@ import { Route as AuthedHomeRouteImport } from './routes/_authed.home'
 import { Route as AuthedPinsRouteImport } from './routes/_authed.pins'
 import { Route as AuthedRedTeamerRouteImport } from './routes/_authed.red-teamer'
 import { Route as AuthedSearchRouteImport } from './routes/_authed.search'
+import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
 import { Route as AuthedThreadsRouteImport } from './routes/_authed.threads'
 import { Route as AuthedTrackerRouteImport } from './routes/_authed.tracker'
 import { Route as AuthedWorkbenchRouteImport } from './routes/_authed.workbench'
@@ -97,6 +98,11 @@ const AuthedSearchRoute = AuthedSearchRouteImport.update({
   path: '/search',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedSettingsRoute = AuthedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedThreadsRoute = AuthedThreadsRouteImport.update({
   id: '/threads',
   path: '/threads',
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/pins': typeof AuthedPinsRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
+  '/settings': typeof AuthedSettingsRoute
   '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
   '/workbench': typeof AuthedWorkbenchRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/pins': typeof AuthedPinsRoute
   '/red-teamer': typeof AuthedRedTeamerRoute
   '/search': typeof AuthedSearchRoute
+  '/settings': typeof AuthedSettingsRoute
   '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
   '/workbench': typeof AuthedWorkbenchRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/_authed/pins': typeof AuthedPinsRoute
   '/_authed/red-teamer': typeof AuthedRedTeamerRoute
   '/_authed/search': typeof AuthedSearchRoute
+  '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/threads': typeof AuthedThreadsRouteWithChildren
   '/_authed/tracker': typeof AuthedTrackerRoute
   '/_authed/workbench': typeof AuthedWorkbenchRoute
@@ -193,6 +202,7 @@ export interface FileRouteTypes {
     | '/pins'
     | '/red-teamer'
     | '/search'
+    | '/settings'
     | '/threads'
     | '/tracker'
     | '/workbench'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/pins'
     | '/red-teamer'
     | '/search'
+    | '/settings'
     | '/threads'
     | '/tracker'
     | '/workbench'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/_authed/pins'
     | '/_authed/red-teamer'
     | '/_authed/search'
+    | '/_authed/settings'
     | '/_authed/threads'
     | '/_authed/tracker'
     | '/_authed/workbench'
@@ -346,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedSearchRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/settings': {
+      id: '/_authed/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthedSettingsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/threads': {
       id: '/_authed/threads'
       path: '/threads'
@@ -399,6 +418,7 @@ interface AuthedRouteChildren {
   AuthedPinsRoute: typeof AuthedPinsRoute
   AuthedRedTeamerRoute: typeof AuthedRedTeamerRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
+  AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedThreadsRoute: typeof AuthedThreadsRouteWithChildren
   AuthedTrackerRoute: typeof AuthedTrackerRoute
   AuthedWorkbenchRoute: typeof AuthedWorkbenchRoute
@@ -414,6 +434,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedPinsRoute: AuthedPinsRoute,
   AuthedRedTeamerRoute: AuthedRedTeamerRoute,
   AuthedSearchRoute: AuthedSearchRoute,
+  AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedThreadsRoute: AuthedThreadsRouteWithChildren,
   AuthedTrackerRoute: AuthedTrackerRoute,
   AuthedWorkbenchRoute: AuthedWorkbenchRoute,

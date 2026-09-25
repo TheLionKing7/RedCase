@@ -59,6 +59,11 @@ class VerifyRequest(BaseModel):
     token: str = Field(min_length=1, max_length=256)
 
 
+class ActivateSignupRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    full_name: str = Field(min_length=1, max_length=160)
+
+
 def _limiter(request: Request) -> PublicSignupLimiter:
     limiter: PublicSignupLimiter | None = getattr(
         request.app.state, "public_signup_limiter", None
@@ -71,30 +76,13 @@ def _limiter(request: Request) -> PublicSignupLimiter:
 
 
 async def _send_verification_email(settings, email: str, token: str) -> bool:
-    """Dispatch the outbound verification email via Supabase Auth when provisioned.
+    """Report whether production Auth is configured for the browser OTP flow.
 
-    Returns True when an email was dispatched, False when the provider credential is
-    absent (dev/CI fallback — the caller then returns the token for demo/testing).
-    Uses httpx (already a dependency) against the Supabase magic-link endpoint.
+    The browser sends Supabase's public-key OTP only after the application is
+    stored. The private signup verification token is returned only in local/CI.
     """
-    service_role = settings.supabase_service_role
-    supabase_url = settings.supabase_url
-    if not service_role or not supabase_url:
-        return False
-    import httpx
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(
-            f"{supabase_url.rstrip('/')}/auth/v1/otp",
-            headers={
-                "apikey": service_role.get_secret_value(),
-                "Authorization": f"Bearer {service_role.get_secret_value()}",
-                "Content-Type": "application/json",
-            },
-            json={"email": email, "create_user": False},
-        )
-        resp.raise_for_status()
-    return True
+    del email, token
+    return bool(settings.supabase_service_role and settings.supabase_url)
 
 
 @router.post("/signup", status_code=201)
@@ -156,10 +144,9 @@ async def public_signup(request: Request, body: SignupRequest) -> dict:
     resp: dict = {"status": "PENDING_VERIFICATION"}
     if not sent:
         # Dev/CI fallback: no provider credential — the only path that surfaces
-        # the raw token. Never reached in prod (credential is provisioned).
+        # the raw internal token. Production uses the verified Supabase OTP flow.
         resp["verify_token"] = token
         log.warning("signup_no_email_provider", note="service role unset (dev/CI)")
-
     log.info("signup_applied", status="PENDING_VERIFICATION")
     return resp
 
@@ -239,8 +226,8 @@ async def public_verify(request: Request, body: VerifyRequest) -> dict:
                 uuid.UUID(tenant_id),
             )
             await conn.execute(
-                "INSERT INTO subscriptions (tenant_id, plan, max_seats, current_seats, status)"
-                " VALUES ($1, 'CORE', 3, 0, 'ACTIVE')",
+            "INSERT INTO subscriptions (tenant_id, plan, max_seats, current_seats, status)"
+            " VALUES ($1, 'CORE', 3, 0, 'ACTIVE')",
                 uuid.UUID(tenant_id),
             )
             await conn.execute(
@@ -267,5 +254,128 @@ async def public_verify(request: Request, body: VerifyRequest) -> dict:
         step="activate",
     )
     return {"status": "ACTIVE", "tenant_id": tenant_id}
+
+
+@router.post("/activate", status_code=200)
+async def activate_verified_signup(request: Request, body: ActivateSignupRequest) -> dict:
+    """Provision the verified Supabase user as this tenant's initial Admin.
+
+    The bearer JWT is signature/expiry checked and its verified email must match the
+    pending signup. Tenant/admin claims are server-derived and written to Supabase
+    app_metadata; no client-supplied role or tenant id is accepted.
+    """
+    from app.deps import JwtError, verify_supabase_jwt
+
+    settings = request.app.state.settings
+    if not settings.supabase_jwt_secret:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Auth is not configured.")
+    authorization = request.headers.get("authorization", "")
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Verified sign-in is required.")
+    try:
+        claims = verify_supabase_jwt(
+            authorization.removeprefix("Bearer ").strip(),
+            settings.supabase_jwt_secret.get_secret_value(),
+        )
+    except JwtError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid sign-in session.") from exc
+    user_ref = claims.get("sub")
+    email = normalize_email(str(claims.get("email") or ""))
+    if not user_ref or not email or email != normalize_email(body.email):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="The verified email does not match.")
+    if not settings.supabase_service_role or not settings.supabase_url:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Account provisioning is unavailable.")
+
+    pool = request.app.state.db_pool
+    if pool is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database not configured.")
+    import httpx
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            signup = await conn.fetchrow(
+                "SELECT id, firm_name, jurisdiction, tenant_id, status FROM firm_signups"
+                " WHERE email = $1 FOR UPDATE",
+                email,
+            )
+            if signup is None or signup["status"] not in ("PENDING_VERIFICATION", "ACTIVE"):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="No pending firm signup was found.")
+            if signup["tenant_id"]:
+                tenant_id = str(signup["tenant_id"])
+            else:
+                import uuid
+
+                tenant_id = str(uuid.uuid4())
+                vault_id = uuid.uuid4()
+                slug = f"t-{uuid.uuid4().hex[:12]}"
+                await conn.execute(
+                    "INSERT INTO tenants (id, name, slug, jurisdiction) VALUES ($1, $2, $3, $4)",
+                    uuid.UUID(tenant_id), signup["firm_name"], slug, signup["jurisdiction"],
+                )
+                await conn.execute("SELECT set_config('app.tenant_id', $1, true)", tenant_id)
+                await conn.execute(
+                    "INSERT INTO vaults (id, tenant_id, vault_type, name) VALUES ($1, $2, 'firm', 'Client Vault')",
+                    vault_id, uuid.UUID(tenant_id),
+                )
+                await conn.execute(
+                    "INSERT INTO subscriptions (tenant_id, plan, max_seats, current_seats, status)"
+                    " VALUES ($1, 'CORE', 3, 1, 'ACTIVE')",
+                    uuid.UUID(tenant_id),
+                )
+                await conn.execute(
+                    "INSERT INTO firm_members (tenant_id, user_ref, full_name, role, clearance)"
+                    " VALUES ($1, $2, $3, 'Admin', 'ADMIN') ON CONFLICT (tenant_id, user_ref)"
+                    " DO UPDATE SET full_name = EXCLUDED.full_name, role = 'Admin', clearance = 'ADMIN'",
+                    uuid.UUID(tenant_id), str(user_ref), body.full_name.strip()[:160],
+                )
+                await conn.execute(
+                    "INSERT INTO agent_personas (tenant_id, owner_ref, agent_name, tone_preset)"
+                    " VALUES ($1, $2, 'Assistant', 'PROFESSIONAL')"
+                    " ON CONFLICT (tenant_id, owner_ref) DO NOTHING",
+                    uuid.UUID(tenant_id), str(user_ref),
+                )
+                await conn.execute(
+                    "INSERT INTO firm_admins (tenant_id, user_ref, action, granted_by)"
+                    " VALUES ($1, $2, 'GRANTED', 'system')",
+                    uuid.UUID(tenant_id), str(user_ref),
+                )
+                await conn.execute(
+                    "INSERT INTO tenant_departments (tenant_id, department) VALUES ($1, 'Legal Practice')"
+                    " ON CONFLICT DO NOTHING",
+                    uuid.UUID(tenant_id),
+                )
+                await conn.execute(
+                    "UPDATE firm_signups SET status = 'ACTIVE', tenant_id = $2, verified_at = now(),"
+                    " verify_token_hash = NULL, verify_token_expires_at = NULL WHERE id = $1",
+                    signup["id"], uuid.UUID(tenant_id),
+                )
+                await conn.execute(
+                    "INSERT INTO signup_audit (tenant_id, step, actor, detail)"
+                    " VALUES ($1, 'verify', 'system', $2), ($1, 'provision', 'system', $3),"
+                    " ($1, 'activate', 'system', $4)",
+                    uuid.UUID(tenant_id), f"signup_id={signup['id']}",
+                    f"tenant_id={tenant_id}", slug,
+                )
+
+            service_key = settings.supabase_service_role.get_secret_value()
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.put(
+                    f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_ref}",
+                    headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+                    json={
+                        "app_metadata": {
+                            "tenant_id": tenant_id,
+                            "clearance": "ADMIN",
+                            "is_firm_admin": True,
+                        },
+                        "user_metadata": {"full_name": body.full_name.strip()[:160]},
+                    },
+                )
+                if response.is_error:
+                    raise HTTPException(
+                        status.HTTP_502_BAD_GATEWAY,
+                        detail="Could not complete secure firm account provisioning.",
+                    )
+    return {"status": "ACTIVE", "tenant_id": tenant_id, "refresh_session": True}
 
 

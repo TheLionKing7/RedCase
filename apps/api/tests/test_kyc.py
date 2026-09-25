@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.routers.firm_storage import MAX_UPLOAD_BYTES, _sniff_content_type
 
 JWT_SECRET = "test-secret"  # noqa: S105 (throwaway test-only shared secret)
 
@@ -83,6 +84,48 @@ def _headers(token: str) -> dict[str, str]:
 _admin = make_jwt(sub=ADMIN_REF, is_firm_admin=True)
 _partner_no_admin = make_jwt(sub=PARTNER_REF, clearance="PARTNER", is_firm_admin=False)
 _staff = make_jwt(sub=STAFF_REF, clearance="STAFF", is_firm_admin=False)
+
+
+def test_upload_signature_sniffer_accepts_only_expected_file_headers() -> None:
+    assert _sniff_content_type(b"%PDF-1.7\nbody") == "application/pdf"
+    assert _sniff_content_type(b"\xff\xd8\xff\xe0image") == "image/jpeg"
+    assert _sniff_content_type(b"\x89PNG\r\n\x1a\nimage") == "image/png"
+    assert _sniff_content_type(b"not a pdf") is None
+
+
+def test_upload_size_limit_is_ten_megabytes() -> None:
+    assert MAX_UPLOAD_BYTES == 10 * 1024 * 1024
+
+
+def test_upload_rejects_extension_spoofed_content(app_db_url: str) -> None:
+    with TestClient(create_app(_settings(app_db_url))) as client:
+        response = client.post(
+            "/v1/firm/assets/rc-document",
+            headers={**_headers(_admin), "Content-Type": "application/pdf"},
+            content=b"<html>not a PDF</html>",
+        )
+        assert response.status_code == 415
+
+
+def test_upload_rejects_payload_over_cap(app_db_url: str) -> None:
+    with TestClient(create_app(_settings(app_db_url))) as client:
+        response = client.post(
+            "/v1/firm/assets/personal-id",
+            headers={**_headers(_admin), "Content-Type": "application/pdf"},
+            content=b"%PDF-1.7\n" + (b"x" * MAX_UPLOAD_BYTES),
+        )
+        assert response.status_code == 413
+
+
+def test_asset_upload_requires_firm_admin(app_db_url: str) -> None:
+    with TestClient(create_app(_settings(app_db_url))) as client:
+        for token in (_staff, _partner_no_admin):
+            response = client.post(
+                "/v1/firm/assets/rc-document",
+                headers={**_headers(token), "Content-Type": "application/pdf"},
+                content=b"%PDF-1.7\nprivate bytes",
+            )
+            assert response.status_code == 403
 
 
 def test_kyc_rejects_non_admin(app_db_url: str) -> None:

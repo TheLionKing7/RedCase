@@ -60,9 +60,9 @@ export function MarketingLayout({ children }: { children: ReactNode }) {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-2.5">
               <img
-                src="/brand/redcase-mark-white.svg"
-                alt="RedCase mark"
-                className="size-8"
+                src="/brand/redcase-logo.svg"
+                alt="RedCase"
+                className="h-10 w-auto object-contain"
               />
               <span className="font-display text-base">
                 <span className="font-semibold text-foreground">Red</span>

@@ -91,6 +91,36 @@ export async function verifyOtp(
   return session;
 }
 
+/** Refresh a session after the API updates the verified user's app_metadata. */
+export async function refreshSession(): Promise<AuthSession> {
+  const { url, key } = requireConfig();
+  const current = getSession();
+  if (!current?.refresh_token) throw new AuthError("Sign in again to continue setup.");
+  const res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+    method: "POST",
+    headers: { apikey: key, "content-type": "application/json" },
+    body: JSON.stringify({ refresh_token: current.refresh_token }),
+  });
+  const data = (await res.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_at?: number;
+    user?: { id?: string };
+    msg?: string;
+  };
+  if (!res.ok || !data.access_token) {
+    throw new AuthError(data.msg ?? `Session refresh failed (HTTP ${res.status})`);
+  }
+  const session: AuthSession = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token ?? current.refresh_token,
+    expires_at: data.expires_at ?? 0,
+    user_ref: data.user?.id ?? current.user_ref,
+  };
+  persist(session);
+  return session;
+}
+
 /** Step: email+password sign-in via Supabase Auth password grant. */
 export async function signInWithPassword(
   email: string,

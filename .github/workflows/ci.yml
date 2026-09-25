@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  mojibake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject mojibake in application source
+        run: |
+          if git grep -n -I -E 'GÇ|GÃ|GÜ|â€|ï¿½|�|-º| -[+]' -- apps; then
+            echo "Mojibake detected under apps/. Restore valid UTF-8 text before merging."
+            exit 1
+          fi
+
   api:
     runs-on: ubuntu-latest
     defaults:

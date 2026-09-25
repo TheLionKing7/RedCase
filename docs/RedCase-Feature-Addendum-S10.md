@@ -16,10 +16,11 @@
 
 ## 10.2 Firm onboarding funnel (extends the H1 wizard) — with KYC
 
-The wizard at `/onboarding` gains two steps and two enrichment steps. Final step order:
+The wizard at `/onboarding` is exactly five steps. Persona and first-matter setup are intentionally excluded (owner ruling: persona is a per-user preference, never firm onboarding; first matter is created after setup).
 
-1. **Firm identity** — firm name; **logo upload** (stored in Supabase Storage; `tenants.logo_path`); **jurisdiction** (dropdown; only Nigeria active — others render "Coming soon"; sets `tenants.jurisdiction` + selects the corpus pack at scale-up); **website** (URL, optional).
-2. **Firm verification (KYC)** — CAC registration number + RC document upload; administrator personal ID: type (NIN / Driver's License / International Passport) + document upload. New table:
+1. **Admin account** — owner name, work email, firm name; verify the address with Supabase Auth OTP before any upload. The verified owner is provisioned as the tenant's initial Admin.
+2. **Firm identity** — firm name; **logo upload** (actual bytes in a private Supabase Storage bucket, tenant-scoped key; `tenants.logo_path`); **jurisdiction** (Nigeria active; others coming soon); **website** (URL, optional).
+3. **Firm verification (KYC)** — CAC registration number + RC document upload; administrator personal ID: type (NIN / Driver's License / International Passport) + document upload.
 
 ```sql
 CREATE TABLE firm_kyc (
@@ -36,12 +37,11 @@ CREATE TABLE firm_kyc (
     reviewed_by TEXT, reviewed_at TIMESTAMPTZ
 );
 ```
-KYC documents are tenant-scoped, RLS-protected, and treated as PARTNER_RESTRICTED content (named-grant access only). Verification is a manual ops step for tenant zero; self-serve verification is Phase 4. KYC adds a processing activity to the RoPA (owner to notify the data-protection consultant).
+KYC documents are byte uploads to a **private** Supabase Storage bucket, tenant-scoped paths and PARTNER_RESTRICTED. Only admin-gated, 60-second signed URLs may access them; buckets are never public. Enforce PDF/JPG/PNG, 10 MB, and server-side signature sniffing. The browser never receives service-role credentials. Verification is a manual ops step for tenant zero; self-serve verification is Phase 4. KYC adds a processing activity to the RoPA (owner to notify the data-protection consultant).
 
-3. **Admin account** → existing `POST /v1/public/signup`.
-4. **Practice areas (firm defaults)** — multi-select taxonomy (Land, Employment, Election, Commercial, Criminal, Family, Banking/Finance, Tax…) → new table `tenant_practice_areas(tenant_id, tag)`. These are the firm's default lens.
-5. **Team invites** — emails + role (Partner/Senior Associate/Associate/Staff); invites go through the existing invite flow. Seat capacity enforced at invite time (existing `DENY_SEAT` behavior).
-6. **Done** → handoff to `/signin` with first-action suggestions.
+4. **Practice areas & departments** — multi-select taxonomy and firm modules; saves firm defaults.
+5. **Team** — optional teammate email invites through the existing seat-gated invite path (default Associate; seat capacity enforced at invite time).
+6. **Done** — authenticated owner enters the firm workspace; first matter can be created later.
 
 ## 10.3 Workbench personalization — the lawyer's own agent
 
@@ -62,7 +62,7 @@ CREATE TABLE agent_personas (
 );
 ```
 
-- **Agent name + rules of engagement + tone** are set during onboarding (step 5 extension) and editable in Workbench settings.
+- **Persona is Settings-only.** The new firm starts with the default persona (`Assistant`, `PROFESSIONAL`). After first login, each user may personalize agent name, rules of engagement and tone in **Settings → Assistant Persona**. Persona is never requested during firm onboarding.
 - Injection order per turn: `GROUNDED_SYSTEM` → persona block (name, rules, tone) → retrieval context. **Persona never overrides grounding rules** (citation, refusal, zero-fabrication contracts are immutable).
 - Practice areas filter the assistant's `search_vault_a/b` tools and the Similar Cases lens (metadata pre-filter on `legal_topics`).
 
@@ -82,8 +82,9 @@ ALTER TABLE matters ADD COLUMN progress_note TEXT;
 | Surface | Who | Contents |
 |---|---|---|
 | Sign-in | Everyone | Email+password OR magic link; "New firm? Start your firm →" link |
-| Onboarding wizard | New firms | §10.2 six steps incl. KYC |
-| My Workbench | Every lawyer (partners included) | Agent (persona §10.3), analyses, my matters, my deadlines |
+| Onboarding wizard | New firms | §10.2 five setup steps incl. KYC; Done is the completion state |
+| My Workbench | Every lawyer (partners included) | Default assistant, analyses, my matters, my deadlines |
+| Settings → Assistant Persona | Every user | Per-user assistant writing preferences; default persona is used until personalized |
 | Firm Command | `is_firm_admin` only | Seats, invites, KYC status, matter progress (§10.4), receivables, transparency feed |
 | Staff home | Non-lawyer staff | My tasks, my channels, my deadlines |
 
@@ -92,8 +93,8 @@ ALTER TABLE matters ADD COLUMN progress_note TEXT;
 | Slice | Content |
 |---|---|
 | S10-0 | Sign-in bug sweep: `redcase.ai`→`redcase.xyz` link; logo → `docs/RedCaseSVG/redcase_firefly.svg` (properly sized); bottom mark → `apps/web/public/brand/redcase-mark-white.svg`; favicon → `apps/web/public/brand/redcase-mark-favicon.svg`; "New firm? Start your firm →" link | ✅ DONE (2026-09-23) — also landed the PRODUCTS band on `/`; `npm run build` GREEN |
-| S10-1 | Wizard extensions: firm identity (logo/jurisdiction/website) + KYC (firm_kyc table + uploads + storage) | ✅ DONE (2026-09-23) — `0021_firm_kyc` (tenants.logo_path + firm_kyc table, tenant-scoped RLS + firm-admin gate, storage-path-only design, `id_document_type`), `GET/POST /v1/firm/kyc` (firm-admin gated, upsert resets to PENDING, ops-only VERIFIED/REJECTED), `storage_kyc_bucket`/`storage_kyc_prefix` config, `test_kyc.py` (5 tests incl. tenant RLS + admin gate) GREEN, onboarding wizard gains Firm identity + KYC steps (paths only — no upload in this slice); `npm run build` GREEN |
-| S10-2 | Agent persona (table + onboarding step + workbench settings + prompt injection) + practice-area lens |
+| S10-1 | Five-step wizard + firm identity and KYC real file uploads; private tenant-scoped Supabase buckets; server sniffing, 10 MB cap, signed-URL admin gate; owner email verification and initial Admin provisioning | In progress — production bucket/bytes/non-admin live-fetch DoD pending backend Supabase credentials |
+| S10-2 | Agent persona (table + **Settings-only** per-user preference + prompt injection) + practice-area lens — never onboarding |
 | S10-3 | Matter assignment (column + endpoint + DIRECT channel) + Firm Command matter-progress panel |
 
 Standing rules unchanged: RLS on every new table; KYC docs classified PARTNER_RESTRICTED; synthetic data only; suite green per slice; MEMORY_BANK updated.

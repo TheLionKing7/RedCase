@@ -86,12 +86,13 @@ class Settings(BaseSettings):
     vault_a_key_provider: str = "local"
     vault_a_master_key: SecretStr | None = None
     storage_public_url: str | None = None  # public URL prefix for source_pdf_path
-    # KYC document storage (Addendum S10.2): KYC scans are PARTNER_RESTRICTED
-    # content. They live in a PRIVATE bucket — never under storage_public_url — and
-    # only path refs are written to firm_kyc. Access is via admin-gated signed
-    # URLs (Phase 4); this slice stores the refs issued at upload.
+    # Firm identity and KYC assets are private, PARTNER_RESTRICTED objects.
+    # The backend uses service-role REST calls only; no storage credentials enter
+    # the browser. Reads are short-lived signed URLs behind require_firm_admin.
     storage_kyc_bucket: str = "firm-kyc"
     storage_kyc_prefix: str = "kyc"
+    storage_brand_bucket: str = "firm-brand"
+    storage_brand_prefix: str = "logos"
 
 
     # Web

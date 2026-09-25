@@ -179,6 +179,14 @@ class TestPublicSignup:
 
 
 class TestPublicVerify:
+    def test_signup_activation_requires_verified_supabase_session(self, app_db_url: str) -> None:
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            response = client.post(
+                "/v1/public/activate",
+                json={"email": "owner@example.com", "full_name": "Owner"},
+            )
+        assert response.status_code == 401
+
     def test_verify_provisions_tenant_and_activates(self, app_db_url: str) -> None:
         email = f"verify-{uuid.uuid4().hex[:8]}@example.com"
         token = new_verify_token()
