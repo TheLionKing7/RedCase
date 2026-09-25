@@ -14,10 +14,18 @@ frontend falls back to clearance/role gracefully.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from app.deps import TenantContext, get_tenant_context
 
 router = APIRouter(prefix="/v1", tags=["members"])
+
+
+class ProfileUpdate(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
+    email: str = Field(min_length=3, max_length=320)
+    timezone: str = Field(min_length=1, max_length=100)
 
 
 @router.get("/members")
@@ -66,3 +74,34 @@ async def my_membership(
         "clearance": row["member_clearance"] or ctx.clearance,
         "firm_name": row["firm_name"],
     }
+
+
+@router.get("/profile")
+async def get_profile(
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict:
+    row = await ctx.db.fetchrow(
+        "SELECT full_name, phone, email, timezone, role, clearance"
+        " FROM firm_members WHERE tenant_id = $1::uuid AND user_ref = $2",
+        uuid.UUID(ctx.tenant_id), ctx.user_ref,
+    )
+    if row is None:
+        raise HTTPException(404, "No personnel record for this user yet.")
+    return {**dict(row), "email": row["email"] or ""}
+
+
+@router.put("/profile")
+async def update_profile(
+    body: ProfileUpdate,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict:
+    row = await ctx.db.fetchrow(
+        "UPDATE firm_members SET full_name = $1, phone = $2, email = $3, timezone = $4"
+        " WHERE tenant_id = $5::uuid AND user_ref = $6"
+        " RETURNING full_name, phone, email, timezone, role, clearance",
+        body.full_name.strip(), body.phone.strip() if body.phone else None,
+        body.email.strip().lower(), body.timezone.strip(), uuid.UUID(ctx.tenant_id), ctx.user_ref,
+    )
+    if row is None:
+        raise HTTPException(404, "No personnel record for this user yet.")
+    return dict(row)

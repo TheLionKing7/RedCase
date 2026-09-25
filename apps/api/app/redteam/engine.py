@@ -178,6 +178,9 @@ async def run_pack_analysis(
     db: asyncpg.Connection,
     *,
     settings: Settings,
+    redteam_temperature: float | None = None,
+    reviewer_specialty: str | None = None,
+    researcher_specialty: str | None = None,
     llm: AnswerLLM | None = None,
     embedder: Embedder | None = None,
 ) -> BaseModel:
@@ -187,7 +190,27 @@ async def run_pack_analysis(
     for ADVERSAL_BRIEF, SummonsResponseOutput / ContractReviewOutput for
     the §3.3 packs); authority UUIDs are matcher-verified against retrieved
     context."""
-    llm = llm or make_llm(settings)
+    if llm is None:
+        # Keep the configured fallback chain, but allow each user's saved
+        # workbench temperature to tune adversarial generation only.
+        from app.retrieval.clients import FallbackLLM, OpenAICompatLLM
+
+        base_llm = make_llm(settings)
+        if redteam_temperature is not None:
+            providers = getattr(base_llm, "_providers", [])
+            tuned = []
+            for provider, client in providers:
+                if isinstance(client, OpenAICompatLLM):
+                    tuned.append((provider, OpenAICompatLLM(
+                        client._client, client._model, provider=provider,
+                        max_tokens=client._max_tokens,
+                        temperature=redteam_temperature,
+                    )))
+                else:
+                    tuned.append((provider, client))
+            llm = FallbackLLM(tuned) if tuned else base_llm
+        else:
+            llm = base_llm
     embedder = embedder or make_embedder(settings)
     log.info("pack_analysis_start", pack=pack.name, document_id=document_id)
 
@@ -229,7 +252,17 @@ async def run_pack_analysis(
     output: BaseModel | None = None
     critic_feedback = ""
     for attempt in range(MAX_REGENERATIONS + 1):
-        specialist = pack.specialist_prompt + (
+        specialty = (
+            reviewer_specialty
+            if pack.name == "CONTRACT_REVIEW"
+            else researcher_specialty
+        )
+        specialty_context = (
+            f"\n<user_specialty>{specialty}</user_specialty>"
+            if specialty
+            else ""
+        )
+        specialist = pack.specialist_prompt + specialty_context + (
             f"\n<critic_feedback>{critic_feedback}</critic_feedback>"
             if critic_feedback
             else ""

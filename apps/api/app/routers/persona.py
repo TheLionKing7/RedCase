@@ -38,6 +38,11 @@ class PersonaUpsert(BaseModel):
     rules_of_engagement: str | None = Field(default=None, max_length=4000)
     tone_preset: str = Field(default="PROFESSIONAL")
     practice_areas: list[str] = Field(default_factory=list, max_length=40)
+    personality: str | None = Field(default=None, max_length=2000)
+    working_style: str | None = Field(default=None, max_length=2000)
+    reviewer_specialty: str | None = Field(default=None, max_length=2000)
+    researcher_specialty: str | None = Field(default=None, max_length=2000)
+    redteam_temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
 
 class PracticeAreasUpsert(BaseModel):
@@ -50,7 +55,8 @@ class DepartmentsUpsert(BaseModel):
 
 async def _persona_row(ctx: TenantContext):
     return await ctx.db.fetchrow(
-        "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas"
+        "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas, personality,"
+        " working_style, reviewer_specialty, researcher_specialty, redteam_temperature"
         " FROM agent_personas WHERE tenant_id = $1::uuid AND owner_ref = $2",
         uuid.UUID(ctx.tenant_id),
         ctx.user_ref,
@@ -63,6 +69,11 @@ def _persona_payload(row) -> dict[str, Any]:
         "rules_of_engagement": row["rules_of_engagement"],
         "tone_preset": row["tone_preset"] or "PROFESSIONAL",
         "practice_areas": list(row["practice_areas"] or []),
+        "personality": row["personality"],
+        "working_style": row["working_style"],
+        "reviewer_specialty": row["reviewer_specialty"],
+        "researcher_specialty": row["researcher_specialty"],
+        "redteam_temperature": float(row["redteam_temperature"] or 0.2),
     }
 
 
@@ -75,7 +86,9 @@ async def get_persona(
     if row is None:
         return _persona_payload(
             {"agent_name": "Assistant", "rules_of_engagement": None,
-             "tone_preset": "PROFESSIONAL", "practice_areas": []}
+             "tone_preset": "PROFESSIONAL", "practice_areas": [], "personality": None,
+             "working_style": None, "reviewer_specialty": None, "researcher_specialty": None,
+             "redteam_temperature": 0.2}
         )
     return _persona_payload(row)
 
@@ -93,21 +106,34 @@ async def upsert_persona(
         )
     row = await ctx.db.fetchrow(
         "INSERT INTO agent_personas"
-        " (tenant_id, owner_ref, agent_name, rules_of_engagement, tone_preset, practice_areas)"
-        " VALUES ($1, $2, $3, $4, $5, $6)"
+        " (tenant_id, owner_ref, agent_name, rules_of_engagement, tone_preset, practice_areas,"
+        " personality, working_style, reviewer_specialty, researcher_specialty,"
+        " redteam_temperature)"
+        " VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
         " ON CONFLICT (tenant_id, owner_ref) DO UPDATE SET"
         "  agent_name = EXCLUDED.agent_name,"
         "  rules_of_engagement = EXCLUDED.rules_of_engagement,"
         "  tone_preset = EXCLUDED.tone_preset,"
         "  practice_areas = EXCLUDED.practice_areas,"
+        "  personality = EXCLUDED.personality,"
+        "  working_style = EXCLUDED.working_style,"
+        "  reviewer_specialty = EXCLUDED.reviewer_specialty,"
+        "  researcher_specialty = EXCLUDED.researcher_specialty,"
+        "  redteam_temperature = EXCLUDED.redteam_temperature,"
         "  updated_at = now()"
-        " RETURNING agent_name, rules_of_engagement, tone_preset, practice_areas",
+        " RETURNING agent_name, rules_of_engagement, tone_preset, practice_areas, personality,"
+        " working_style, reviewer_specialty, researcher_specialty, redteam_temperature",
         uuid.UUID(ctx.tenant_id),
         ctx.user_ref,
         body.agent_name[:120],
         body.rules_of_engagement,
         body.tone_preset,
         list(body.practice_areas) or None,
+        body.personality,
+        body.working_style,
+        body.reviewer_specialty,
+        body.researcher_specialty,
+        body.redteam_temperature,
     )
     log.info("persona_upserted", tenant_id=ctx.tenant_id, user_ref=ctx.user_ref)
     return _persona_payload(row)

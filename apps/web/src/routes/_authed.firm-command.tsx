@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Flame,
   Scale,
@@ -16,11 +16,12 @@ import { getFirmAdmin } from "@/lib/auth/supabase";
 import { useDeadlineEvents } from "@/lib/api/deadlines";
 import { useAnalyses } from "@/lib/api/workbench";
 import type { Analysis } from "@/lib/api/workbench";
-import { useFirmOverview, useAdminLedger, useFirmSettings } from "@/lib/api/firmAdmin";
 import {
-  useAccessRequests,
-  useDecideAccessRequest,
-} from "@/lib/api/access";
+  useFirmOverview,
+  useAdminLedger,
+  useFirmSettings,
+} from "@/lib/api/firmAdmin";
+import { useAccessRequests, useDecideAccessRequest } from "@/lib/api/access";
 import type { AccessRequest } from "@/lib/api/access";
 
 // Part 3 Slice 2 — Firm Command (renamed from the partner dashboard).
@@ -37,7 +38,8 @@ export const Route = createFileRoute("/_authed/firm-command")({
       { title: "Firm Command — RedCase" },
       {
         name: "description",
-        content: "Run-the-firm command center for admins — seats, admin ledger, deadlines and analyses.",
+        content:
+          "Run-the-firm command center for admins — seats, admin ledger, deadlines and analyses.",
       },
     ],
   }),
@@ -45,15 +47,40 @@ export const Route = createFileRoute("/_authed/firm-command")({
 });
 
 const ADMIN_TOOLS = [
-  { to: "/search", label: "Vault Search", sub: "Dual-vault retrieval", icon: Search },
-  { to: "/red-teamer", label: "Red-Teamer", sub: "Adversarial analysis", icon: ShieldAlert },
-  { to: "/tracker", label: "Statutory Tracker", sub: "Deadline computation", icon: CalendarClock },
+  {
+    to: "/search",
+    label: "Vault Search",
+    sub: "Dual-vault retrieval",
+    icon: Search,
+  },
+  {
+    to: "/red-teamer",
+    label: "Red-Teamer",
+    sub: "Adversarial analysis",
+    icon: ShieldAlert,
+  },
+  {
+    to: "/tracker",
+    label: "Statutory Tracker",
+    sub: "Deadline computation",
+    icon: CalendarClock,
+  },
 ] as const;
 
-function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
   return (
     <div className="panel p-5">
-      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
+      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </div>
       <div className={`mt-2 font-display text-3xl ${tone}`}>{value}</div>
     </div>
   );
@@ -65,9 +92,14 @@ function AnalysisStatus({ status }: { status: Analysis["status"] }) {
     RUNNING: { label: "Running", cls: "bg-steel/15 text-steel" },
     FAILED: { label: "Failed", cls: "bg-destructive/15 text-destructive" },
   };
-  const s = map[status] ?? { label: "Needs review", cls: "bg-warning/15 text-warning" };
+  const s = map[status] ?? {
+    label: "Needs review",
+    cls: "bg-warning/15 text-warning",
+  };
   return (
-    <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${s.cls}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${s.cls}`}
+    >
       {s.label}
     </span>
   );
@@ -76,6 +108,12 @@ function AnalysisStatus({ status }: { status: Analysis["status"] }) {
 function AccessRequestsPanel() {
   const requests = useAccessRequests();
   const decide = useDecideAccessRequest();
+  const [expiryByRequest, setExpiryByRequest] = useState<
+    Record<string, string>
+  >({});
+  const [granteeByRequest, setGranteeByRequest] = useState<
+    Record<string, string>
+  >({});
   const items = requests.data?.requests ?? [];
 
   return (
@@ -85,8 +123,8 @@ function AccessRequestsPanel() {
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Named-grant requests on documents (#1.6). Approving writes a real{" "}
-        <span className="font-mono text-xs">document_grants</span> ACL row — a PARTNER/
-        ADMIN may never grant to themselves.
+        <span className="font-mono text-xs">document_grants</span> ACL row — a
+        PARTNER/ ADMIN may never grant to themselves.
       </p>
       {requests.isPending ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -109,22 +147,65 @@ function AccessRequestsPanel() {
             >
               <div className="min-w-0">
                 <div className="font-mono text-xs">
-                  {r.grantee_ref} · {r.grant_level}
+                  {r.brief_name || "Internal Brief"} · {r.grant_level}
                 </div>
                 <div className="font-mono text-[10px] text-muted-foreground">
-                  doc {r.document_id.slice(0, 8)} · by {r.requester_ref}
+                  requested by {r.requester_ref}
                 </div>
                 {r.reason && (
-                  <div className="mt-1 text-sm text-muted-foreground">{r.reason}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {r.reason}
+                  </div>
                 )}
               </div>
               {r.status === "PENDING" ? (
                 <div className="flex shrink-0 items-center gap-2">
+                  <label className="sr-only" htmlFor={`grant-user-${r.id}`}>
+                    User reference to grant
+                  </label>
+                  <input
+                    id={`grant-user-${r.id}`}
+                    value={granteeByRequest[r.id] ?? r.grantee_ref}
+                    onChange={(event) =>
+                      setGranteeByRequest((current) => ({
+                        ...current,
+                        [r.id]: event.target.value,
+                      }))
+                    }
+                    aria-label="User reference to grant access"
+                    className="w-36 rounded-md border border-border bg-background px-2 py-1.5 text-[11px]"
+                  />
+                  <label className="sr-only" htmlFor={`grant-expiry-${r.id}`}>
+                    Grant expires on
+                  </label>
+                  <input
+                    id={`grant-expiry-${r.id}`}
+                    type="date"
+                    value={expiryByRequest[r.id] ?? ""}
+                    onChange={(event) =>
+                      setExpiryByRequest((current) => ({
+                        ...current,
+                        [r.id]: event.target.value,
+                      }))
+                    }
+                    aria-label="Grant expiry date (optional)"
+                    className="rounded-md border border-border bg-background px-2 py-1.5 text-[11px]"
+                  />
                   <button
                     type="button"
                     disabled={decide.isPending}
                     onClick={() =>
-                      decide.mutate({ id: r.id, approve: true, grant_level: r.grant_level })
+                      decide.mutate({
+                        id: r.id,
+                        approve: true,
+                        grant_level: r.grant_level,
+                        grantee_ref: granteeByRequest[r.id] || r.grantee_ref,
+                        expires_at: expiryByRequest[r.id]
+                          ? new Date(
+                              `${expiryByRequest[r.id]}T23:59:59`,
+                            ).toISOString()
+                          : null,
+                      })
                     }
                     className="rounded-md bg-success/15 px-3 py-1.5 text-xs font-semibold text-success transition-all duration-200 hover:bg-success/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-success/50"
                   >
@@ -170,9 +251,14 @@ function FirmCommand() {
     const events = deadlines.data ?? [];
     const now = new Date();
     const todayIso = now.toISOString().slice(0, 10);
-    const in14 = new Date(now.getTime() + 14 * 86400_000).toISOString().slice(0, 10);
+    const in14 = new Date(now.getTime() + 14 * 86400_000)
+      .toISOString()
+      .slice(0, 10);
     const overdue = events.filter(
-      (e) => e.status !== "MISSED" && e.status !== "DISMISSED" && e.due_date < todayIso,
+      (e) =>
+        e.status !== "MISSED" &&
+        e.status !== "DISMISSED" &&
+        e.due_date < todayIso,
     ).length;
     const due14 = events.filter(
       (e) =>
@@ -195,7 +281,10 @@ function FirmCommand() {
 
   const recentAnalyses = useMemo(() => {
     const items = analyses.data ?? [];
-    return [...items].sort((a, b) => a.created_at.localeCompare(b.created_at)).reverse().slice(0, 5);
+    return [...items]
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .reverse()
+      .slice(0, 5);
   }, [analyses.data]);
 
   const seats = overview.data?.seats;
@@ -207,11 +296,14 @@ function FirmCommand() {
         {!firmAdmin ? (
           <section className="panel glow-gold flex flex-col items-start gap-3 p-6">
             <ShieldCheck className="size-5 text-destructive" />
-            <h2 className="text-lg font-semibold">Firm-admin capability required</h2>
+            <h2 className="text-lg font-semibold">
+              Firm-admin capability required
+            </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
               This run-the-firm surface is reserved for users carrying the{" "}
-              <span className="font-mono text-xs">is_firm_admin</span> capability on their session. If you
-              believe this is a mistake, ask the managing partner to grant it. (Admin capability is enforced
+              <span className="font-mono text-xs">is_firm_admin</span>{" "}
+              capability on their session. If you believe this is a mistake, ask
+              the managing partner to grant it. (Admin capability is enforced
               server-side — this view is never a guard.)
             </p>
           </section>
@@ -221,11 +313,21 @@ function FirmCommand() {
               <Stat label="Plan" value={seats?.plan ?? "—"} tone="text-gold" />
               <Stat
                 label="Seats used"
-                value={seats ? `${seats.current_seats}/${seats.max_seats}` : "—"}
+                value={
+                  seats ? `${seats.current_seats}/${seats.max_seats}` : "—"
+                }
                 tone="text-steel"
               />
-              <Stat label="Overdue deadlines" value={String(deadlineStats.overdue)} tone="text-destructive" />
-              <Stat label="Due in 14 days" value={String(deadlineStats.due14)} tone="text-warning" />
+              <Stat
+                label="Overdue deadlines"
+                value={String(deadlineStats.overdue)}
+                tone="text-destructive"
+              />
+              <Stat
+                label="Due in 14 days"
+                value={String(deadlineStats.due14)}
+                tone="text-warning"
+              />
             </div>
 
             {settings.data && (
@@ -235,8 +337,10 @@ function FirmCommand() {
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {settings.data.firm.name} · slug{" "}
-                  <span className="font-mono text-xs">{settings.data.firm.slug}</span> ·{" "}
-                  {settings.data.firm.jurisdiction}
+                  <span className="font-mono text-xs">
+                    {settings.data.firm.slug}
+                  </span>{" "}
+                  · {settings.data.firm.jurisdiction}
                 </p>
               </section>
             )}
@@ -252,7 +356,8 @@ function FirmCommand() {
                 </p>
                 {ledger.isPending ? (
                   <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Loading ledger&hellip;
+                    <Loader2 className="size-4 animate-spin" /> Loading
+                    ledger&hellip;
                   </div>
                 ) : entries.length === 0 ? (
                   <div className="mt-4 rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
@@ -261,10 +366,15 @@ function FirmCommand() {
                 ) : (
                   <ul className="mt-4 space-y-2">
                     {entries.slice(0, 8).map((e) => (
-                      <li key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3">
+                      <li
+                        key={e.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3"
+                      >
                         <div>
                           <div className="font-mono text-xs">{e.user_ref}</div>
-                          <div className="font-mono text-[10px] text-muted-foreground">by {e.granted_by}</div>
+                          <div className="font-mono text-[10px] text-muted-foreground">
+                            by {e.granted_by}
+                          </div>
                         </div>
                         <span
                           className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${
@@ -289,27 +399,40 @@ function FirmCommand() {
                 </p>
                 {deadlines.isPending ? (
                   <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" /> Loading deadlines&hellip;
+                    <Loader2 className="size-4 animate-spin" /> Loading
+                    deadlines&hellip;
                   </div>
                 ) : deadlines.isError || upcoming.length === 0 ? (
                   <div className="mt-4 rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
-                    {deadlines.isError ? "Deadline service unavailable right now." : "No deadlines on the firm calendar yet."}
+                    {deadlines.isError
+                      ? "Deadline service unavailable right now."
+                      : "No deadlines on the firm calendar yet."}
                   </div>
                 ) : (
                   <ul className="mt-4 space-y-2">
                     {upcoming.map((e) => (
-                      <li key={e.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3">
+                      <li
+                        key={e.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3"
+                      >
                         <div>
-                          <div className="text-sm font-medium">{e.description}</div>
+                          <div className="text-sm font-medium">
+                            {e.description}
+                          </div>
                           <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                             {e.event_type.replaceAll("_", " ")}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="font-mono text-sm">
-                            {new Date(e.due_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                            {new Date(e.due_date).toLocaleDateString("en-GB", {
+                              day: "2-digit",
+                              month: "short",
+                            })}
                           </div>
-                          <div className="font-mono text-[10px] text-muted-foreground">due</div>
+                          <div className="font-mono text-[10px] text-muted-foreground">
+                            due
+                          </div>
                         </div>
                       </li>
                     ))}
@@ -329,17 +452,25 @@ function FirmCommand() {
               </p>
               {analyses.isPending ? (
                 <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" /> Loading analyses&hellip;
+                  <Loader2 className="size-4 animate-spin" /> Loading
+                  analyses&hellip;
                 </div>
               ) : analyses.isError || recentAnalyses.length === 0 ? (
                 <div className="mt-4 rounded-lg border border-border/60 p-4 text-sm text-muted-foreground">
-                  {analyses.isError ? "Workbench service unavailable right now." : "No workbench analyses have been run yet."}
+                  {analyses.isError
+                    ? "Workbench service unavailable right now."
+                    : "No workbench analyses have been run yet."}
                 </div>
               ) : (
                 <ul className="mt-4 grid gap-3 sm:grid-cols-2">
                   {recentAnalyses.map((a) => (
-                    <li key={a.analysis_id} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3">
-                      <span className="text-sm font-medium">{a.prompt_pack.replaceAll("_", " ")}</span>
+                    <li
+                      key={a.analysis_id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3"
+                    >
+                      <span className="text-sm font-medium">
+                        {a.prompt_pack.replaceAll("_", " ")}
+                      </span>
                       <AnalysisStatus status={a.status} />
                     </li>
                   ))}
@@ -361,7 +492,9 @@ function FirmCommand() {
                     <Icon className="mt-0.5 size-4 shrink-0 text-steel transition-colors group-hover:text-gold" />
                     <span>
                       <span className="block text-sm font-medium">{label}</span>
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground">{sub}</span>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        {sub}
+                      </span>
                     </span>
                   </Link>
                 ))}
@@ -373,4 +506,3 @@ function FirmCommand() {
     </AppShell>
   );
 }
-

@@ -78,6 +78,9 @@ async def _run_analysis_worker(
     tenant_id: str,
     user_ref: str,
     prompt_pack: str,
+    redteam_temperature: float,
+    reviewer_specialty: str | None,
+    researcher_specialty: str | None,
 ) -> None:
     """Background task: run the engine, persist output, write the audit row.
     Never raises into the response path (the client already got 202); any
@@ -91,7 +94,10 @@ async def _run_analysis_worker(
                     "SELECT set_config('app.tenant_id', $1, true)", tenant_id
                 )
                 output = await run_pack_analysis(
-                    pack, document_id, tenant_id, conn, settings=settings
+                    pack, document_id, tenant_id, conn, settings=settings,
+                    redteam_temperature=redteam_temperature,
+                    reviewer_specialty=reviewer_specialty,
+                    researcher_specialty=researcher_specialty,
                 )
                 output_json = output.model_dump(by_alias=True, mode="json")
                 await conn.execute(
@@ -214,6 +220,15 @@ async def start_analysis(
                 body.prompt_pack,
                 ctx.user_ref,
             )
+    persona = await ctx.db.fetchrow(
+        "SELECT redteam_temperature, reviewer_specialty, researcher_specialty"
+        " FROM agent_personas"
+        " WHERE tenant_id = $1::uuid AND owner_ref = $2",
+        uuid.UUID(ctx.tenant_id), ctx.user_ref,
+    )
+    redteam_temperature = (
+        float(persona["redteam_temperature"]) if persona else 0.2
+    )
     settings: Settings = request.app.state.settings
     background.add_task(
         _run_analysis_worker,
@@ -224,6 +239,9 @@ async def start_analysis(
         ctx.tenant_id,
         ctx.user_ref,
         body.prompt_pack,
+        redteam_temperature,
+        persona["reviewer_specialty"] if persona else None,
+        persona["researcher_specialty"] if persona else None,
     )
     log.info(
         "analysis_started",
@@ -287,6 +305,15 @@ async def chain_analysis(
                 uuid.UUID(analysis_id),
             )
     settings: Settings = request.app.state.settings
+    persona = await ctx.db.fetchrow(
+        "SELECT redteam_temperature, reviewer_specialty, researcher_specialty"
+        " FROM agent_personas"
+        " WHERE tenant_id = $1::uuid AND owner_ref = $2",
+        uuid.UUID(ctx.tenant_id), ctx.user_ref,
+    )
+    redteam_temperature = (
+        float(persona["redteam_temperature"]) if persona else 0.2
+    )
     background.add_task(
         _run_analysis_worker,
         settings,
@@ -296,6 +323,9 @@ async def chain_analysis(
         ctx.tenant_id,
         ctx.user_ref,
         body.prompt_pack,
+        redteam_temperature,
+        persona["reviewer_specialty"] if persona else None,
+        persona["researcher_specialty"] if persona else None,
     )
     log.info(
         "analysis_chained",

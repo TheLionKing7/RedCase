@@ -27,6 +27,11 @@ export interface Persona {
   rules_of_engagement: string | null;
   tone_preset: TonePreset;
   practice_areas: string[];
+  personality: string | null;
+  working_style: string | null;
+  reviewer_specialty: string | null;
+  researcher_specialty: string | null;
+  redteam_temperature: number;
 }
 
 export interface PersonaInput {
@@ -34,6 +39,11 @@ export interface PersonaInput {
   rules_of_engagement?: string | null;
   tone_preset?: TonePreset;
   practice_areas?: string[];
+  personality?: string | null;
+  working_style?: string | null;
+  reviewer_specialty?: string | null;
+  researcher_specialty?: string | null;
+  redteam_temperature?: number;
 }
 
 /** Wire mirror of GET /v1/persona/practice-areas. */

@@ -40,6 +40,32 @@ log = get_logger("redcase.vault_a")
 router = APIRouter(tags=["vault-a"])
 
 
+@router.get("/v1/vault/documents")
+async def list_vault_documents(
+    vault_type: str,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict:
+    """List visible Vault A or B metadata; SQL RLS is the access boundary."""
+    if vault_type not in {"firm", "juris"}:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "vault_type must be firm or juris",
+        )
+    rows = await ctx.db.fetch(
+        "SELECT d.id, d.case_title, d.citation, d.doc_type, d.classification_level,"
+        " d.ingested_at, d.matter_id FROM documents d JOIN vaults v ON v.id = d.vault_id"
+        " WHERE v.vault_type = $1 ORDER BY d.ingested_at DESC LIMIT 100",
+        vault_type,
+    )
+    return {"documents": [
+        {"document_id": str(r["id"]), "title": r["case_title"], "citation": r["citation"],
+         "doc_type": r["doc_type"], "classification": r["classification_level"],
+         "ingested_at": r["ingested_at"].isoformat() if r["ingested_at"] else None,
+         "matter_id": str(r["matter_id"]) if r["matter_id"] else None}
+        for r in rows
+    ]}
+
+
 @router.post("/v1/matters/{matter_id}/documents")
 async def ingest_document(
     request: Request,

@@ -151,7 +151,8 @@ async def _fetch_persona(
 ) -> dict[str, Any]:
     """The caller's OWN persona row (RLS enforces tenant + owner isolation)."""
     row = await db.fetchrow(
-        "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas"
+        "SELECT agent_name, rules_of_engagement, tone_preset, practice_areas, personality,"
+        " working_style, reviewer_specialty, researcher_specialty"
         " FROM agent_personas WHERE tenant_id = $1::uuid AND owner_ref = $2",
         uuid.UUID(tenant_id),
         user_ref,
@@ -163,6 +164,10 @@ async def _fetch_persona(
         "rules_of_engagement": row["rules_of_engagement"],
         "tone_preset": row["tone_preset"] or "PROFESSIONAL",
         "practice_areas": list(row["practice_areas"] or []),
+        "personality": row["personality"],
+        "working_style": row["working_style"],
+        "reviewer_specialty": row["reviewer_specialty"],
+        "researcher_specialty": row["researcher_specialty"],
     }
 
 
@@ -189,10 +194,18 @@ def _persona_block(persona: dict[str, Any]) -> str:
         return "<persona>Default assistant — professional tone. No personalization set.</persona>"
     rules = (persona.get("rules_of_engagement") or "").strip()
     areas = persona.get("practice_areas") or []
-    lines = [f"<persona>", f"- Agent name: {persona.get('agent_name', 'Assistant')}"]
+    lines = ["<persona>", f"- Agent name: {persona.get('agent_name', 'Assistant')}"]
     lines.append(f"- Tone preset: {persona.get('tone_preset', 'PROFESSIONAL')}")
     if rules:
         lines.append(f"- Rules of engagement: {rules}")
+    if persona.get("personality"):
+        lines.append(f"- Personality: {persona['personality']}")
+    if persona.get("working_style"):
+        lines.append(f"- Working style: {persona['working_style']}")
+    if persona.get("reviewer_specialty"):
+        lines.append(f"- Reviewer specialty: {persona['reviewer_specialty']}")
+    if persona.get("researcher_specialty"):
+        lines.append(f"- Researcher specialty: {persona['researcher_specialty']}")
     if areas:
         lines.append(f"- Practice-area lens: {', '.join(areas)}")
     lines.append("</persona>")

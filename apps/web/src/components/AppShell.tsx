@@ -9,8 +9,8 @@ import {
   Home,
   Landmark,
   MessageSquare,
-  Search,
   Settings2,
+  Search,
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
@@ -31,6 +31,7 @@ type Route =
   | "/home"
   | "/workbench"
   | "/search"
+  | "/vault"
   | "/tracker"
   | "/firm-command"
   | "/red-teamer"
@@ -122,22 +123,21 @@ const PANELS: Record<string, Item[]> = {
     },
   ],
   Vault: [
-    { label: "Internal", detail: "Firm documents", icon: Vault, to: "/search" },
     {
       label: "Juris OS",
-      detail: "Public jurisprudence",
+      detail: "Vault B · Nigerian public case law",
       icon: Landmark,
-      to: "/search",
+      to: "/vault",
     },
     {
-      label: "Search",
-      detail: "Cross-vault research",
-      icon: Search,
-      to: "/search",
+      label: "Internal Briefs",
+      detail: "Vault A · firm documents",
+      icon: Vault,
+      to: "/vault",
     },
     {
-      label: "Access requests",
-      detail: "Named grants and approvals",
+      label: "Access & Request",
+      detail: "Request or manage granted files",
       icon: ShieldAlert,
       to: "/access-requests",
     },
@@ -299,12 +299,29 @@ export function AppShell({
   const [compact, setCompact] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pendingAssistantMessage, setPendingAssistantMessage] = useState("");
   useEffect(() => setActiveRail(current), [current]);
   useEffect(() => {
     const openAssistant = () => setAssistantOpen(true);
+    const receiveAssistantMessage = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (detail?.message) {
+        setPendingAssistantMessage(detail.message);
+        setAssistantOpen(true);
+      }
+    };
     window.addEventListener("redcase:assistant-open", openAssistant);
-    return () =>
+    window.addEventListener(
+      "redcase:assistant-message",
+      receiveAssistantMessage,
+    );
+    return () => {
       window.removeEventListener("redcase:assistant-open", openAssistant);
+      window.removeEventListener(
+        "redcase:assistant-message",
+        receiveAssistantMessage,
+      );
+    };
   }, []);
   const visibleRail = RAIL.filter((item) => !item.adminOnly || firmAdmin);
   const activeItem =
@@ -456,8 +473,12 @@ export function AppShell({
             </nav>
           </div>
           <div className="border-t border-sidebar-border px-5 py-4 text-xs text-muted-foreground">
-            <p>● &nbsp;Vault A synced</p>
-            <p className="mt-2">● &nbsp;Juris OS synced</p>
+            <Link
+              to="/settings"
+              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+            >
+              <Settings2 className="size-3.5" /> Settings
+            </Link>
             <p className="mt-3 font-mono text-[9px] uppercase tracking-widest">
               {roleSubtitle}
             </p>
@@ -583,6 +604,8 @@ export function AppShell({
         onClose={() => setAssistantOpen(false)}
         context={dockContext}
         persistent
+        initialMessage={pendingAssistantMessage}
+        onMessageChange={() => setPendingAssistantMessage("")}
       />
     </div>
   );

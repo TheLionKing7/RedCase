@@ -102,7 +102,7 @@ class TestAccessRequestWorkflow:
             assert denied.status_code == 403
             ok = client.post(
                 f"/v1/access-requests/{rid}/decide",
-                json={"approve": True},
+                json={"approve": True, "grantee_ref": "staff-b"},
                 headers=_auth(sub="partner", clearance="PARTNER"),
             )
             assert ok.status_code == 200, ok.text
@@ -148,7 +148,7 @@ class TestAccessRequestWorkflow:
             assert res.json()["status"] == "DENIED"
             again = client.post(
                 f"/v1/access-requests/{rid}/decide",
-                json={"approve": True},
+                json={"approve": True, "grantee_ref": "partner"},
                 headers=_auth(sub="partner2", clearance="PARTNER"),
             )
             assert again.status_code == 409

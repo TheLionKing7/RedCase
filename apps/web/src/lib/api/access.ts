@@ -14,7 +14,8 @@ export type AccessDecisionStatus = "PENDING" | "APPROVED" | "DENIED";
 /** Wire mirror of the access_requests SELECT shape (app/routers/access.py). */
 export interface AccessRequest {
   id: string;
-  document_id: string;
+  document_id: string | null;
+  brief_name?: string | null;
   requester_ref: string;
   grantee_ref: string;
   grant_level: string;
@@ -26,10 +27,28 @@ export interface AccessRequest {
 }
 
 export interface CreateAccessRequest {
-  document_id: string;
-  grantee_ref: string;
+  brief_name: string;
+  document_id?: string;
+  grantee_ref?: string | null;
   grant_level: "READ" | "ANNOTATE";
   reason?: string | null;
+}
+
+export interface AccessGrant {
+  id: string;
+  document_id: string;
+  brief_name: string | null;
+  granted_at: string;
+  expires_at: string | null;
+  relinquished_at: string | null;
+  grant_level: string;
+}
+
+export function useAccessGrants() {
+  return useQuery({
+    queryKey: ["access", "grants"],
+    queryFn: () => apiGet<{ grants: AccessGrant[] }>("/v1/access-grants"),
+  });
 }
 
 /** The caller's requests: what they asked for + what awaits their decision. */
@@ -61,17 +80,41 @@ export function useCreateAccessRequest() {
   });
 }
 
+export function useRelinquishGrant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (grantId: string) =>
+      apiPost<{ status: string }, Record<string, never>>(
+        `/v1/access-grants/${grantId}/relinquish`,
+        {},
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["access", "grants"] });
+      qc.invalidateQueries({ queryKey: ["access", "requests"] });
+    },
+  });
+}
+
 export function decideAccessRequest(input: {
   id: string;
   approve: boolean;
   grant_level?: string | null;
+  expires_at?: string | null;
+  grantee_ref?: string | null;
 }): Promise<{ status: AccessDecisionStatus }> {
   return apiPost<
     { status: AccessDecisionStatus },
-    { approve: boolean; grant_level?: string | null }
+    {
+      approve: boolean;
+      grant_level?: string | null;
+      expires_at?: string | null;
+      grantee_ref?: string | null;
+    }
   >(`/v1/access-requests/${input.id}/decide`, {
     approve: input.approve,
     grant_level: input.grant_level ?? null,
+    expires_at: input.expires_at ?? null,
+    grantee_ref: input.grantee_ref ?? null,
   });
 }
 
