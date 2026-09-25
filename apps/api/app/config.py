@@ -70,14 +70,12 @@ class Settings(BaseSettings):
     # ministral-8b is therefore the only served model; a 5-ID battery pilot
     # gauges its citation discipline before any full run.
     mistral_model: str = "ministral-8b-latest"
-    # Experiential Labs paid gateway (owner 2026-09-20): OpenAI-compatible
-    # chat over a 288-model catalog (GET /v1/models verified). Hosts the
-    # Claude Sonnet class — the Phase1-Design §3.3 ZDR-primary family — so
-    # explabs is the premium answer-model candidate for the battery's
-    # answer-LLM-limited failures (DeepSeek over-refusal/flap class).
+    # Experiential Labs OpenAI-compatible chat gateway. Luna is the calibrated
+    # answer primary; confirm console data terms before sending private Vault A
+    # content (see docs/calibration/phase1-jina.md §11).
     explabs_api_key: SecretStr | None = None
     explabs_base_url: str = "https://api.experientiallabs.ai/v1"
-    explabs_model: str = "claude-sonnet-4.5"
+    explabs_model: str = "gpt-5.6-luna"
     zdr_embed_proxy: str | None = None  # no-retention embedding gateway URL
     database_url: str | None = None  # asyncpg DSN; Secrets Manager in prod
     supabase_jwt_secret: SecretStr | None = None  # verifies Supabase JWTs (ruling 3)
@@ -133,21 +131,14 @@ class Settings(BaseSettings):
     # Answer-model provider selection (owner ruling 2026-09-18, Task 1.7
     # step 3/1): env-selectable primary + fallback chain, names only.
     # Resolution order: ANSWER_MODEL_PRIMARY, then ANSWER_MODEL_FALLBACK
-    # (comma-separated chain, first provisioned credential wins). OpenRouter
-    # (gpt-4o) is the platform primary — Groq's free-tier 8k ITPM ceiling
-    # rejects battery-size prompts and Cerebras 402s with no account quota
-    # (both verified 2026-09-18). DeepSeek is explicitly EXPERIMENTAL
-    # FALLBACK (latency + flapping evidence below). Anthropic
-    # (claude-3-5-sonnet-20241022) remains the design-doc ZDR primary and is
-    # used automatically when an Anthropic key is provisioned.
-    answer_model_primary: str = "openrouter"
-    answer_model_fallback: str = "cerebras,groq,deepseek"
-    # Chat model served through OpenRouter (the platform answer model,
-    # owner 2026-09-18: gpt-4o — verified temperature=0 accepted, ~10k-token
-    # grounded prompts served in ~3s). gpt-4o is not a ZDR-class endpoint:
-    # OpenAI API default retention applies (no training; 30-day abuse-
-    # monitoring retention unless a ZDR agreement is in place) — same
-    # verification-item class as Groq/Cerebras console zero-retention.
+    # (comma-separated chain, first provisioned credential wins). Luna is the
+    # calibrated primary (45/50, 0 fabrications, 17/17 negatives); Groq is the
+    # configured fallback. Explabs data-terms/training status is an owner-held
+    # verification item; do not infer it from API configuration. See calibration §11.
+    answer_model_primary: str = "explabs"
+    answer_model_fallback: str = "groq"
+    # Legacy OpenRouter-compatible model setting used only if OpenRouter is
+    # explicitly selected as a comparison provider; not part of the default chain.
     llm_model: str = "openai/gpt-4o"
     # Answer-call ceiling (Task 1.7 step 2, owner-approved 2026-09-18): a
     # single answer LLM call exceeding this is logged as a refusal for that
@@ -160,6 +151,9 @@ class Settings(BaseSettings):
     # answers fit comfortably — the largest observed battery answer is
     # <2k tokens; the old 16k+ row was a passage-echo artifact, now stripped.
     answer_max_tokens: int = 4096
+    # Per-call sampling temperature. Defaults to the calibrated deterministic
+    # contract (0.0); model-specific comparison runs may override via env.
+    answer_temperature: float = 0.0
 
     # --- Part 2: public signup hardening (HANDOFF §4 growth surface) ---
     # The system's first UNAUTHENTICATED write path is rate-limited per IP and

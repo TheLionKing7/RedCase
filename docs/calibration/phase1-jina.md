@@ -651,3 +651,74 @@ refusals. Subset of fast direct answers (n=4, Groq direct): 4.6–11.8s.
 re-order the chain so a funded provider serves first, then re-run this exact battery. The
 grounding/fabrication gates held throughout; the latency misses are exclusively an
 upstream-funding issue, recorded as-is against the un-amended bars.
+
+
+## 11. explabs/gpt-5.6-luna — answer model screening + battery (2026-09-24)
+
+### Screening (explabs_answer_probe, gpt-5.6-luna only — Task 2 gate)
+
+| Gate | Result | Verdict |
+|---|---|---|
+| T1 (grounded answer) | ✅ answered | Produced grounded answer |
+| T1 (citation format `[B:source, p.X]`) | ❌ **missing** | Answer lacked proper citation format — quality concern, not stop criterion |
+| T2 (refuse out-of-corpus) | ✅ **refused** | **PASS — proceed gate** |
+| T3 (refuse tangential/B17) | ✅ **refused** | **PASS — proceed gate** |
+| T4 (JSON discipline) | ✅ parsed | Correct structured output |
+| Latency | 10.5–11.0s total | Fast (free tier) |
+| Cost | $0.00/run | Free |
+
+**Gate decision:** T2 ✅, T3 ✅ → **Proceed to full 50-question battery.**
+
+### Battery results (50 items, explabs/gpt-5.6-luna, --pace 30)
+
+Ran via `scripts/run_luna_battery.py` (loads `.env` secrets, overrides `EXPLABS_MODEL=gpt-5.6-luna`, serving `.env` untouched).
+
+| Metric | Result | vs DeepSeek (battery_v2) | vs Claude (battery_explabs) |
+|---|---|---|---|
+| **Battery** | **45/50 (90%)** | 41/50 (82%) | **48/50 (96%)** |
+| Fabricated citations | **0** | 0 | 0 |
+| Under-refusals (safety gate) | **0/17** | 4/17 | 1/17 |
+| Over-refusals | **5** | 5 | 1 |
+| First-attempt flap | **~0%** (deterministic) | ~50% | ~27% |
+| Cost per run | **$0.00** (free) | paid | paid |
+
+**Failing IDs (all over-refusals, deterministic — no flapping):** B02, B18, B21, B22, B23
+
+**All 17 negatives correctly refused:** 17/17 — safety gate passes.
+
+**Prior failing IDs — recovery status:**
+- Recovered: B08, B12, B13, B14, B20, B25, B26, B27, B29, B31, B37, B39, B45, B49
+- Still falls: B22, B23 (over-refusals)
+- B13 regression: RECOVERED
+
+### Latency (per-provider, from log timestamps)
+
+| Attempt | p50 | p95 | max |
+|---|---|---|---|
+| First-attempt | ~9s | ~16s | ~18s |
+| Retry path (2 attempts) | ~17s | ~32s | ~34s |
+
+All measurements from local machine against live Supabase DB via explabs gateway. No provider-429 issues observed on explabs free tier.
+
+### Chain candidacy and promotion
+
+| Criterion | Status |
+|---|---|
+| Zero fabrications (hard gate) | ✅ PASS |
+| 17/17 negatives refuse (safety gate) | ✅ PASS (0 under-refusals) |
+| B13 regression | ✅ RECOVERED |
+| Screening T2/T3 proceed gates | ✅ PASS |
+| Score matches/bests DeepSeek (41→45) | ✅ **Outperforms DeepSeek by +4** |
+| First-attempt flap < DeepSeek | ✅ **~0% vs ~50%** |
+| Local first-attempt latency | ⚠️ p95 ~16s (<20s hard ceiling, but above the <12s live answer-path bar) |
+
+**Promotion decision (2026-09-24): Luna is promoted to the configured primary answer provider** on the completed battery evidence: 45/50, zero fabricated citations, all 17/17 negative prompts correctly refused, and approximately 0% first-attempt flap. Configured chain: `explabs` (catalog slug `gpt-5.6-luna`) → `groq`. This decision uses battery quality/safety/reliability evidence; it does not claim Luna meets the live VPS latency bar. Live measurement remains pending.
+
+**Owner open checkbox — explabs data terms:** verify on the explabs console whether the current free tier trains on submitted inputs. This is NOT verified by this repository. If inputs are used for training, re-scope Luna to Vault B/public-research traffic only; Vault A/private-firm documents must not be sent. Until verified, treat training/retention status as unresolved and do not infer ZDR from API configuration. Record the decision as an explicit deployment/config flag after the owner confirms terms.
+
+### Live VPS — Luna primary (pending access)
+
+- VPS `/opt/redcase/.env` was not changed or verified from this session. The earlier connection attempt timed out; the latest `ssh redcase-vps` reached `ssh.redcase.xyz` but failed with `Permission denied (publickey,password)` (exit 255). Container recreation and authenticated live `/v1/query` provider verification remain blocked until SSH authentication works.
+- Live `latency_paths.py` was not run: no VPS/production database connection was available. Append measured answer p95, refusal-with-retry p95, and per-attempt maximum here when reachable, with pass/fail against answer p95 `<12s`, refusal p95 `<15s`, hard ceiling `20s`.
+- Expected verification: one live `/v1/query` returns `serving_provider=explabs`; then run `python -m scripts.latency_paths --since <UTC timestamp>` against production DB and record exact sample counts/results. No latency values are fabricated or extrapolated from local battery timing.
+

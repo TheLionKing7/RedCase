@@ -1,0 +1,567 @@
+{
+ "run_at": "2026-09-24T21:18:05.196286+00:00",
+ "prompt": "GROUNDED_SYSTEM current (v2.1)",
+ "provider": "explabs",
+ "model": "gpt-5.6-luna",
+ "pace_s": 30.0,
+ "outcomes": [
+  {
+   "id": "B01",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B02",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B03",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Adegoke Motors Ltd. Vs Dr. Babatunde Adesanya (1989) LLJR-SC"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B04",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "General Sanni Abacha & Others v Chief Gani Fawehinmi (2000)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B05",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B06",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B07",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B08",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B09",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B10",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B11",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B12",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B13",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B14",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (2 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "General Sanni Abacha & Others v Chief Gani Fawehinmi (2000)",
+    "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B15",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B16",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B17",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B18",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B19",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B20",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B21",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B22",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B23",
+   "expect": "answer",
+   "pass": false,
+   "reason": "over-refusal",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B24",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B25",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "General Sanni Abacha & Others v Chief Gani Fawehinmi (2000)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B26",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B27",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B28",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B29",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (2 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim",
+    "MILITARY GOVERNOR, ONDO STATE ATTORNEY-GENERAL, ONDO STATE v VICTOR ADEGOKE ADEWUMI (SC 130-1986) [1988]"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B30",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B31",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B32",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B33",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B34",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B35",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B36",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B37",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Madukolu v. Nkemdilim"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B38",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B39",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Obikoya v Wema Bank Ltd (S.C. 61-1986)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B40",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B41",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "General Sanni Abacha & Others v Chief Gani Fawehinmi (2000)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B42",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B43",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "DPP v. Chike Obi [1961] NGSC 28 \u2014 constitutional law"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B44",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B45",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Alimi v. Kosebinu [2016] NGSC 12 \u2014 fair hearing"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B46",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B47",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Senator Abraham Ade Adesanya V. President Of The Federal Republic Of Nigeria & Anor. (1981)"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B48",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B49",
+   "expect": "answer",
+   "pass": true,
+   "reason": "answered (1 cites)",
+   "refusal": false,
+   "cited_titles": [
+    "Amaechi v. INEC 2007"
+   ],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  },
+  {
+   "id": "B50",
+   "expect": "refusal",
+   "pass": true,
+   "reason": "refused",
+   "refusal": true,
+   "cited_titles": [],
+   "provider": "explabs",
+   "model": "gpt-5.6-luna"
+  }
+ ]
+}
