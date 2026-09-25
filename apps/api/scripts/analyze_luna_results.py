@@ -81,8 +81,8 @@ def main() -> None:
         "--in",
         dest="input_path",
         type=Path,
-        default=Path("calibration_results/battery_explabs_luna.json"),
-        help="battery JSON (default: calibration_results/battery_explabs_luna.json)",
+        default=Path("calibration_results/battery_explabs_gpt6_luna.json"),
+        help="battery JSON (default: calibration_results/battery_explabs_gpt6_luna.json)",
     )
     args = parser.parse_args()
     analyze(json.loads(args.input_path.read_text(encoding="utf-8")))
