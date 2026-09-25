@@ -14,6 +14,7 @@ provider-comparison evidence honest:
 
 from app.middleware.audit import write_audit
 from app.retrieval.clients import FallbackLLM, RateLimitedError
+from scripts.run_battery import _settings_for_run, classify_outcome
 
 
 class FakeLeaf:
@@ -38,6 +39,86 @@ def _status_error(status_code: int) -> Exception:
     err = RuntimeError(f"HTTP {status_code}")
     err.status_code = status_code  # type: ignore[attr-defined]
     return err
+
+
+def test_battery_timeout_is_not_classified_as_refusal() -> None:
+    item = {"id": "B01", "expect": "answer"}
+    timed_out = {
+        "refusal": True,
+        "citations": [],
+        "_answer_timeout_attempts": 2,
+        "_genuine_refusal_attempts": 0,
+        "_final_refusal_reason": "answer_timeout",
+    }
+    assert classify_outcome(item, timed_out) == (
+        False,
+        "answer_timeout",
+        "timeout_converted_refusal",
+    )
+
+
+def test_final_timeout_is_classified_by_the_last_attempt() -> None:
+    item = {"id": "B01", "expect": "answer"}
+    result = {
+        "refusal": True,
+        "citations": [],
+        "_answer_timeout_attempts": 1,
+        "_genuine_refusal_attempts": 1,
+        "_final_refusal_reason": "answer_timeout",
+    }
+    assert classify_outcome(item, result) == (
+        False,
+        "answer_timeout",
+        "timeout_converted_refusal",
+    )
+
+
+def test_recovered_timeout_does_not_change_final_answer_classification() -> None:
+    item = {"id": "B01", "expect": "answer"}
+    recovered = {
+        "refusal": False,
+        "answer": "A grounded answer.",
+        "citations": [
+            {
+                "case_title": "MADUKOLU v. NKEMDILIM",
+                "verified": True,
+                "page_start": 1,
+                "page_end": 1,
+            }
+        ],
+        "_answer_timeout_attempts": 1,
+        "_genuine_refusal_attempts": 0,
+        "_final_refusal_reason": None,
+    }
+    assert classify_outcome(item, recovered) == (True, "answered (1 cites)", "answer")
+
+
+def test_battery_grounding_refusal_is_classified_separately() -> None:
+    item = {"id": "B01", "expect": "answer"}
+    refused = {
+        "refusal": True,
+        "citations": [],
+        "_answer_timeout_attempts": 0,
+        "_genuine_refusal_attempts": 2,
+        "_final_refusal_reason": "insufficient_grounding",
+    }
+    assert classify_outcome(item, refused) == (False, "over-refusal", "genuine_refusal")
+
+
+def test_battery_keeps_fallback_by_default_and_only_isolates_explicitly() -> None:
+    class SettingsStub:
+        answer_model_primary = "explabs"
+        answer_model_fallback = "groq"
+
+        def model_copy(self, *, update):
+            result = SettingsStub()
+            result.__dict__.update(self.__dict__)
+            result.__dict__.update(update)
+            return result
+
+    configured = SettingsStub()
+    assert _settings_for_run(configured, "explabs", False).answer_model_fallback == "groq"
+    assert _settings_for_run(configured, "explabs", True).answer_model_fallback == ""
 
 
 async def test_429_then_success_stays_on_same_provider(monkeypatch):

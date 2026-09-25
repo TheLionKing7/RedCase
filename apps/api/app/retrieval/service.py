@@ -342,6 +342,10 @@ async def answer_question(
             "answer": "No binding precedent found in Vault B.",
             "citations": [],
             "refusal": True,
+            "_refusal_reason": "retrieval_threshold",
+            "_final_refusal_reason": "retrieval_threshold",
+            "_answer_timeout_attempts": 0,
+            "_genuine_refusal_attempts": 0,
         }
 
     passages = svc.build_passages(rows)
@@ -412,6 +416,9 @@ async def answer_question(
             question_hash=base_audit["question_hash"],
         )
 
+    answer_timeout_attempts = 0
+    grounding_refusal_attempts = 0
+    final_refusal_reason: str | None = None
     for attempt in (1, 2):
         try:
             answer, citations, regenerations = await _answer_once()
@@ -443,10 +450,17 @@ async def answer_question(
                 "answer": "No binding precedent found in Vault B.",
                 "citations": [],
                 "refusal": True,
+                "_answer_timeout_attempts": answer_timeout_attempts,
+                "_genuine_refusal_attempts": grounding_refusal_attempts,
+                "_refusal_reason": "citation_integrity",
+                "_final_refusal_reason": "citation_integrity",
             }
         except TimeoutError:
             # answer_timeout_s ceiling: this attempt's answer call overran.
-            # Logged as a refusal; the retry policy gets the one retry.
+            # Keep private per-request metadata so calibration tooling can
+            # distinguish technical timeouts from a model's genuine refusal.
+            answer_timeout_attempts += 1
+            final_refusal_reason = "answer_timeout"
             ANSWER_TIMEOUTS.inc()
             await _audit_refusal(attempt, "answer_timeout")
             continue
@@ -454,6 +468,8 @@ async def answer_question(
             # GROUNDED_SYSTEM rule 3 (§3.2): the LLM found the passages
             # unsupported and answered with the exact no-precedence sentence
             # and no <citations> block. Audit THIS attempt, then retry once.
+            grounding_refusal_attempts += 1
+            final_refusal_reason = "insufficient_grounding"
             await _audit_refusal(attempt, "insufficient_grounding")
             continue
         await write_audit(
@@ -473,11 +489,22 @@ async def answer_question(
                 )
             ),
         )
-        return {"answer": answer, "citations": citations, "refusal": False}
+        return {
+            "answer": answer,
+            "citations": citations,
+            "refusal": False,
+            "_answer_timeout_attempts": answer_timeout_attempts,
+            "_genuine_refusal_attempts": grounding_refusal_attempts,
+            "_final_refusal_reason": final_refusal_reason,
+        }
 
-    # Both attempts refused on grounding.
+    # Both attempts refused on grounding or timed out. This private field is
+    # ignored by QueryResponse and consumed only by calibration tooling.
     return {
         "answer": "No binding precedent found in Vault B.",
         "citations": [],
         "refusal": True,
+        "_answer_timeout_attempts": answer_timeout_attempts,
+        "_genuine_refusal_attempts": grounding_refusal_attempts,
+        "_final_refusal_reason": final_refusal_reason or "answer_timeout",
     }

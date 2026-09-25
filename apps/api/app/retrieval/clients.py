@@ -131,18 +131,20 @@ class OpenAICompatLLM:
         model: str,
         provider: str,
         max_tokens: int = 4096,
+        temperature: float = 0.0,
     ) -> None:
         self._client = client
         self._model = model
         self.provider = provider
         self.model = model
         self._max_tokens = max_tokens
+        self._temperature = temperature
 
     async def answer(self, system: str, user: str) -> str:
         try:
             r = await self._client.chat.completions.create(
                 model=self._model,
-                temperature=0,
+                temperature=self._temperature,
                 max_tokens=self._max_tokens,
                 messages=[
                     {"role": "system", "content": system},
@@ -237,7 +239,11 @@ def _provider_client(name: str, settings: Settings) -> AnswerLLM | None:
         max_retries=4,
     )
     return OpenAICompatLLM(
-        client, model, provider=name, max_tokens=settings.answer_max_tokens
+        client,
+        model,
+        provider=name,
+        max_tokens=settings.answer_max_tokens,
+        temperature=settings.answer_temperature,
     )
 
 

@@ -426,6 +426,9 @@ class TestAnswerQuestion:
             )
             assert result["refusal"] is True
             assert result["citations"] == []
+            assert result["_answer_timeout_attempts"] == 2
+            assert result["_genuine_refusal_attempts"] == 0
+            assert result["_final_refusal_reason"] == "answer_timeout"
             assert llm.calls == 2  # ceiling per attempt; retry policy applies
             rows = await _audit_rows(conn, _qhash(question))
             assert len(rows) == 2  # one append-only row per attempt

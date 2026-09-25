@@ -113,6 +113,29 @@ async def _run_item(item, conn, settings, embedder, llm):
     raise RuntimeError(f"{item['id']}: no result after retries")
 
 
+def classify_outcome(item: dict, result: dict) -> tuple[bool, str, str]:
+    """Classify the final result, not transient refusals recovered by retry."""
+    ok, reason = score(item, result)
+    final_reason = result.get("_final_refusal_reason")
+    if result.get("refusal") and final_reason == "answer_timeout":
+        return False, "answer_timeout", "timeout_converted_refusal"
+    if result.get("refusal") and final_reason == "insufficient_grounding":
+        return ok, reason, "genuine_refusal"
+    if result.get("refusal") and final_reason == "citation_integrity":
+        return ok, reason, "integrity_refusal"
+    return ok, reason, "answer"
+
+
+def _settings_for_run(settings, provider: str | None, isolate: bool):
+    """Override the primary; clear fallback only for explicit isolation."""
+    overrides = {}
+    if provider:
+        overrides["answer_model_primary"] = provider
+    if isolate:
+        overrides["answer_model_fallback"] = ""
+    return settings.model_copy(update=overrides) if overrides else settings
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ids", nargs="*", default=None)
@@ -132,9 +155,16 @@ async def main() -> None:
         "--provider",
         type=str,
         default=None,
-        help="measure this provider ALONE (override primary + clear fallback) for the run",
+        help="override the primary provider for comparison runs",
+    )
+    ap.add_argument(
+        "--isolate",
+        action="store_true",
+        help="clear the configured fallback chain (requires --provider)",
     )
     args = ap.parse_args()
+    if args.isolate and not args.provider:
+        ap.error("--isolate requires --provider so the isolated model is explicit")
 
     battery = json.loads(BATTERY_PATH.read_text(encoding="utf-8"))  # noqa: ASYNC240
     if args.ids:
@@ -146,18 +176,9 @@ async def main() -> None:
         items = [i for i in battery if i["id"] not in done]
     print(f"items to run: {[i['id'] for i in items]}", flush=True)
 
-    settings = get_settings()
-    if args.provider:
-        # Override ANSWER_MODEL_PRIMARY AND clear the fallback chain for THIS
-        # run only — a calibration run must measure the named provider alone,
-        # so a transient 429 surfaces as "not_run_rate_limited" (resumable)
-        # rather than silently falling through to a weaker provider and
-        # blending quality/latency evidence. The cached global Settings (and
-        # hence the live serving config) is untouched.
-        settings = settings.model_copy(
-            update={"answer_model_primary": args.provider, "answer_model_fallback": ""}
-        )
+    settings = _settings_for_run(get_settings(), args.provider, args.isolate)
     primary = settings.answer_model_primary
+    fallback = settings.answer_model_fallback
     model = getattr(settings, _MODEL_FIELD.get(primary, "llm_model"), None)
     conn = await asyncpg.connect(settings.database_url)
     try:
@@ -176,7 +197,9 @@ async def main() -> None:
                 continue  # absent from outcomes -> picked up next pass
             if result is None:
                 raise RuntimeError(f"{item['id']}: no result after retries")
-            ok, reason = score(item, result)
+            ok, reason, category = classify_outcome(item, result)
+            timeout_attempts = result.get("_answer_timeout_attempts", 0)
+            recovered = timeout_attempts > 0 and category != "timeout_converted_refusal"
             # Per-item provenance = what ACTUALLY served (the resolved provider
             # today; the runtime fallback chain updates llm.provider once landed).
             served_provider = getattr(llm, "provider", primary)
@@ -187,6 +210,15 @@ async def main() -> None:
                 "pass": ok,
                 "reason": reason,
                 "refusal": result["refusal"],
+                "answer_timeout_attempts": timeout_attempts,
+                "genuine_refusal_attempts": result.get("_genuine_refusal_attempts", 0),
+                "recovered": recovered,
+                "final_outcome_category": category,
+                "reason_category": (
+                    "answer_timeout" if category == "timeout_converted_refusal"
+                    else "refusal" if category == "genuine_refusal"
+                    else category
+                ),
                 "cited_titles": [c["case_title"] for c in result["citations"]],
                 "provider": served_provider,
                 "model": served_model,
@@ -200,6 +232,7 @@ async def main() -> None:
                 "run_at": datetime.now(UTC).isoformat(),
                 "prompt": "GROUNDED_SYSTEM current (v2.1)",
                 "provider": primary,
+                "fallback": fallback,
                 "model": model,
                 "pace_s": args.pace,
                 "outcomes": outcomes,
