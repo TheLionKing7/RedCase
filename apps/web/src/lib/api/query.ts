@@ -1,8 +1,6 @@
 // Vault Search data hook — POST /v1/query (Phase1-Design §3.5).
 //
-// Replaces the deleted VAULT_RESULTS mock: the screen submits a QueryRequest
-// and renders the server's QueryResponse (answer + verified citations, or a
-// refusal — never an unverified answer; §3.4).
+// Renders the API's grounded response, verified citations, or explicit refusal.
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -18,6 +16,9 @@ export function runVaultQuery(req: QueryRequest): Promise<QueryResponse> {
     : apiPost<QueryResponse, QueryRequest>("/v1/query", req);
 }
 
-export function useVaultQuery() {
-  return useMutation({ mutationFn: runVaultQuery });
+export function useVaultQuery<TData = QueryResponse>() {
+  return useMutation({
+    mutationFn: async (request: QueryRequest) =>
+      (await runVaultQuery(request)) as TData,
+  });
 }

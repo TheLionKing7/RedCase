@@ -11,16 +11,11 @@ import { apiGet, apiPost } from "@/lib/api/client";
 
 /** §3.1 status values. */
 export type AnalysisStatusValue =
-  | "RUNNING"
-  | "COMPLETE"
-  | "FAILED"
-  | "NEEDS_REVIEW";
+  "RUNNING" | "COMPLETE" | "FAILED" | "NEEDS_REVIEW";
 
 /** §3.3 prompt packs. */
 export type PromptPack =
-  | "ADVERSAL_BRIEF"
-  | "SUMMONS_RESPONSE"
-  | "CONTRACT_REVIEW";
+  "ADVERSAL_BRIEF" | "SUMMONS_RESPONSE" | "CONTRACT_REVIEW";
 
 /** Wire mirror of AnalysisStatus (app/routers/analyses.py). */
 export interface Analysis {
@@ -47,6 +42,10 @@ export function useAnalyses() {
   return useQuery({
     queryKey: ["analyses", "list"],
     queryFn: listAnalyses,
+    refetchInterval: (query) =>
+      query.state.data?.some((analysis) => analysis.status === "RUNNING")
+        ? 3000
+        : false,
   });
 }
 
@@ -55,6 +54,8 @@ export function useAnalysis(id: string | null) {
     queryKey: ["analyses", id],
     queryFn: () => getAnalysis(id!),
     enabled: !!id,
+    refetchInterval: (query) =>
+      query.state.data?.status === "RUNNING" ? 3000 : false,
   });
 }
 

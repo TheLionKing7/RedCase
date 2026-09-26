@@ -1,11 +1,20 @@
-import { FormEvent, useState } from "react";
-import { Bot, Loader2, MessageSquarePlus, Send, X } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  Bot,
+  Loader2,
+  MessageSquarePlus,
+  Send,
+  ThumbsDown,
+  ThumbsUp,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   sendAssistantMessage,
   useCreateThread,
   useThread,
   useThreads,
+  submitAssistantFeedback,
 } from "@/lib/api/collaboration";
 import type { AssistantContext } from "@/lib/api/assistantContext";
 
@@ -14,11 +23,15 @@ export function AssistantDock({
   onClose,
   context,
   persistent = false,
+  initialMessage = "",
+  onMessageChange,
 }: {
   open: boolean;
   onClose: () => void;
   context: AssistantContext;
   persistent?: boolean;
+  initialMessage?: string;
+  onMessageChange?: () => void;
 }) {
   const threads = useThreads();
   const create = useCreateThread();
@@ -26,8 +39,16 @@ export function AssistantDock({
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState<string>();
   const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, "UP" | "DOWN">>({});
+  const [feedbackMessage, setFeedbackMessage] = useState("");
   const activeId = selectedId ?? threads.data?.[0]?.thread_id;
   const selectedThread = useThread(activeId ?? "");
+
+  useEffect(() => {
+    if (!initialMessage) return;
+    setMessage(initialMessage);
+    onMessageChange?.();
+  }, [initialMessage, onMessageChange]);
 
   if (!open && !persistent) return null;
   const activeThread = selectedThread.data;
@@ -38,6 +59,7 @@ export function AssistantDock({
     setSending(true);
     try {
       setReply(await sendAssistantMessage(activeId, value, context));
+      await selectedThread.refetch();
       setMessage("");
     } finally {
       setSending(false);
@@ -171,8 +193,60 @@ export function AssistantDock({
                       <p className="mt-1 whitespace-pre-wrap text-sm">
                         {turn.content}
                       </p>
+                      {turn.role === "ASSISTANT" && (
+                        <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-2">
+                          <span className="mr-auto text-[10px] text-muted-foreground">
+                            Was this helpful?
+                          </span>
+                          {(["UP", "DOWN"] as const).map((rating) => (
+                            <button
+                              key={rating}
+                              type="button"
+                              aria-label={
+                                rating === "UP"
+                                  ? "Helpful answer"
+                                  : "Unhelpful answer"
+                              }
+                              aria-pressed={feedback[turn.id] === rating}
+                              disabled={Boolean(feedback[turn.id])}
+                              onClick={async () => {
+                                if (!activeId || feedback[turn.id]) return;
+                                try {
+                                  await submitAssistantFeedback(activeId, {
+                                    message_id: turn.id,
+                                    rating,
+                                  });
+                                  setFeedback((current) => ({
+                                    ...current,
+                                    [turn.id]: rating,
+                                  }));
+                                  setFeedbackMessage(
+                                    "Thanks — your feedback was saved.",
+                                  );
+                                } catch {
+                                  setFeedbackMessage(
+                                    "Feedback could not be saved. Please retry.",
+                                  );
+                                }
+                              }}
+                              className={`rounded-md p-1.5 transition-all duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-default ${feedback[turn.id] === rating ? "text-gold" : "text-muted-foreground"}`}
+                            >
+                              {rating === "UP" ? (
+                                <ThumbsUp className="size-3.5" />
+                              ) : (
+                                <ThumbsDown className="size-3.5" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </article>
                   ))
+                )}
+                {feedbackMessage && (
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {feedbackMessage}
+                  </p>
                 )}
                 {reply && (
                   <article className="rounded-xl border border-gold/30 bg-gold/5 p-3">

@@ -159,6 +159,21 @@ export async function sendAssistantMessage(
   if (buffer.trim()) consume(buffer);
   return result;
 }
+
+export function submitAssistantFeedback(
+  threadId: string,
+  input: {
+    message_id: string;
+    rating: "UP" | "DOWN";
+    correction_text?: string;
+  },
+): Promise<{ feedback_id: string }> {
+  return apiPost<{ feedback_id: string }, typeof input>(
+    `/v1/assistant/threads/${threadId}/feedback`,
+    input,
+  );
+}
+
 export function useCreatePin() {
   const qc = useQueryClient();
   return useMutation({

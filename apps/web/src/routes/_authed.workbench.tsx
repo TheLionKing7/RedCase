@@ -13,8 +13,8 @@ import {
   Upload,
   MoreHorizontal,
   Inbox,
-  Bot,
   ChevronRight,
+  Printer,
 } from "lucide-react";
 import { useIdentity } from "@/lib/identity";
 import { apiGet, apiPost, apiUpload } from "@/lib/api/client";
@@ -34,6 +34,8 @@ import type { AssistantBench } from "@/lib/api/assistantContext";
 import { useCourtDiaryEntries } from "@/lib/api/court-diary";
 import { useMembership } from "@/lib/api/members";
 import { sendAssistantMessage, useThreads } from "@/lib/api/collaboration";
+import { useVaultQuery } from "@/lib/api/query";
+import type { Citation, QueryResponse } from "@/lib/api/types";
 
 export const Route = createFileRoute("/_authed/workbench")({
   head: () => ({
@@ -110,6 +112,14 @@ function Workbench() {
   const [uploadMatter, setUploadMatter] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadedDocument, setUploadedDocument] = useState<{
+    document_id: string;
+    matter_id: string;
+    title: string;
+  } | null>(null);
+  const [startingAnalysis, setStartingAnalysis] = useState(false);
+  const [analysisPack, setAnalysisPack] =
+    useState<PromptPack>("ADVERSAL_BRIEF");
 
   useEffect(() => {
     const requestedMatter = sessionStorage.getItem("redcase:workbench-matter");
@@ -163,86 +173,225 @@ function Workbench() {
       }}
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
-      <div className="mx-auto max-w-7xl space-y-6 pb-28">
+      <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
         <p className="-mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
           {membership.data?.full_name ?? identity.name}
           {membership.data?.role ? ` · ${membership.data.role}` : ""}
         </p>
         <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="space-y-3">
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
-              <Upload className="size-4" />
-              Upload PDF to a matter
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                className="sr-only"
-                disabled={uploading}
-                onChange={async (event) => {
-                  const file = event.currentTarget.files?.[0];
-                  if (!file) return;
-                  if (!uploadMatter) {
-                    setUploadMessage("Choose a matter below before uploading.");
-                    event.currentTarget.value = "";
-                    return;
-                  }
-                  if (
-                    file.type !== "application/pdf" &&
-                    !file.name.toLowerCase().endsWith(".pdf")
-                  ) {
-                    setUploadMessage(
-                      "Only PDF uploads are currently supported by the secure matter-ingestion API.",
-                    );
-                    event.currentTarget.value = "";
-                    return;
-                  }
-                  setUploading(true);
-                  setUploadMessage("");
-                  try {
-                    await apiUpload(
-                      `/v1/matters/${uploadMatter}/documents?title=${encodeURIComponent(file.name)}`,
-                      file,
-                      () => undefined,
-                    );
-                    setUploadMessage(
-                      "Document uploaded to the matter's private vault.",
-                    );
-                  } catch (error) {
-                    setUploadMessage(
-                      error instanceof Error ? error.message : "Upload failed.",
-                    );
-                  } finally {
-                    setUploading(false);
-                    event.currentTarget.value = "";
-                  }
-                }}
-              />
-            </label>
-            {matters.data?.matters.length ? (
-              <select
-                aria-label="Matter for upload"
-                value={uploadMatter}
-                onChange={(event) => setUploadMatter(event.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-              >
-                <option value="">Choose matter for upload</option>
-                {matters.data.matters.map((matter) => (
-                  <option key={matter.id} value={matter.id}>
-                    {matter.matter_ref}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Upload requires an assigned matter. DOCX is not supported by the
-                current ingestion API.
-              </p>
-            )}
+          <aside className="workbench-tools space-y-3 print-hide">
+            <div className="panel space-y-3 p-4">
+              <div>
+                <h2 className="text-sm font-semibold">Start with a source</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {matters.data?.matters.find(
+                    (matter) => matter.id === uploadMatter,
+                  )?.matter_ref
+                    ? `Selected matter: ${matters.data.matters.find((matter) => matter.id === uploadMatter)?.matter_ref}`
+                    : "Upload a PDF to an assigned matter, then choose the appropriate review."}
+                </p>
+              </div>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
+                <Upload className="size-4" />
+                {uploading ? "Uploading PDF…" : "Choose PDF to upload"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="sr-only"
+                  disabled={uploading}
+                  onChange={async (event) => {
+                    const input = event.currentTarget;
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    if (!uploadMatter) {
+                      setUploadMessage(
+                        "Choose a matter below before uploading.",
+                      );
+                      input.value = "";
+                      return;
+                    }
+                    if (
+                      file.type !== "application/pdf" &&
+                      !file.name.toLowerCase().endsWith(".pdf")
+                    ) {
+                      setUploadMessage(
+                        "Only PDF uploads are currently supported by the secure matter-ingestion API.",
+                      );
+                      input.value = "";
+                      return;
+                    }
+                    setUploading(true);
+                    setUploadMessage("");
+                    try {
+                      const result = await apiUpload<{
+                        document_id: string;
+                        duplicate?: boolean;
+                      }>(
+                        `/v1/matters/${uploadMatter}/documents?title=${encodeURIComponent(file.name)}`,
+                        file,
+                        () => undefined,
+                      );
+                      if (result.duplicate) {
+                        const matterDocuments = await apiGet<{
+                          documents: Array<{ document_id: string }>;
+                        }>(`/v1/matters/${uploadMatter}/documents`);
+                        if (
+                          !matterDocuments.documents.some(
+                            (document) =>
+                              document.document_id === result.document_id,
+                          )
+                        ) {
+                          setUploadedDocument(null);
+                          setUploadMessage(
+                            "This PDF already exists outside the selected matter. It was not attached or analyzed here.",
+                          );
+                          return;
+                        }
+                      }
+                      setUploadedDocument({
+                        document_id: result.document_id,
+                        matter_id: uploadMatter,
+                        title: file.name.replace(/\.pdf$/i, ""),
+                      });
+                      setUploadMessage(
+                        result.duplicate
+                          ? "This document is already in the matter vault."
+                          : "Document uploaded and ready for analysis.",
+                      );
+                    } catch (error) {
+                      setUploadMessage(
+                        error instanceof Error
+                          ? error.message
+                          : "Upload failed.",
+                      );
+                    } finally {
+                      setUploading(false);
+                      input.value = "";
+                    }
+                  }}
+                />
+              </label>
+              {uploadedDocument && (
+                <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
+                  <p className="truncate text-xs font-medium">
+                    {uploadedDocument.title}
+                  </p>
+                  <label className="mt-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Analysis pack
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <select
+                      value={analysisPack}
+                      onChange={(event) =>
+                        setAnalysisPack(event.target.value as PromptPack)
+                      }
+                      aria-label="Analysis pack"
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                    >
+                      <option value="ADVERSAL_BRIEF">Adversarial Brief</option>
+                      <option value="SUMMONS_RESPONSE">Summons Response</option>
+                      <option value="CONTRACT_REVIEW">Contract Review</option>
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={startingAnalysis}
+                      onClick={async () => {
+                        if (!uploadedDocument) return;
+                        setStartingAnalysis(true);
+                        try {
+                          await apiPost<
+                            { analysis_id: string },
+                            { prompt_pack: PromptPack; matter_id: string }
+                          >(
+                            `/v1/documents/${uploadedDocument.document_id}/analyze`,
+                            {
+                              prompt_pack: analysisPack,
+                              matter_id: uploadedDocument.matter_id,
+                            },
+                          );
+                          await analyses.refetch();
+                          setSelectedId(null);
+                          setBench("Deck");
+                          setUploadMessage(
+                            "Analysis started. Follow its status in your Deck; completed output opens when selected.",
+                          );
+                        } catch (error) {
+                          setUploadMessage(
+                            error instanceof Error
+                              ? error.message
+                              : "Could not start analysis.",
+                          );
+                        } finally {
+                          setStartingAnalysis(false);
+                        }
+                      }}
+                    >
+                      {startingAnalysis ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <ChevronRight className="size-3" />
+                      )}
+                      {startingAnalysis ? "Starting…" : "Analyze"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {matters.data?.matters.length ? (
+                <select
+                  aria-label="Matter for upload"
+                  value={uploadMatter}
+                  onChange={(event) => {
+                    setUploadMatter(event.target.value);
+                    setUploadedDocument(null);
+                    setUploadMessage("");
+                  }}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                >
+                  <option value="">Choose matter for upload</option>
+                  {matters.data.matters.map((matter) => (
+                    <option key={matter.id} value={matter.id}>
+                      {matter.matter_ref}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Upload requires an assigned matter. DOCX is not supported by
+                  the current ingestion API.
+                </p>
+              )}
+            </div>
             {uploadMessage && (
               <p role="status" className="text-xs text-muted-foreground">
                 {uploading ? "Uploading…" : uploadMessage}
               </p>
             )}
+            <div className="panel space-y-3 p-4">
+              <div className="flex items-center gap-2">
+                <Printer className="size-4 text-steel" />
+                <h2 className="text-sm font-semibold">Court copy</h2>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={
+                  !selectedId ||
+                  bench !== "SmartBrief" ||
+                  analyses.data?.find((item) => item.analysis_id === selectedId)
+                    ?.status !== "COMPLETE"
+                }
+                onClick={() => window.print()}
+              >
+                <Printer className="mr-2 size-3.5" /> Print completed analysis
+              </Button>
+              <p className="text-[10px] text-muted-foreground">
+                {membership.data?.firm_name ?? "Your firm"} · browser print
+                layout. Select a completed analysis first.
+              </p>
+            </div>
             <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
               Deck{" "}
               <span className="normal-case tracking-normal">
@@ -357,10 +506,23 @@ function Workbench() {
               </div>
             )}
           </aside>
-          <section className="panel min-w-0 p-5">
+          <section className="workbench-content panel min-w-0 p-5">
+            <div className="print-only mb-6 border-b border-black pb-4 text-black">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em]">
+                {membership.data?.firm_name ?? "RedCase"}
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold">
+                {selectedId
+                  ? `${PACK_LABEL[analyses.data?.find((item) => item.analysis_id === selectedId)?.prompt_pack ?? ""] ?? "Legal analysis"} · ${selectedId.slice(0, 8)}`
+                  : "Legal analysis"}
+              </h1>
+              <p className="mt-1 text-sm">
+                Printed {new Date().toLocaleDateString("en-GB")}
+              </p>
+            </div>
             <nav
               aria-label="Workbench benches"
-              className="mb-5 flex gap-2 overflow-x-auto border-b border-border pb-3"
+              className="print-hide mb-5 flex gap-2 overflow-x-auto border-b border-border pb-3"
             >
               {(
                 [
@@ -400,10 +562,17 @@ function Workbench() {
                 bench={bench}
                 analyses={analyses.data ?? []}
                 diary={diary.data ?? []}
-                onSelect={setSelectedId}
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  setBench("SmartBrief");
+                }}
                 onAssistant={() =>
                   window.dispatchEvent(new Event("redcase:assistant-open"))
                 }
+                onReview={(id) => {
+                  setSelectedId(id);
+                  setBench("SmartBrief");
+                }}
               />
             )}
           </section>
@@ -419,6 +588,7 @@ function BenchView({
   diary,
   onSelect,
   onAssistant,
+  onReview,
 }: {
   bench: string;
   analyses: Analysis[];
@@ -431,30 +601,74 @@ function BenchView({
   }>;
   onSelect: (id: string) => void;
   onAssistant: () => void;
+  onReview: (id: string) => void;
 }) {
+  const research = useVaultQuery<QueryResponse>();
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [researchNotice, setResearchNotice] = useState("");
+  const [activeResearchQuestion, setActiveResearchQuestion] = useState("");
   if (bench === "Deck")
     return (
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Deck outputs</h2>
+        <div>
+          <h2 className="text-lg font-semibold">Deck</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Your analyses, grouped by workflow state. Open an item to inspect
+            its sections and citations.
+          </p>
+        </div>
         {analyses.length ? (
-          analyses.map((analysis) => (
-            <button
-              key={analysis.analysis_id}
-              type="button"
-              onClick={() => onSelect(analysis.analysis_id)}
-              className="flex w-full items-center justify-between rounded-xl border border-border p-4 text-left transition-all duration-200 hover:border-gold/50"
-            >
-              <span>
-                <span className="block text-sm font-medium">
-                  {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {analysis.analysis_id}
-                </span>
-              </span>
-              <StatusBadge status={analysis.status} />
-            </button>
-          ))
+          [
+            {
+              title: "In progress",
+              rows: analyses.filter((item) => item.status === "RUNNING"),
+            },
+            {
+              title: "Ready for review",
+              rows: analyses.filter((item) => item.status === "NEEDS_REVIEW"),
+            },
+            {
+              title: "Completed",
+              rows: analyses.filter((item) => item.status === "COMPLETE"),
+            },
+            {
+              title: "Could not complete",
+              rows: analyses.filter((item) => item.status === "FAILED"),
+            },
+          ]
+            .filter((group) => group.rows.length > 0)
+            .map((group) => (
+              <section key={group.title} className="space-y-2">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-steel">
+                  {group.title}{" "}
+                  <span className="text-muted-foreground">
+                    ({group.rows.length})
+                  </span>
+                </h3>
+                {group.rows.map((analysis) => (
+                  <button
+                    key={analysis.analysis_id}
+                    type="button"
+                    onClick={() => onSelect(analysis.analysis_id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-4 text-left transition-all duration-200 hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {PACK_LABEL[analysis.prompt_pack] ??
+                          analysis.prompt_pack}
+                      </span>
+                      <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
+                        {analysis.analysis_id.slice(0, 8)} ·{" "}
+                        {new Date(analysis.created_at).toLocaleDateString(
+                          "en-GB",
+                        )}
+                      </span>
+                    </span>
+                    <StatusBadge status={analysis.status} />
+                  </button>
+                ))}
+              </section>
+            ))
         ) : (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             Your SmartBrief outputs will appear in the Deck.
@@ -491,49 +705,172 @@ function BenchView({
     );
   if (bench === "Researcher")
     return (
-      <div className="rounded-xl border border-border bg-background/60 p-6">
+      <div className="space-y-4 rounded-xl border border-border bg-background/60 p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <Scale className="size-5 text-gold" />
           <h2 className="text-lg font-semibold">Researcher</h2>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Search firm documents and Nigerian authorities, then reference a
-          result in the Assistant.
+        <p className="text-sm text-muted-foreground">
+          Research is Vault Search in context: ask a legal question and review
+          the returned answer and verified, page-pinned citations. The
+          underlying query endpoint determines accessible sources.
         </p>
-        <Link
-          to="/search"
-          className="mt-4 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90"
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const question = researchQuestion.trim();
+            if (question.length < 10 || research.isPending) return;
+            setResearchNotice("");
+            setActiveResearchQuestion(question);
+            research.mutate(
+              { question },
+              {
+                onError: () =>
+                  setResearchNotice(
+                    "Research could not be completed. Check the connection and try again.",
+                  ),
+              },
+            );
+          }}
         >
-          Open research <ChevronRight className="ml-2 size-4" />
-        </Link>
+          <label
+            htmlFor="workbench-research"
+            className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
+          >
+            Legal research question
+          </label>
+          <textarea
+            id="workbench-research"
+            value={researchQuestion}
+            onChange={(event) => setResearchQuestion(event.target.value)}
+            minLength={10}
+            maxLength={2000}
+            rows={3}
+            placeholder="e.g. What is the effect of a defective originating process on jurisdiction?"
+            className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="submit"
+              disabled={
+                researchQuestion.trim().length < 10 || research.isPending
+              }
+            >
+              <Scale className="mr-2 size-4" />
+              {research.isPending ? "Searching…" : "Search authorities"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Minimum 10 characters · verified citations only
+            </span>
+          </div>
+        </form>
+        {researchNotice && (
+          <p role="alert" className="text-sm text-destructive">
+            {researchNotice}
+          </p>
+        )}
+        {research.isError && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive"
+          >
+            {research.error instanceof Error
+              ? research.error.message
+              : "Research failed."}
+          </p>
+        )}
+        {research.data && (
+          <ResearchResults
+            question={activeResearchQuestion}
+            answer={research.data.answer}
+            refusal={research.data.refusal}
+            citations={research.data.citations}
+            onAssistant={onAssistant}
+          />
+        )}
       </div>
     );
   if (bench === "Reviewer")
     return (
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Hearings &amp; reviews</h2>
-        {diary.length ? (
-          diary.map((entry) => (
-            <article
-              key={entry.id}
-              className="rounded-xl border border-border p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium">{entry.title}</span>
-                <span className="text-[10px] uppercase text-gold">
-                  {entry.entry_type}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {new Date(entry.starts_at).toLocaleString()} · {entry.status}
-              </p>
-            </article>
-          ))
-        ) : (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No court diary entries available.
-          </div>
-        )}
+        <div>
+          <h2 className="text-lg font-semibold">Reviewer</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Review analyses flagged for human attention alongside upcoming court
+            diary items.
+          </p>
+        </div>
+        <section className="space-y-2">
+          <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
+            Analysis review queue
+          </h3>
+          {analyses.filter((analysis) => analysis.status === "NEEDS_REVIEW")
+            .length ? (
+            analyses
+              .filter((analysis) => analysis.status === "NEEDS_REVIEW")
+              .map((analysis) => (
+                <article
+                  key={analysis.analysis_id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 p-4"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
+                    </p>
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                      {analysis.analysis_id.slice(0, 8)} ·{" "}
+                      {new Date(analysis.created_at).toLocaleDateString(
+                        "en-GB",
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={analysis.status} />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onReview(analysis.analysis_id)}
+                    >
+                      Review output
+                    </Button>
+                  </div>
+                </article>
+              ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+              No analyses are currently flagged for manual review.
+            </div>
+          )}
+        </section>
+        <section className="space-y-2">
+          <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
+            Hearings &amp; court diary
+          </h3>
+          {diary.length ? (
+            diary.map((entry) => (
+              <article
+                key={entry.id}
+                className="rounded-xl border border-border p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{entry.title}</span>
+                  <span className="text-[10px] uppercase text-gold">
+                    {entry.entry_type}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {new Date(entry.starts_at).toLocaleString()} · {entry.status}
+                </p>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              No court diary entries available.
+            </div>
+          )}
+        </section>
       </div>
     );
   return (
@@ -545,6 +882,125 @@ function BenchView({
         Law sections.
       </p>
     </div>
+  );
+}
+
+function ResearchResults({
+  question,
+  answer,
+  refusal,
+  citations,
+  onAssistant,
+}: {
+  question: string;
+  answer: string;
+  refusal: boolean;
+  citations: Citation[];
+  onAssistant: () => void;
+}) {
+  return (
+    <section
+      aria-live="polite"
+      className="space-y-3 border-t border-border pt-4"
+    >
+      <div
+        className={`rounded-xl border p-4 ${refusal ? "border-warning/40 bg-warning/5" : "border-border bg-background"}`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Research answer</h3>
+          <span
+            className={`font-mono text-[10px] uppercase tracking-widest ${refusal ? "text-warning" : "text-success"}`}
+          >
+            {refusal ? "Verification refused" : "Grounded response"}
+          </span>
+        </div>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{answer}</p>
+        {refusal && (
+          <p className="mt-3 text-xs text-warning">
+            Do not rely on this as a verified answer. Refine the question or
+            consult the source material.
+          </p>
+        )}
+      </div>
+      <div>
+        <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-steel">
+          Sources ({citations.length})
+        </h3>
+        {citations.length ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {citations.map((citation) => (
+              <article
+                key={`${citation.document_id}:${citation.page_start}:${citation.citation}`}
+                className="rounded-xl border border-border p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 font-mono text-[10px] text-gold">
+                    {citation.court_level} · {citation.year}
+                  </span>
+                  <span
+                    className={`font-mono text-[9px] uppercase ${citation.verified ? "text-success" : "text-warning"}`}
+                  >
+                    {citation.verified ? "Verified" : "Unverified"}
+                  </span>
+                </div>
+                <h4 className="mt-2 text-sm font-medium">
+                  {citation.case_title}
+                </h4>
+                <p className="mt-1 font-mono text-xs text-gold">
+                  {citation.citation}
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                  pp. {citation.page_start}–{citation.page_end}
+                  {citation.paragraph_refs.length
+                    ? ` · ¶ ${citation.paragraph_refs.join(", ¶ ")}`
+                    : ""}
+                </p>
+                {citation.source_pdf_url && (
+                  <a
+                    className="mt-2 inline-flex text-xs underline underline-offset-2 transition-colors hover:text-gold"
+                    href={citation.source_pdf_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open source PDF
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+            No citations were returned. Treat the answer cautiously and verify
+            against primary sources.
+          </p>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          window.dispatchEvent(
+            new CustomEvent("redcase:assistant-message", {
+              detail: {
+                message: `Research question: ${question}\n\nVault Search response: ${answer}\n\nSources: ${
+                  citations
+                    .map(
+                      (citation) =>
+                        `${citation.case_title} (${citation.citation}), pp. ${citation.page_start}–${citation.page_end}${citation.verified ? " [verified]" : " [unverified]"}`,
+                    )
+                    .join("; ") || "No citations returned."
+                }`,
+                context: { bench: "Researcher" },
+              },
+            }),
+          );
+          onAssistant();
+        }}
+      >
+        Discuss research with Assistant
+      </Button>
+    </section>
   );
 }
 

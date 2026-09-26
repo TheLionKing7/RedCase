@@ -26,6 +26,7 @@ import { Route as AuthedSearchRouteImport } from './routes/_authed.search'
 import { Route as AuthedSettingsRouteImport } from './routes/_authed.settings'
 import { Route as AuthedThreadsRouteImport } from './routes/_authed.threads'
 import { Route as AuthedTrackerRouteImport } from './routes/_authed.tracker'
+import { Route as AuthedVaultRouteImport } from './routes/_authed.vault'
 import { Route as AuthedWorkbenchRouteImport } from './routes/_authed.workbench'
 import { Route as AuthedThreadsThreadIdRouteImport } from './routes/_authed.threads.$threadId'
 
@@ -113,6 +114,11 @@ const AuthedTrackerRoute = AuthedTrackerRouteImport.update({
   path: '/tracker',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedVaultRoute = AuthedVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedWorkbenchRoute = AuthedWorkbenchRouteImport.update({
   id: '/workbench',
   path: '/workbench',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthedSettingsRoute
   '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
+  '/vault': typeof AuthedVaultRoute
   '/workbench': typeof AuthedWorkbenchRoute
   '/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthedSettingsRoute
   '/threads': typeof AuthedThreadsRouteWithChildren
   '/tracker': typeof AuthedTrackerRoute
+  '/vault': typeof AuthedVaultRoute
   '/workbench': typeof AuthedWorkbenchRoute
   '/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/_authed/settings': typeof AuthedSettingsRoute
   '/_authed/threads': typeof AuthedThreadsRouteWithChildren
   '/_authed/tracker': typeof AuthedTrackerRoute
+  '/_authed/vault': typeof AuthedVaultRoute
   '/_authed/workbench': typeof AuthedWorkbenchRoute
   '/_authed/threads/$threadId': typeof AuthedThreadsThreadIdRoute
 }
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/threads'
     | '/tracker'
+    | '/vault'
     | '/workbench'
     | '/threads/$threadId'
   fileRoutesByTo: FileRoutesByTo
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/threads'
     | '/tracker'
+    | '/vault'
     | '/workbench'
     | '/threads/$threadId'
   id:
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/_authed/settings'
     | '/_authed/threads'
     | '/_authed/tracker'
+    | '/_authed/vault'
     | '/_authed/workbench'
     | '/_authed/threads/$threadId'
   fileRoutesById: FileRoutesById
@@ -379,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedTrackerRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/vault': {
+      id: '/_authed/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof AuthedVaultRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/workbench': {
       id: '/_authed/workbench'
       path: '/workbench'
@@ -421,6 +440,7 @@ interface AuthedRouteChildren {
   AuthedSettingsRoute: typeof AuthedSettingsRoute
   AuthedThreadsRoute: typeof AuthedThreadsRouteWithChildren
   AuthedTrackerRoute: typeof AuthedTrackerRoute
+  AuthedVaultRoute: typeof AuthedVaultRoute
   AuthedWorkbenchRoute: typeof AuthedWorkbenchRoute
 }
 
@@ -437,6 +457,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedSettingsRoute: AuthedSettingsRoute,
   AuthedThreadsRoute: AuthedThreadsRouteWithChildren,
   AuthedTrackerRoute: AuthedTrackerRoute,
+  AuthedVaultRoute: AuthedVaultRoute,
   AuthedWorkbenchRoute: AuthedWorkbenchRoute,
 }
 
