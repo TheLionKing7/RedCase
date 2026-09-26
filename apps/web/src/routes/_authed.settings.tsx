@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Bot, Check, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import {
+  Bot,
+  Check,
+  KeyRound,
+  Loader2,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import {
   PERSONA_TONES,
@@ -10,6 +17,7 @@ import {
   type TonePreset,
 } from "@/lib/api/persona";
 import { useProfile, useSaveProfile, type Profile } from "@/lib/api/profile";
+import { updatePassword } from "@/lib/auth/supabase";
 
 export const Route = createFileRoute("/_authed/settings")({
   component: SettingsPage,
@@ -38,6 +46,13 @@ function SettingsPage() {
   });
   const [profileNotice, setProfileNotice] = useState("");
   const [personaNotice, setPersonaNotice] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     if (profile.data)
@@ -78,6 +93,33 @@ function SettingsPage() {
   const set = (key: keyof PersonaInput, value: string | number) =>
     setPersonaForm((current) => ({ ...current, [key]: value }));
 
+  const savePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordNotice(null);
+    if (newPassword !== confirmPassword) {
+      setPasswordNotice({ kind: "error", text: "Passwords do not match." });
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      await updatePassword(newPassword);
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordNotice({
+        kind: "success",
+        text: "Password saved. You can now sign in with your password or continue using magic links.",
+      });
+    } catch (err) {
+      setPasswordNotice({
+        kind: "error",
+        text:
+          err instanceof Error ? err.message : "Password could not be saved.",
+      });
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
   return (
     <AppShell eyebrow="WORKBENCH CONTROL ROOM" title="Settings">
       <div className="mx-auto max-w-6xl space-y-8">
@@ -93,6 +135,78 @@ function SettingsPage() {
             it can use or what it may claim.
           </p>
         </header>
+
+        <section className="panel overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-border px-5 py-4 sm:px-7">
+            <span className="grid size-9 place-items-center rounded-lg bg-gold/10 text-gold">
+              <KeyRound className="size-4" />
+            </span>
+            <div>
+              <h3 className="font-semibold">Security</h3>
+              <p className="text-xs text-muted-foreground">
+                Add password sign-in without giving up magic links
+              </p>
+            </div>
+          </div>
+          <form onSubmit={savePassword} className="space-y-5 p-5 sm:p-7">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Set password{" "}
+                <span className="text-muted-foreground">(optional)</span>
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Your email magic link remains available. Choose a password only
+                if you would also like to sign in with email and password.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="New password">
+                <input
+                  className={inputClass}
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  placeholder="At least 6 characters"
+                />
+              </Field>
+              <Field label="Confirm new password">
+                <input
+                  className={inputClass}
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Re-enter your password"
+                />
+              </Field>
+            </div>
+            {passwordNotice && (
+              <p
+                role={passwordNotice.kind === "error" ? "alert" : "status"}
+                className={`text-sm ${passwordNotice.kind === "error" ? "text-destructive" : "text-success"}`}
+              >
+                {passwordNotice.text}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={passwordBusy || !newPassword || !confirmPassword}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-5 py-2.5 text-sm font-semibold text-foreground transition-all duration-200 hover:border-gold/50 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {passwordBusy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="size-4" />
+              )}
+              {passwordBusy ? "Saving password…" : "Set password"}
+            </button>
+          </form>
+        </section>
 
         <section className="panel overflow-hidden">
           <div className="flex items-center gap-3 border-b border-border px-5 py-4 sm:px-7">

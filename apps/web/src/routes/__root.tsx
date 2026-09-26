@@ -6,10 +6,12 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  redirect,
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import { getSession, processAuthSessionFromUrl } from "@/lib/auth/supabase";
 
 function NotFoundComponent() {
   return (
@@ -73,6 +75,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   {
+    beforeLoad: () => {
+      if (typeof window === "undefined") return;
+      const callbackSession = processAuthSessionFromUrl();
+      const isPublicAuthRoute = ["/signin", "/onboarding"].includes(
+        window.location.pathname,
+      );
+      const hasPublicRouteSession =
+        import.meta.env.VITE_API_DEV_ADAPTER !== "1" &&
+        isPublicAuthRoute &&
+        getSession();
+      if (callbackSession || hasPublicRouteSession) {
+        throw redirect({ to: "/home" });
+      }
+    },
     head: () => ({
       meta: [
         { charSet: "utf-8" },

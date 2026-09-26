@@ -45,11 +45,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function signInWithEmail(email: string): Promise<void> {
   const { url, key } = requireConfig();
   if (!EMAIL_RE.test(email)) throw new AuthError("Enter a valid email address");
-  const res = await fetch(`${url}/auth/v1/otp`, {
-    method: "POST",
-    headers: { apikey: key, "content-type": "application/json" },
-    body: JSON.stringify({ email, create_user: true }),
-  });
+  if (typeof window === "undefined") {
+    throw new AuthError("Email sign-in is only available in a browser.");
+  }
+  const redirectTo = `${window.location.origin}/home`;
+  const res = await fetch(
+    `${url}/auth/v1/otp?redirect_to=${encodeURIComponent(redirectTo)}`,
+    {
+      method: "POST",
+      headers: { apikey: key, "content-type": "application/json" },
+      body: JSON.stringify({ email, create_user: true }),
+    },
+  );
   if (!res.ok) {
     throw new AuthError(`Could not send sign-in email (HTTP ${res.status})`);
   }
@@ -88,6 +95,10 @@ export async function verifyOtp(
     user_ref: data.user?.id ?? null,
   };
   persist(session);
+  // Clean the fragment and normalize the browser URL before the router is
+  // constructed. This lands confirmation/magic-link callbacks directly on the
+  // authenticated home route without rendering an intermediate auth screen.
+  window.history.replaceState(window.history.state, "", "/home");
   return session;
 }
 
@@ -95,7 +106,8 @@ export async function verifyOtp(
 export async function refreshSession(): Promise<AuthSession> {
   const { url, key } = requireConfig();
   const current = getSession();
-  if (!current?.refresh_token) throw new AuthError("Sign in again to continue setup.");
+  if (!current?.refresh_token)
+    throw new AuthError("Sign in again to continue setup.");
   const res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
     method: "POST",
     headers: { apikey: key, "content-type": "application/json" },
@@ -109,7 +121,9 @@ export async function refreshSession(): Promise<AuthSession> {
     msg?: string;
   };
   if (!res.ok || !data.access_token) {
-    throw new AuthError(data.msg ?? `Session refresh failed (HTTP ${res.status})`);
+    throw new AuthError(
+      data.msg ?? `Session refresh failed (HTTP ${res.status})`,
+    );
   }
   const session: AuthSession = {
     access_token: data.access_token,
@@ -158,6 +172,109 @@ export async function signInWithPassword(
   };
   persist(session);
   return session;
+}
+
+/**
+ * Process the Supabase Auth implicit-flow callback before route guards run.
+ * Supabase redirects confirmed email links to the app with the session in the
+ * URL hash; the hash is removed immediately so bearer tokens are not left in
+ * browser history or copied with the URL.
+ */
+export function processAuthSessionFromUrl(): AuthSession | null {
+  if (typeof window === "undefined") return null;
+
+  const hash = window.location.hash.replace(/^#/, "");
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token");
+  if (!accessToken && /^access_token=/.test(hash)) return null;
+  if (!accessToken) {
+    if (params.has("error") || params.has("error_description")) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+    return null;
+  }
+
+  const expiresAtParam = Number(params.get("expires_at"));
+  const expiresIn = Number(params.get("expires_in"));
+  const expiresAt =
+    Number.isFinite(expiresAtParam) && expiresAtParam > 0
+      ? expiresAtParam
+      : Number.isFinite(expiresIn) && expiresIn > 0
+        ? Math.floor(Date.now() / 1000) + expiresIn
+        : 0;
+  if (!expiresAt || expiresAt < Date.now() / 1000 + 60) {
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    return null;
+  }
+
+  let userRef: string | null = null;
+  try {
+    const payload = accessToken.split(".")[1];
+    if (!payload) throw new Error("Missing token payload");
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(normalized)) as { sub?: unknown };
+    if (typeof decoded.sub !== "string" || !decoded.sub) {
+      throw new Error("Invalid token subject");
+    }
+    userRef = decoded.sub;
+  } catch {
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`,
+    );
+    return null;
+  }
+
+  const session: AuthSession = {
+    access_token: accessToken,
+    refresh_token: params.get("refresh_token") ?? "",
+    expires_at: expiresAt,
+    user_ref: userRef,
+  };
+  persist(session);
+  return session;
+}
+
+/** Set or change the current user's password through Supabase Auth. */
+export async function updatePassword(password: string): Promise<void> {
+  const { url, key } = requireConfig();
+  const session = getSession();
+  if (!session) throw new AuthError("Sign in again before setting a password.");
+  if (password.length < 6) {
+    throw new AuthError("Use a password with at least 6 characters.");
+  }
+
+  const res = await fetch(`${url}/auth/v1/user`, {
+    method: "PUT",
+    headers: {
+      apikey: key,
+      authorization: `Bearer ${session.access_token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error_description?: string;
+    msg?: string;
+    message?: string;
+  };
+  if (!res.ok) {
+    throw new AuthError(
+      data.error_description ??
+        data.msg ??
+        data.message ??
+        `Password could not be updated (HTTP ${res.status})`,
+    );
+  }
 }
 
 export function getSession(): AuthSession | null {
@@ -240,7 +357,9 @@ export function getSignInEmail(): string | null {
     const payloadB64 = token.split(".")[1] ?? "";
     const pad = "=".repeat(-payloadB64.length % 4);
     const payload = JSON.parse(atob(payloadB64)) as { email?: string };
-    return typeof payload.email === "string" && payload.email ? payload.email : null;
+    return typeof payload.email === "string" && payload.email
+      ? payload.email
+      : null;
   } catch {
     return null;
   }

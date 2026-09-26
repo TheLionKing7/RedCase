@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -17,9 +17,20 @@ import {
 import { apiPost } from "@/lib/api/client";
 import { getFirmAssetPreview, uploadFirmAsset, type FirmAssetType } from "@/lib/api/firmAssets";
 import { saveDepartments, savePracticeAreas } from "@/lib/api/persona";
-import { getAccessToken, refreshSession, signInWithEmail, verifyOtp } from "@/lib/auth/supabase";
+import { getAccessToken, getSession, refreshSession, signInWithEmail, verifyOtp } from "@/lib/auth/supabase";
 
-export const Route = createFileRoute("/onboarding")({ component: OnboardingPage });
+export const Route = createFileRoute("/onboarding")({
+  beforeLoad: () => {
+    if (
+      typeof window !== "undefined" &&
+      import.meta.env.VITE_API_DEV_ADAPTER !== "1" &&
+      getSession()
+    ) {
+      throw redirect({ to: "/home" });
+    }
+  },
+  component: OnboardingPage,
+});
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
 type UploadStatus = { state: "uploading" | "success" | "failure"; progress: number; message?: string };

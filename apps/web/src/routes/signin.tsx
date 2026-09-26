@@ -1,10 +1,24 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShieldCheck, Mail, ArrowRight } from "lucide-react";
-import { signInWithPassword, signInWithEmail } from "@/lib/auth/supabase";
+import {
+  getSession,
+  signInWithPassword,
+  signInWithEmail,
+  AuthError,
+} from "@/lib/auth/supabase";
 
 export const Route = createFileRoute("/signin")({
+  beforeLoad: () => {
+    if (
+      typeof window !== "undefined" &&
+      import.meta.env.VITE_API_DEV_ADAPTER !== "1" &&
+      getSession()
+    ) {
+      throw redirect({ to: "/home" });
+    }
+  },
   component: SignInPage,
 });
 
