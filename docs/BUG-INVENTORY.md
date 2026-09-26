@@ -56,3 +56,8 @@ Scope: evidence-led consistency audit, recorded before fixes. No application/aud
 - Dead-link inspection used TanStack `src/routes` and `routeTree.gen.ts`; Settings missing. Exhaustive crawl of dynamic requests/methods and clickable hrefs remains outstanding; no claim of complete method-level verification.
 - No inventory finding has been fixed in this change set.
 
+## W-gap follow-up — 2026-09-25
+
+- Workbench / Deck W-gap updates are implemented in the local slice; migration `0033` adds `DRAFT` to `document_analyses.status` and is applied to the configured Supabase database (`0033` verified as head). DOCX extraction and upload-byte deduplication are verified by the Vault A API tests (13 passed); this intake behavior is covered at the appropriate API level, not by a screenshot.
+- **W-gap browser evidence: re-capture deck + display frame with seeded analysis.** Existing Deck capture showed loading and the current logged-in fixture did not provide a populated analysis or an exercised Send-to-Inbox result, so those browser interactions remain unverified.
+

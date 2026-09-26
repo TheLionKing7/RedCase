@@ -20,6 +20,8 @@ import hmac
 import json
 import time
 import uuid
+from io import BytesIO
+from zipfile import ZipFile
 
 import asyncpg
 import pytest
@@ -122,13 +124,13 @@ def _pdf_bytes(tmp_path, marker: str) -> bytes:
     ).read_bytes()
 
 
-def _post(client, matter, token, raw, **params):
+def _post(client, matter, token, raw, *, content_type="application/pdf", **params):
     return client.post(
         f"/v1/matters/{matter}/documents",
         params={k: v for k, v in params.items() if v is not None},
         content=raw,
         headers={"Authorization": f"Bearer {token}",
-                 "Content-Type": "application/pdf"},
+                 "Content-Type": content_type},
     )
 
 
@@ -254,6 +256,54 @@ class TestIdempotency:
         one = _post(client, matter_id, token, _pdf_bytes(tmp_path, "a1"))
         two = _post(client, matter_id, token, _pdf_bytes(tmp_path, "a2"))
         assert one.json()["document_id"] != two.json()["document_id"]
+
+    def test_docx_reingest_uses_original_upload_bytes_for_dedup(
+        self, client, matter_id
+    ) -> None:
+        raw = _docx_bytes("DOCX intake text with a distinctive paragraph.")
+        token = make_jwt()
+        first = _post(
+            client, matter_id, token, raw, title="brief.docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        second = _post(
+            client, matter_id, token, raw, title="brief.docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert second.json()["duplicate"] is True
+        assert second.json()["document_id"] == first.json()["document_id"]
+        assert second.json()["chunks"] == 0
+        readback = client.get(
+            f"/v1/documents/{first.json()['document_id']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert readback.status_code == 200
+        assert any(
+            "DOCX intake text" in chunk["text"]
+            for chunk in readback.json()["chunks"]
+        )
+
+    def test_docx_invalid_archive_is_rejected(self, client, matter_id) -> None:
+        response = _post(
+            client, matter_id, make_jwt(), b"not a zip file",
+            title="corrupt.docx",
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        assert response.status_code == 422
+
+
+def _docx_bytes(paragraph: str) -> bytes:
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:body><w:p><w:r><w:t>' + paragraph + '</w:t></w:r></w:p></w:body></w:document>'
+    )
+    stream = BytesIO()
+    with ZipFile(stream, "w") as archive:
+        archive.writestr("word/document.xml", xml)
+    return stream.getvalue()
 
 
 class TestEncryptedRoundTripInversion:

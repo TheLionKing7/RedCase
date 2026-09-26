@@ -1,6 +1,6 @@
 """Vault A document endpoints — Task 2.3 (owner brief 2026-09-19).
 
-  POST /v1/matters/{matter_id}/documents   — raw PDF body; classification,
+  POST /v1/matters/{matter_id}/documents   — raw PDF/DOCX body; classification,
                                              doc_type, title, grantees as
                                              query params. Auth: Supabase
                                              JWT (existing layer); write
@@ -12,7 +12,7 @@
   GET  /v1/documents/{document_id}         — metadata + DECRYPTED chunks
                                              (decrypt-on-retrieve, DoD 2c).
 
-Body is raw ``application/pdf`` bytes rather than multipart: the pipeline
+Body is raw document bytes rather than multipart: the pipeline
 trusts the hash, not the filename, and it keeps the endpoint testable
 without extra dependencies. Slack attachment intake (2.6) downloads the
 bytes and calls the same pipeline — one ingestion path, one audit story.

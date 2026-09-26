@@ -49,6 +49,7 @@ from app.vault_a.crypto import (
     generate_dek,
     needs_encryption,
 )
+from app.vault_a.docx import DocxError, extract_docx_text
 
 DEFAULT_CLASSIFICATION = "CONFIDENTIAL"  # ruling 1 — never FIRM_INTERNAL
 CLASSIFICATIONS = ("PUBLIC", "FIRM_INTERNAL", "CONFIDENTIAL", "PARTNER_RESTRICTED")
@@ -187,7 +188,7 @@ async def intake_document(
     doc_type: str | None = None,
     grantees: list[str] | None = None,
 ) -> dict:
-    """Ingest PDF bytes into Vault A. Returns document metadata.
+    """Ingest PDF or DOCX bytes into Vault A. Returns document metadata.
 
     ``conn`` must already carry the request scope (app.tenant_id /
     app.user_ref / app.user_clearance set in the current transaction) —
@@ -202,6 +203,10 @@ async def intake_document(
     if dtype not in DOC_TYPES:
         raise IntakeError(f"unknown doc_type {doc_type!r}")
 
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
+    if extension not in {"pdf", "docx"}:
+        raise IntakeError("only PDF and DOCX uploads are supported")
+
     digest = hashlib.sha256(raw).hexdigest()
     if existing := await find_by_hash(conn, str(tenant_id), digest):
         return {
@@ -211,11 +216,19 @@ async def intake_document(
             "chunks": 0,
         }
 
-    # Chunk + embed from plaintext (worker-memory only; ZDR).
-    try:
-        pages = extract_pages(fitz.open(stream=raw, filetype="pdf"))
-    except Exception as exc:  # noqa: BLE001 — mapped to a 4xx by the route
-        raise IntakeError(f"unparseable PDF: {type(exc).__name__}") from exc
+    # Chunk + embed from plaintext (worker-memory only; ZDR). The dedup key
+    # remains the hash of the original upload bytes for both formats.
+    if extension == "docx":
+        try:
+            pages = [extract_docx_text(raw)]
+        except DocxError as exc:
+            raise IntakeError(str(exc)) from exc
+    else:
+        try:
+            with fitz.open(stream=raw, filetype="pdf") as pdf:
+                pages = extract_pages(pdf)
+        except Exception as exc:  # noqa: BLE001 — mapped to a 4xx by the route
+            raise IntakeError(f"unparseable PDF: {type(exc).__name__}") from exc
     chunks = chunk_pages(pages)
     if not chunks:
         raise IntakeError("PDF contains no extractable text")
@@ -238,7 +251,7 @@ async def intake_document(
     if matter is None:
         raise IntakeError("matter not found in this tenant")
 
-    title = re.sub(r"\.pdf$", "", filename, flags=re.I) or f"Document {digest[:8]}"
+    title = re.sub(r"\.(pdf|docx)$", "", filename, flags=re.I) or f"Document {digest[:8]}"
     await conn.execute(
         "INSERT INTO documents"
         " (id, tenant_id, vault_id, case_title, citation, court_level, year,"

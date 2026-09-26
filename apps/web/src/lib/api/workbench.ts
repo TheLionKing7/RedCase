@@ -11,7 +11,7 @@ import { apiGet, apiPost } from "@/lib/api/client";
 
 /** §3.1 status values. */
 export type AnalysisStatusValue =
-  "RUNNING" | "COMPLETE" | "FAILED" | "NEEDS_REVIEW";
+  "DRAFT" | "RUNNING" | "COMPLETE" | "FAILED" | "NEEDS_REVIEW";
 
 /** §3.3 prompt packs. */
 export type PromptPack =

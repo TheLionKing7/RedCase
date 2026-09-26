@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -15,8 +15,10 @@ import {
   Inbox,
   ChevronRight,
   Printer,
+  MessageSquare,
 } from "lucide-react";
 import { useIdentity } from "@/lib/identity";
+import { AnalysisSectionCard } from "@/components/assistant/AnalysisSectionCard";
 import { apiGet, apiPost, apiUpload } from "@/lib/api/client";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -66,6 +68,13 @@ const PACK_LABEL: Record<string, string> = {
 };
 
 function StatusBadge({ status }: { status: Analysis["status"] }) {
+  if (status === "DRAFT") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        Draft
+      </span>
+    );
+  }
   if (status === "COMPLETE") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-success">
@@ -95,6 +104,7 @@ function StatusBadge({ status }: { status: Analysis["status"] }) {
 }
 
 function Workbench() {
+  const navigate = useNavigate();
   const analyses = useAnalyses();
   const identity = useIdentity();
   const membership = useMembership();
@@ -150,8 +160,8 @@ function Workbench() {
 
   return (
     <AppShell
-      eyebrow="LEGAL WORKBENCH"
-      title={`${identity.name}${identity.role ? ` · ${identity.role}` : ""}`}
+      eyebrow={`${membership.data?.full_name ?? identity.name}${membership.data?.role ? ` · ${membership.data.role}` : ""}`}
+      title="Legal Workbench"
       assistantContext={{
         bench,
         ...(selectedId &&
@@ -174,10 +184,6 @@ function Workbench() {
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
-        <p className="-mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          {membership.data?.full_name ?? identity.name}
-          {membership.data?.role ? ` · ${membership.data.role}` : ""}
-        </p>
         <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="workbench-tools space-y-3 print-hide">
             <div className="panel space-y-3 p-4">
@@ -188,15 +194,15 @@ function Workbench() {
                     (matter) => matter.id === uploadMatter,
                   )?.matter_ref
                     ? `Selected matter: ${matters.data.matters.find((matter) => matter.id === uploadMatter)?.matter_ref}`
-                    : "Upload a PDF to an assigned matter, then choose the appropriate review."}
+                    : "Upload a PDF or DOCX to an assigned matter, then choose the appropriate review."}
                 </p>
               </div>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
                 <Upload className="size-4" />
-                {uploading ? "Uploading PDF…" : "Choose PDF to upload"}
+                {uploading ? "Uploading document…" : "Choose PDF or DOCX"}
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                   className="sr-only"
                   disabled={uploading}
                   onChange={async (event) => {
@@ -210,13 +216,8 @@ function Workbench() {
                       input.value = "";
                       return;
                     }
-                    if (
-                      file.type !== "application/pdf" &&
-                      !file.name.toLowerCase().endsWith(".pdf")
-                    ) {
-                      setUploadMessage(
-                        "Only PDF uploads are currently supported by the secure matter-ingestion API.",
-                      );
+                    if (!/\.(pdf|docx)$/i.test(file.name)) {
+                      setUploadMessage("Choose a PDF or DOCX document.");
                       input.value = "";
                       return;
                     }
@@ -243,7 +244,7 @@ function Workbench() {
                         ) {
                           setUploadedDocument(null);
                           setUploadMessage(
-                            "This PDF already exists outside the selected matter. It was not attached or analyzed here.",
+                            "This document already exists outside the selected matter. It was not attached or analyzed here.",
                           );
                           return;
                         }
@@ -251,7 +252,7 @@ function Workbench() {
                       setUploadedDocument({
                         document_id: result.document_id,
                         matter_id: uploadMatter,
-                        title: file.name.replace(/\.pdf$/i, ""),
+                        title: file.name.replace(/\.(pdf|docx)$/i, ""),
                       });
                       setUploadMessage(
                         result.duplicate
@@ -357,8 +358,8 @@ function Workbench() {
                 </select>
               ) : (
                 <p className="text-[11px] text-muted-foreground">
-                  Upload requires an assigned matter. DOCX is not supported by
-                  the current ingestion API.
+                  Upload requires an assigned matter. PDF and DOCX files are
+                  converted to searchable text during secure ingestion.
                 </p>
               )}
             </div>
@@ -501,6 +502,16 @@ function Workbench() {
                         </div>
                       </details>
                     </div>
+                    {a.status === "COMPLETE" && (
+                      <Link
+                        to="/channels"
+                        search={{ analysis: a.analysis_id } as never}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/30 px-3 py-2 text-xs font-medium text-gold transition-all duration-200 hover:border-gold/60 hover:bg-gold/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                      >
+                        <MessageSquare className="size-3.5" /> Discuss this
+                        brief
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
@@ -537,6 +548,10 @@ function Workbench() {
                   type="button"
                   key={item}
                   onClick={() => {
+                    if (item === "Red-Teamer") {
+                      void navigate({ to: "/red-teamer" });
+                      return;
+                    }
                     setBench(item);
                     if (item !== "SmartBrief") setSelectedId(null);
                   }}
@@ -562,6 +577,34 @@ function Workbench() {
                 bench={bench}
                 analyses={analyses.data ?? []}
                 diary={diary.data ?? []}
+                threads={threads.data ?? []}
+                onSendToInbox={(analysis, threadId) => {
+                  const thread = threads.data?.find(
+                    (item) => item.thread_id === threadId,
+                  );
+                  if (!thread) return;
+                  void sendAssistantMessage(
+                    threadId,
+                    `Please review the referenced SmartBrief output ${analysis.analysis_id}.`,
+                    {
+                      bench: "Deck",
+                      reference: {
+                        type: "analysis",
+                        id: analysis.analysis_id,
+                        label:
+                          PACK_LABEL[analysis.prompt_pack] ??
+                          "SmartBrief output",
+                      },
+                    },
+                  ).then(
+                    () =>
+                      setUploadMessage(`Sent reference to “${thread.title}”.`),
+                    () =>
+                      setUploadMessage(
+                        "Could not send output reference. Please retry.",
+                      ),
+                  );
+                }}
                 onSelect={(id) => {
                   setSelectedId(id);
                   setBench("SmartBrief");
@@ -586,12 +629,15 @@ function BenchView({
   bench,
   analyses,
   diary,
+  threads,
   onSelect,
   onAssistant,
   onReview,
+  onSendToInbox,
 }: {
   bench: string;
   analyses: Analysis[];
+  threads: Array<{ thread_id: string; title: string }>;
   diary: Array<{
     id: string;
     title: string;
@@ -602,6 +648,7 @@ function BenchView({
   onSelect: (id: string) => void;
   onAssistant: () => void;
   onReview: (id: string) => void;
+  onSendToInbox: (analysis: Analysis, threadId: string) => void;
 }) {
   const research = useVaultQuery<QueryResponse>();
   const [researchQuestion, setResearchQuestion] = useState("");
@@ -617,63 +664,99 @@ function BenchView({
             its sections and citations.
           </p>
         </div>
-        {analyses.length ? (
-          [
-            {
-              title: "In progress",
-              rows: analyses.filter((item) => item.status === "RUNNING"),
-            },
-            {
-              title: "Ready for review",
-              rows: analyses.filter((item) => item.status === "NEEDS_REVIEW"),
-            },
-            {
-              title: "Completed",
-              rows: analyses.filter((item) => item.status === "COMPLETE"),
-            },
-            {
-              title: "Could not complete",
-              rows: analyses.filter((item) => item.status === "FAILED"),
-            },
-          ]
-            .filter((group) => group.rows.length > 0)
-            .map((group) => (
-              <section key={group.title} className="space-y-2">
-                <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-steel">
-                  {group.title}{" "}
-                  <span className="text-muted-foreground">
-                    ({group.rows.length})
-                  </span>
-                </h3>
-                {group.rows.map((analysis) => (
-                  <button
-                    key={analysis.analysis_id}
-                    type="button"
-                    onClick={() => onSelect(analysis.analysis_id)}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-4 text-left transition-all duration-200 hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">
-                        {PACK_LABEL[analysis.prompt_pack] ??
-                          analysis.prompt_pack}
-                      </span>
-                      <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
-                        {analysis.analysis_id.slice(0, 8)} ·{" "}
-                        {new Date(analysis.created_at).toLocaleDateString(
-                          "en-GB",
-                        )}
-                      </span>
+        {[
+          {
+            title: "Drafts",
+            rows: analyses.filter((item) => item.status === "DRAFT"),
+          },
+          {
+            title: "In progress",
+            rows: analyses.filter((item) => item.status === "RUNNING"),
+          },
+          {
+            title: "Ready for review",
+            rows: analyses.filter((item) => item.status === "NEEDS_REVIEW"),
+          },
+          {
+            title: "Completed",
+            rows: analyses.filter((item) => item.status === "COMPLETE"),
+          },
+          {
+            title: "Could not complete",
+            rows: analyses.filter((item) => item.status === "FAILED"),
+          },
+        ].map((group) => (
+          <section key={group.title} className="space-y-2">
+            <h3 className="font-mono text-[10px] uppercase tracking-[0.2em] text-steel">
+              {group.title}{" "}
+              <span className="text-muted-foreground">
+                ({group.rows.length})
+              </span>
+            </h3>
+            {group.rows.length === 0 && group.title === "Drafts" ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+                No saved drafts yet.
+              </p>
+            ) : null}
+            {group.rows.map((analysis) => (
+              <article
+                key={analysis.analysis_id}
+                className="flex items-center gap-3 rounded-xl border border-border p-3 transition-all duration-200 hover:border-gold/50"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(analysis.analysis_id)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg p-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
                     </span>
-                    <StatusBadge status={analysis.status} />
-                  </button>
-                ))}
-              </section>
-            ))
-        ) : (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            Your SmartBrief outputs will appear in the Deck.
-          </div>
-        )}
+                    <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
+                      {analysis.analysis_id.slice(0, 8)} ·{" "}
+                      {new Date(analysis.created_at).toLocaleDateString(
+                        "en-GB",
+                      )}
+                    </span>
+                  </span>
+                  <StatusBadge status={analysis.status} />
+                </button>
+                <details className="relative shrink-0">
+                  <summary
+                    aria-label={`Actions for ${PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}`}
+                    className="list-none cursor-pointer rounded-lg p-2 text-muted-foreground transition-all duration-200 hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold [&::-webkit-details-marker]:hidden"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </summary>
+                  <div className="absolute right-0 z-10 mt-1 w-56 rounded-xl border border-border bg-sidebar p-2 shadow-lg">
+                    <p className="px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-steel">
+                      Send to Inbox
+                    </p>
+                    {threads.length ? (
+                      threads.map((thread) => (
+                        <button
+                          key={thread.thread_id}
+                          type="button"
+                          onClick={() =>
+                            onSendToInbox(analysis, thread.thread_id)
+                          }
+                          className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition-all duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                        >
+                          <Inbox className="size-3.5 shrink-0" />
+                          <span className="truncate">{thread.title}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Create an Assistant thread before sending a reference.
+                      </p>
+                    )}
+                  </div>
+                </details>
+              </article>
+            ))}
+          </section>
+        ))}
       </div>
     );
   if (bench === "Red-Teamer")
@@ -1056,6 +1139,43 @@ function AnalysisWorkspace({ id }: { id: string }) {
 
   return (
     <div className="space-y-4">
+      <nav
+        aria-label="Analysis sections"
+        className="flex gap-2 overflow-x-auto border-b border-border"
+      >
+        {(
+          [
+            { id: "overview", label: "Overview" },
+            { id: "arguments", label: "Arguments" },
+            { id: "similar", label: "Similar Cases" },
+            { id: "law", label: "Law" },
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-current={tab === item.id ? "page" : undefined}
+            onClick={() => setTab(item.id)}
+            className={`shrink-0 border-b-2 px-3 py-2 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${tab === item.id ? "border-gold text-gold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      <div
+        role="tabpanel"
+        aria-label={
+          tab === "similar"
+            ? "Similar Cases"
+            : `${tab.slice(0, 1).toUpperCase()}${tab.slice(1)}`
+        }
+      >
+        <AnalysisSectionCard
+          section={tab === "similar" ? "similar_cases" : tab}
+          data={sections[tab === "similar" ? "similar_cases" : tab]}
+          className="border-border bg-background"
+        />
+      </div>
       <div className="panel glow-gold p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -1082,44 +1202,6 @@ function AnalysisWorkspace({ id }: { id: string }) {
           </p>
         )}
       </div>
-
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as WorkbenchTab)}
-        className="w-full"
-      >
-        <TabsList className="h-auto w-full justify-start rounded-none border-b bg-transparent p-0">
-          {(
-            [
-              { id: "overview", label: "Overview", icon: LayoutDashboard },
-              { id: "arguments", label: "Arguments", icon: Swords },
-              { id: "similar", label: "Similar Cases", icon: Scale },
-              { id: "law", label: "Law", icon: Gavel },
-            ] as const
-          ).map((t) => (
-            <TabsTrigger
-              key={t.id}
-              value={t.id}
-              className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-gold data-[state=active]:shadow-none"
-            >
-              <t.icon className="size-4 text-steel" />
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value="overview" className="mt-4">
-          <OverviewTab output={output} sections={sections} />
-        </TabsContent>
-        <TabsContent value="arguments" className="mt-4">
-          <ArgumentsTab sections={sections} />
-        </TabsContent>
-        <TabsContent value="similar" className="mt-4">
-          <SimilarTab output={output} />
-        </TabsContent>
-        <TabsContent value="law" className="mt-4">
-          <LawTab output={output} />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
