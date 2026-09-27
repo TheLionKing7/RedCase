@@ -346,7 +346,7 @@ export function AppShell({
     };
   }, []);
   const visibleRail = RAIL.filter((item) => !item.adminOnly || firmAdmin);
-  const showPanel = panelOpen && current !== "Home";
+  const showPanel = panelOpen;
   const activeItem =
     visibleRail.find((item) => item.label === activeRail) ?? visibleRail[0];
   const panelItems = PANELS[activeItem?.label ?? "Home"] ?? [];

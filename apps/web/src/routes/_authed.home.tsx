@@ -153,10 +153,10 @@ function Home() {
               Workspace
             </h2>
           </div>
-          <div className="grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+          <div className="space-y-4">
             <nav
               aria-label="Workspace sections"
-              className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-sidebar/60 p-2 lg:flex-col lg:overflow-visible"
+              className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-sidebar/60 p-2 lg:hidden"
             >
               {(
                 [
@@ -169,9 +169,14 @@ function Home() {
                 <button
                   key={label}
                   type="button"
-                  onClick={() => setView(label)}
+                  onClick={() => {
+                    setView(label);
+                    window.dispatchEvent(
+                      new CustomEvent("redcase:home-view", { detail: label }),
+                    );
+                  }}
                   aria-current={view === label ? "page" : undefined}
-                  className={`flex min-w-max items-center gap-3 rounded-r-lg border-l-2 px-3 py-3 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:w-full ${view === label ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`}
+                  className={`flex min-w-max items-center gap-3 rounded-r-lg border-l-2 px-3 py-3 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${view === label ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`}
                 >
                   <Icon
                     className={`size-4 shrink-0 ${view === label ? "text-primary" : "text-steel"}`}

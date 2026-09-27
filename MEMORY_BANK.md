@@ -18,6 +18,8 @@
 
 ## [System Architecture]
 
+- **Home shell/sidebar layout correction (2026-09-27):** Home uses the shared fixed AppShell sub-navigation column between the icon rail and workspace, outside the workspace scroll region. Its duplicate selector is mobile-only; both the shared panel and mobile selector update the in-place Home content, with Inbox selected by default. The hero time logger and Workspace/matter content remain in place.
+
 High-level request flow, front to back:
 
 ```
