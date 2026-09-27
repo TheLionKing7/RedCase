@@ -509,8 +509,8 @@ export function AppShell({
                 );
               })}
             </nav>
-            {sidebarContent ? (
-              <div className="mt-6 border-t border-sidebar-border px-2 pt-5">
+            {activeItem?.label === "Home" && sidebarContent ? (
+              <div className="mt-5 border-t border-sidebar-border px-2 pt-5">
                 {sidebarContent}
               </div>
             ) : null}

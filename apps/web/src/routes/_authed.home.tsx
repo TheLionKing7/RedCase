@@ -66,7 +66,9 @@ function Home() {
       }
     };
     window.addEventListener("redcase:home-view", selectView);
-    return () => window.removeEventListener("redcase:home-view", selectView);
+    return () => {
+      window.removeEventListener("redcase:home-view", selectView);
+    };
   }, []);
   const today = new Date().toISOString().slice(0, 10);
   const openDeadlines = useMemo(
@@ -112,7 +114,8 @@ function Home() {
       title="Welcome"
       sidebarContent={
         <TimeLogger
-          compact
+          idPrefix="sidebar"
+          full
           matters={(matters.data?.matters ?? []).filter(
             (matter) =>
               !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
@@ -123,10 +126,7 @@ function Home() {
       }
     >
       <div className="mx-auto max-w-6xl space-y-6 pb-16">
-        <section
-          className="panel glow-gold p-5 sm:p-6"
-          aria-label="Workbench and time logger"
-        >
+        <section className="panel glow-gold p-5 sm:p-6" aria-label="Workbench">
           <div className="flex flex-col items-stretch gap-6 xl:flex-row xl:items-center">
             <div className="min-w-0 flex-1">
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
@@ -147,16 +147,16 @@ function Home() {
                 Open Workbench <ArrowUpRight className="size-4" />
               </Link>
             </div>
-            <div className="lg:hidden">
-              <TimeLogger
-                matters={(matters.data?.matters ?? []).filter(
-                  (matter) =>
-                    !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
-                      matter.status.toUpperCase(),
-                    ),
-                )}
-              />
-            </div>
+            <TimeLogger
+              idPrefix="hero"
+              quickAction
+              matters={(matters.data?.matters ?? []).filter(
+                (matter) =>
+                  !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+                    matter.status.toUpperCase(),
+                  ),
+              )}
+            />
           </div>
         </section>
 
@@ -259,11 +259,15 @@ function Home() {
 }
 
 function TimeLogger({
+  idPrefix,
+  full = false,
+  quickAction = false,
   matters,
-  compact = false,
 }: {
+  idPrefix: string;
+  full?: boolean;
+  quickAction?: boolean;
   matters: HomeMatter[];
-  compact?: boolean;
 }) {
   const sessions = useActivitySessions();
   const clockIn = useClockIn();
@@ -290,7 +294,7 @@ function TimeLogger({
     `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   return (
     <div
-      className={`w-full rounded-xl border border-border/70 bg-background/70 ${compact ? "p-3" : "p-4 xl:w-[300px] xl:shrink-0"}`}
+      className={`w-full rounded-xl border border-border/70 bg-background/70 ${full ? "p-4" : "p-3"} ${quickAction ? "xl:w-[300px] xl:shrink-0" : ""}`}
     >
       <div className="flex items-center gap-2">
         <Timer className="size-4 text-gold" />
@@ -302,14 +306,11 @@ function TimeLogger({
           : "Choose an object of work"}
       </p>
       <div className="mt-3 flex gap-2">
-        <label
-          className="sr-only"
-          htmlFor={`activity-target-${compact ? "sidebar" : "hero"}`}
-        >
+        <label className="sr-only" htmlFor={`activity-target-${idPrefix}`}>
           Work target
         </label>
         <select
-          id={`activity-target-${compact ? "sidebar" : "hero"}`}
+          id={`activity-target-${idPrefix}`}
           value={selection}
           onChange={(event) => setSelection(event.target.value)}
           disabled={Boolean(active)}
@@ -352,39 +353,41 @@ function TimeLogger({
           Could not update the time session. Please retry.
         </p>
       )}
-      <details className="mt-3 border-t border-border pt-2">
-        <summary className="cursor-pointer text-[11px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-          Time history by matter or area
-        </summary>
-        {sessions.isPending ? (
-          <div className="mt-3 h-8 animate-pulse rounded bg-muted/60" />
-        ) : groups.length ? (
-          <ul className="mt-2 divide-y divide-border">
-            {groups.map((group: ActivitySessionGroup) => (
-              <li
-                key={`${group.target_type}:${group.target_ref}`}
-                className="flex items-center justify-between gap-2 py-2 text-xs"
-              >
-                <span className="min-w-0 truncate">
-                  {group.target_label}
-                  <span className="ml-2 text-muted-foreground">
-                    {" · "}
-                    {group.session_count}{" "}
-                    {group.session_count === 1 ? "session" : "sessions"}
+      {full && (
+        <details className="mt-3 border-t border-border pt-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+            Time history by matter or area
+          </summary>
+          {sessions.isPending ? (
+            <div className="mt-3 h-8 animate-pulse rounded bg-muted/60" />
+          ) : groups.length ? (
+            <ul className="mt-2 divide-y divide-border">
+              {groups.map((group: ActivitySessionGroup) => (
+                <li
+                  key={`${group.target_type}:${group.target_ref}`}
+                  className="flex items-center justify-between gap-2 py-2 text-xs"
+                >
+                  <span className="min-w-0 truncate">
+                    {group.target_label}
+                    <span className="ml-2 text-muted-foreground">
+                      {" · "}
+                      {group.session_count}{" "}
+                      {group.session_count === 1 ? "session" : "sessions"}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 font-mono text-gold">
-                  {fmt(group.total_duration)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            No sessions recorded yet.
-          </p>
-        )}
-      </details>
+                  <span className="shrink-0 font-mono text-gold">
+                    {fmt(group.total_duration)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              No sessions recorded yet.
+            </p>
+          )}
+        </details>
+      )}
     </div>
   );
 }

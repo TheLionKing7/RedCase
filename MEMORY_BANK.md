@@ -18,8 +18,8 @@
 
 ## [System Architecture]
 
-- **Home shell/sidebar layout correction (2026-09-27):** Home uses the shared fixed AppShell sub-navigation column between the icon rail and workspace, outside the workspace scroll region. Its duplicate selector is mobile-only; both the shared panel and mobile selector update the in-place Home content, with Inbox selected by default. The hero time logger and Workspace/matter content remain in place.
-- **Home time logger in sub-panel (2026-09-27):** `AppShell` accepts optional `sidebarContent`, rendered beneath section navigation inside the scrollable sub-panel. Home supplies a compact time logger there on desktop and retains the original logger in the hero below `lg`, avoiding sidebar overflow on narrow viewports.
+- **Home shell/sidebar layout correction (2026-09-27):** Home uses the shared fixed AppShell sub-navigation column between the icon rail and workspace, outside the workspace scroll region. Its duplicate selector is mobile-only; both the shared panel and mobile selector update the in-place Home content, with Inbox selected by default. The Workbench hero keeps a compact time-logger quick action at the far right on wide screens.
+- **Home time logger (2026-09-27):** The full time logger (including grouped history) is persistently shown beneath Home navigation in the left sub-panel; it is not a flyout or shortcut. The hero contains a compact quick action for clock-in/clock-out and target selection. Logger controls have distinct input IDs.
 
 High-level request flow, front to back:
 
