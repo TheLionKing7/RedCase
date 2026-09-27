@@ -24,10 +24,15 @@ import {
   useClockIn,
   useClockOut,
 } from "@/lib/api/activity";
-import type { ActivitySessionGroup } from "@/lib/api/activity";
+import type { ActivitySession, ActivitySessionGroup } from "@/lib/api/activity";
 import { useCourtDiaryEntries } from "@/lib/api/court-diary";
 
-type HomeView = "Inbox" | "Today" | "My deadlines" | "My matters";
+type HomeView =
+  | "Inbox"
+  | "Today"
+  | "Time logger"
+  | "My matters"
+  | "My deadlines";
 type HomeMatter = {
   id: string;
   matter_ref: string;
@@ -48,6 +53,7 @@ export const Route = createFileRoute("/_authed/home")({
 
 function Home() {
   const identity = useIdentity();
+  const activity = useActivitySessions();
   const analyses = useAnalyses();
   const deadlines = useDeadlineEvents();
   const diary = useCourtDiaryEntries();
@@ -60,7 +66,7 @@ function Home() {
   useEffect(() => {
     const selectView = (event: Event) => {
       const selected = (event as CustomEvent<HomeView>).detail;
-      if (["Inbox", "Today", "My deadlines", "My matters"].includes(selected)) {
+      if (["Inbox", "Today", "Time logger", "My matters", "My deadlines"].includes(selected)) {
         setView(selected);
         setSelectedMatterId(null);
       }
@@ -112,18 +118,6 @@ function Home() {
     <AppShell
       eyebrow={identity.eyebrow}
       title="Welcome"
-      sidebarContent={
-        <TimeLogger
-          idPrefix="sidebar"
-          full
-          matters={(matters.data?.matters ?? []).filter(
-            (matter) =>
-              !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
-                matter.status.toUpperCase(),
-              ),
-          )}
-        />
-      }
     >
       <div className="mx-auto max-w-6xl space-y-6 pb-16">
         <section className="panel glow-gold p-5 sm:p-6" aria-label="Workbench">
@@ -150,6 +144,7 @@ function Home() {
             <TimeLogger
               idPrefix="hero"
               quickAction
+              activity={activity}
               matters={(matters.data?.matters ?? []).filter(
                 (matter) =>
                   !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
@@ -162,11 +157,8 @@ function Home() {
 
         <section aria-labelledby="workspace-heading" className="space-y-4">
           <div>
-            <h2
-              id="workspace-heading"
-              className="mt-1 font-display text-xl font-semibold"
-            >
-              Workspace
+            <h2 id="workspace-heading" className="font-display text-xl font-semibold">
+              Workspace <span className="text-[#f3e8c8]">/ {view}</span>
             </h2>
           </div>
           <div className="space-y-4">
@@ -178,8 +170,9 @@ function Home() {
                 [
                   ["Inbox", Briefcase, "Assignments and recent work"],
                   ["Today", CalendarClock, "Hearings, filings and reviews"],
-                  ["My deadlines", Clock3, "Upcoming dates and reminders"],
+                  ["Time logger", Timer, "Sessions by matter or area"],
                   ["My matters", Scale, "In-progress matters assigned to you"],
+                  ["My deadlines", Clock3, "Upcoming dates and reminders"],
                 ] as const
               ).map(([label, Icon, description]) => (
                 <button
@@ -210,26 +203,20 @@ function Home() {
               className="min-h-[360px] rounded-xl border border-border bg-background/70 p-4 sm:p-6"
               aria-live="polite"
             >
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-steel">
-                    Workspace
-                  </p>
-                  <h3 className="mt-1 font-display text-lg font-semibold">
-                    {view}
-                  </h3>
-                </div>
-                {view === "My deadlines" && (
-                  <Link
-                    to="/tracker"
-                    className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium transition-all duration-200 hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    Open in Tracker <ArrowUpRight className="size-3.5" />
-                  </Link>
-                )}
-              </div>
               {pending ? (
-                <LoadingRows />
+                <div className="space-y-4">
+                  {view === "My deadlines" && (
+                    <div className="flex justify-end">
+                      <Link
+                        to="/tracker"
+                        className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium transition-all duration-200 hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        Open in Tracker <ArrowUpRight className="size-3.5" />
+                      </Link>
+                    </div>
+                  )}
+                  <LoadingRows />
+                </div>
               ) : failed ? (
                 <ErrorState />
               ) : view === "Inbox" ? (
@@ -240,8 +227,30 @@ function Home() {
                 />
               ) : view === "Today" ? (
                 <TodayView items={todaysItems} />
+              ) : view === "Time logger" ? (
+                <TimeLogger
+                  idPrefix="workspace"
+                  activity={activity}
+                  matters={(matters.data?.matters ?? []).filter(
+                    (matter) =>
+                      !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+                        matter.status.toUpperCase(),
+                      ),
+                  )}
+                  fullView
+                />
               ) : view === "My deadlines" ? (
-                <DeadlinesView events={openDeadlines} />
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Link
+                      to="/tracker"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium transition-all duration-200 hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Open in Tracker <ArrowUpRight className="size-3.5" />
+                    </Link>
+                  </div>
+                  <DeadlinesView events={openDeadlines} />
+                </div>
               ) : (
                 <MattersView
                   matters={matters.data?.matters ?? []}
@@ -260,20 +269,21 @@ function Home() {
 
 function TimeLogger({
   idPrefix,
-  full = false,
   quickAction = false,
+  fullView = false,
+  activity,
   matters,
 }: {
   idPrefix: string;
-  full?: boolean;
   quickAction?: boolean;
+  fullView?: boolean;
+  activity: ReturnType<typeof useActivitySessions>;
   matters: HomeMatter[];
 }) {
-  const sessions = useActivitySessions();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
   const [selection, setSelection] = useState("area:General");
-  const active = sessions.data?.sessions.find((session) => !session.ended_at);
+  const active = activity.data?.sessions.find((session) => !session.ended_at);
   const busy = clockIn.isPending || clockOut.isPending;
   const start = () => {
     const [target_type, target_ref] = selection.split(":");
@@ -289,17 +299,16 @@ function TimeLogger({
         target_ref,
       });
   };
-  const groups = sessions.data?.groups ?? [];
-  const fmt = (seconds: number) =>
-    `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   return (
     <div
-      className={`w-full rounded-xl border border-border/70 bg-background/70 ${full ? "p-4" : "p-3"} ${quickAction ? "xl:w-[300px] xl:shrink-0" : ""}`}
+      className={`${fullView ? "space-y-6" : "w-full rounded-xl border border-border/70 bg-background/70 p-3"} ${quickAction ? "xl:w-[300px] xl:shrink-0" : ""}`}
     >
-      <div className="flex items-center gap-2">
-        <Timer className="size-4 text-gold" />
-        <span className="text-sm font-semibold">Time logger</span>
-      </div>
+      <div className={fullView ? "flex flex-col gap-4 rounded-xl border border-border/70 bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" : ""}>
+        <div className="flex items-center gap-2">
+          <Timer className="size-4 text-gold" />
+          <span className="text-sm font-semibold">Time logger</span>
+        </div>
+        <div className={fullView ? "mt-2 flex flex-col gap-4 sm:mt-0 sm:flex-row sm:items-center" : ""}>
       <p className="mt-1 truncate text-[11px] text-muted-foreground">
         {active
           ? `Clocked in · ${active.target_label ?? active.area}`
@@ -335,7 +344,7 @@ function TimeLogger({
         </select>
         <button
           type="button"
-          disabled={busy || sessions.isPending || (!active && !selection)}
+          disabled={busy || activity.isPending || (!active && !selection)}
           onClick={() => (active ? clockOut.mutate() : start())}
           className={`rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 disabled:opacity-60 ${active ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : "bg-gold text-background hover:bg-gold/90"}`}
         >
@@ -348,45 +357,116 @@ function TimeLogger({
           )}
         </button>
       </div>
-      {(clockIn.isError || clockOut.isError || sessions.isError) && (
+      {(clockIn.isError || clockOut.isError || activity.isError) && (
         <p role="alert" className="mt-2 text-[10px] text-destructive">
           Could not update the time session. Please retry.
         </p>
       )}
-      {full && (
-        <details className="mt-3 border-t border-border pt-2">
-          <summary className="cursor-pointer text-[11px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-            Time history by matter or area
-          </summary>
-          {sessions.isPending ? (
-            <div className="mt-3 h-8 animate-pulse rounded bg-muted/60" />
-          ) : groups.length ? (
-            <ul className="mt-2 divide-y divide-border">
-              {groups.map((group: ActivitySessionGroup) => (
-                <li
-                  key={`${group.target_type}:${group.target_ref}`}
-                  className="flex items-center justify-between gap-2 py-2 text-xs"
-                >
-                  <span className="min-w-0 truncate">
-                    {group.target_label}
-                    <span className="ml-2 text-muted-foreground">
-                      {" · "}
-                      {group.session_count}{" "}
-                      {group.session_count === 1 ? "session" : "sessions"}
+        </div>
+      </div>
+      {fullView && (
+        <ActivitySessionHistory
+          sessions={activity.data?.sessions ?? []}
+          groups={activity.data?.groups ?? []}
+          isPending={activity.isPending}
+          isError={activity.isError}
+        />
+      )}
+    </div>
+  );
+}
+
+function ActivitySessionHistory({
+  sessions,
+  groups,
+  isPending,
+  isError,
+}: {
+  sessions: ActivitySession[];
+  groups: ActivitySessionGroup[];
+  isPending: boolean;
+  isError: boolean;
+}) {
+  const formatDuration = (seconds: number | null) => {
+    if (seconds === null) return "In progress";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+  const formatTime = (value: string | null) =>
+    value
+      ? new Date(value).toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "—";
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="font-display text-base font-semibold">Session history</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Complete clock-in history grouped by matter or area.
+        </p>
+      </div>
+      {isPending ? (
+        <div aria-busy="true" aria-label="Loading session history" className="space-y-3">
+          {[0, 1, 2].map((row) => <div key={row} className="h-14 animate-pulse rounded-lg bg-muted/60" />)}
+        </div>
+      ) : isError ? (
+        <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          Could not load time history. Please retry.
+        </p>
+      ) : groups.length ? (
+        <div className="space-y-4">
+          {groups.map((group) => {
+            const groupSessions = sessions.filter(
+              (session) => session.target_type === group.target_type && session.target_ref === group.target_ref,
+            );
+            return (
+              <section key={`${group.target_type}:${group.target_ref}`} className="overflow-hidden rounded-xl border border-border/70 bg-background/70">
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+                      {group.target_type === "matter" ? <Scale className="size-4" /> : <Briefcase className="size-4" />}
                     </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-gold">
-                    {fmt(group.total_duration)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">
-              No sessions recorded yet.
-            </p>
-          )}
-        </details>
+                    <div className="min-w-0">
+                      <h5 className="truncate text-sm font-semibold">{group.target_label}</h5>
+                      <p className="text-xs text-muted-foreground">{group.session_count} {group.session_count === 1 ? "session" : "sessions"}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-sm font-semibold text-gold">{formatDuration(group.total_duration)}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Group total</p>
+                  </div>
+                </header>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[600px] text-left text-xs">
+                    <thead className="bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <tr><th className="px-4 py-3 font-medium sm:px-5">Date</th><th className="px-4 py-3 font-medium">Clock-in</th><th className="px-4 py-3 font-medium">Clock-out</th><th className="px-4 py-3 font-medium">Duration</th><th className="px-4 py-3 font-medium sm:px-5">Matter / area</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {groupSessions.map((session) => (
+                        <tr key={session.id}>
+                          <td className="whitespace-nowrap px-4 py-3 sm:px-5">{new Date(session.started_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono">{formatTime(session.started_at)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono">{formatTime(session.ended_at)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-mono text-gold">{formatDuration(session.duration)}</td>
+                          <td className="px-4 py-3 sm:px-5">{session.target_label ?? session.area}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div role="status" className="rounded-xl border border-dashed border-border px-5 py-12 text-center">
+          <Timer className="mx-auto size-7 text-muted-foreground" />
+          <p className="mt-3 text-sm font-semibold">No sessions recorded yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">Clock in above to start tracking work by matter or area.</p>
+        </div>
       )}
     </div>
   );

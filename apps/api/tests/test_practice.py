@@ -168,7 +168,7 @@ class TestActivitySessions:
                 },
                 headers=_auth(),
             )
-            assert started.status_code == 201
+            assert started.status_code == 200
             assert started.json()["target_ref"] == str(matter)
             assert started.json()["target_type"] == "matter"
             assert client.post(

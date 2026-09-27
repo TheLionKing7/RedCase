@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
+  Timer,
   Users,
   Vault,
   X,
@@ -91,9 +92,15 @@ const PANELS: Record<string, Item[]> = {
       to: "/home",
     },
     {
-      label: "My deadlines",
-      detail: "Upcoming statutory dates",
-      icon: CalendarClock,
+      label: "Today",
+      detail: "Hearings, filings and reviews",
+      icon: CircleHelp,
+      to: "/home",
+    },
+    {
+      label: "Time logger",
+      detail: "Sessions by matter or area",
+      icon: Timer,
       to: "/home",
     },
     {
@@ -103,9 +110,9 @@ const PANELS: Record<string, Item[]> = {
       to: "/home",
     },
     {
-      label: "Today",
-      detail: "Hearings, filings and reviews",
-      icon: CircleHelp,
+      label: "My deadlines",
+      detail: "Upcoming statutory dates",
+      icon: CalendarClock,
       to: "/home",
     },
   ],
@@ -317,7 +324,7 @@ export function AppShell({
   useEffect(() => {
     const selectHomeView = (event: Event) => {
       const label = (event as CustomEvent<string>).detail;
-      if (["Inbox", "Today", "My deadlines", "My matters"].includes(label)) {
+      if (["Inbox", "Today", "Time logger", "My matters", "My deadlines"].includes(label)) {
         setHomeView(label);
       }
     };

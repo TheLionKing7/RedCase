@@ -54,7 +54,7 @@ async def list_sessions(ctx: TenantContext = Depends(get_tenant_context)) -> dic
     }
 
 
-@router.post("/clock-in", status_code=status.HTTP_201_CREATED)
+@router.post("/clock-in", status_code=status.HTTP_200_OK)
 async def clock_in(body: ClockInRequest, ctx: TenantContext = Depends(get_tenant_context)) -> dict:  # noqa: B008
     area = body.area.strip()
     if not area:
