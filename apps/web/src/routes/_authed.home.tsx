@@ -107,7 +107,21 @@ function Home() {
   const failed =
     analyses.isError || deadlines.isError || diary.isError || matters.isError;
   return (
-    <AppShell eyebrow={identity.eyebrow} title="Welcome">
+    <AppShell
+      eyebrow={identity.eyebrow}
+      title="Welcome"
+      sidebarContent={
+        <TimeLogger
+          compact
+          matters={(matters.data?.matters ?? []).filter(
+            (matter) =>
+              !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+                matter.status.toUpperCase(),
+              ),
+          )}
+        />
+      }
+    >
       <div className="mx-auto max-w-6xl space-y-6 pb-16">
         <section
           className="panel glow-gold p-5 sm:p-6"
@@ -133,14 +147,16 @@ function Home() {
                 Open Workbench <ArrowUpRight className="size-4" />
               </Link>
             </div>
-            <TimeLogger
-              matters={(matters.data?.matters ?? []).filter(
-                (matter) =>
-                  !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
-                    matter.status.toUpperCase(),
-                  ),
-              )}
-            />
+            <div className="lg:hidden">
+              <TimeLogger
+                matters={(matters.data?.matters ?? []).filter(
+                  (matter) =>
+                    !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+                      matter.status.toUpperCase(),
+                    ),
+                )}
+              />
+            </div>
           </div>
         </section>
 
@@ -242,7 +258,13 @@ function Home() {
   );
 }
 
-function TimeLogger({ matters }: { matters: HomeMatter[] }) {
+function TimeLogger({
+  matters,
+  compact = false,
+}: {
+  matters: HomeMatter[];
+  compact?: boolean;
+}) {
   const sessions = useActivitySessions();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
@@ -267,7 +289,9 @@ function TimeLogger({ matters }: { matters: HomeMatter[] }) {
   const fmt = (seconds: number) =>
     `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   return (
-    <div className="w-full rounded-xl border border-border/70 bg-background/70 p-4 xl:w-[300px] xl:shrink-0">
+    <div
+      className={`w-full rounded-xl border border-border/70 bg-background/70 ${compact ? "p-3" : "p-4 xl:w-[300px] xl:shrink-0"}`}
+    >
       <div className="flex items-center gap-2">
         <Timer className="size-4 text-gold" />
         <span className="text-sm font-semibold">Time logger</span>
@@ -278,11 +302,14 @@ function TimeLogger({ matters }: { matters: HomeMatter[] }) {
           : "Choose an object of work"}
       </p>
       <div className="mt-3 flex gap-2">
-        <label className="sr-only" htmlFor="activity-target">
+        <label
+          className="sr-only"
+          htmlFor={`activity-target-${compact ? "sidebar" : "hero"}`}
+        >
           Work target
         </label>
         <select
-          id="activity-target"
+          id={`activity-target-${compact ? "sidebar" : "hero"}`}
           value={selection}
           onChange={(event) => setSelection(event.target.value)}
           disabled={Boolean(active)}

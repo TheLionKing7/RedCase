@@ -271,11 +271,13 @@ export function AppShell({
   eyebrow,
   children,
   assistantContext,
+  sidebarContent,
 }: {
   title: string;
   eyebrow: string;
   children: ReactNode;
   assistantContext?: AssistantContext;
+  sidebarContent?: ReactNode;
 }) {
   const firmAdmin = getFirmAdmin();
   const identity = useIdentity();
@@ -507,6 +509,11 @@ export function AppShell({
                 );
               })}
             </nav>
+            {sidebarContent ? (
+              <div className="mt-6 border-t border-sidebar-border px-2 pt-5">
+                {sidebarContent}
+              </div>
+            ) : null}
           </div>
           <div className="border-t border-sidebar-border px-5 py-4 text-xs text-muted-foreground">
             <p className="mt-3 font-mono text-[9px] uppercase tracking-widest">
