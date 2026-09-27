@@ -367,6 +367,59 @@ class TestParticipantIsolation:
         assert GENERAL_CHANNEL in ids
 
 
+class TestDirectUnreadState:
+    def test_unread_count_and_read_cursor_are_per_user(self, app_db_url: str) -> None:
+        channel_id = asyncio.run(
+            _provision_direct(app_db_url, SEED_TENANT_AETOES, "user-a", "user-b")
+        )
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            sent = client.post(
+                f"/v1/channels/{channel_id}/messages",
+                json={"body": "Please review the draft."},
+                headers=_auth_sub("user-a"),
+            )
+            assert sent.status_code == 201
+
+            unread_for_b = client.get(
+                "/v1/channels/unread-count", headers=_auth_sub("user-b")
+            )
+            unread_for_a = client.get(
+                "/v1/channels/unread-count", headers=_auth_sub("user-a")
+            )
+            assert unread_for_b.json() == {"unread_count": 1}
+            assert unread_for_a.json() == {"unread_count": 0}
+
+            marked = client.post(
+                f"/v1/channels/{channel_id}/read",
+                json={},
+                headers=_auth_sub("user-b"),
+            )
+            assert marked.status_code == 204
+
+            unread_after_read = client.get(
+                "/v1/channels/unread-count", headers=_auth_sub("user-b")
+            )
+            assert unread_after_read.json() == {"unread_count": 0}
+
+            # Advancing one user's cursor must not alter the other user's count.
+            unread_for_a_after_b_reads = client.get(
+                "/v1/channels/unread-count", headers=_auth_sub("user-a")
+            )
+            assert unread_for_a_after_b_reads.json() == {"unread_count": 0}
+
+    def test_non_participant_cannot_advance_channel_cursor(self, app_db_url: str) -> None:
+        channel_id = asyncio.run(
+            _provision_direct(app_db_url, SEED_TENANT_AETOES, "user-a", "user-b")
+        )
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            response = client.post(
+                f"/v1/channels/{channel_id}/read",
+                json={},
+                headers=_auth_sub("user-outsider"),
+            )
+        assert response.status_code == 404
+
+
 class TestProvisioning:
     def test_provision_general_channel_idempotent(self, app_db_url: str) -> None:
         tid = asyncio.run(_provision_tenant(app_db_url))

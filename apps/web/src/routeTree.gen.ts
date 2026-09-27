@@ -15,6 +15,7 @@ import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthedAccessRequestsRouteImport } from './routes/_authed.access-requests'
+import { Route as AuthedArchivedRouteImport } from './routes/_authed.archived'
 import { Route as AuthedChannelsRouteImport } from './routes/_authed.channels'
 import { Route as AuthedChatsRouteImport } from './routes/_authed.chats'
 import { Route as AuthedContactsRouteImport } from './routes/_authed.contacts'
@@ -57,6 +58,11 @@ const SigninRoute = SigninRouteImport.update({
 const AuthedAccessRequestsRoute = AuthedAccessRequestsRouteImport.update({
   id: '/access-requests',
   path: '/access-requests',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedArchivedRoute = AuthedArchivedRouteImport.update({
+  id: '/archived',
+  path: '/archived',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedChannelsRoute = AuthedChannelsRouteImport.update({
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/access-requests': typeof AuthedAccessRequestsRoute
+  '/archived': typeof AuthedArchivedRoute
   '/channels': typeof AuthedChannelsRoute
   '/chats': typeof AuthedChatsRoute
   '/contacts': typeof AuthedContactsRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/access-requests': typeof AuthedAccessRequestsRoute
+  '/archived': typeof AuthedArchivedRoute
   '/channels': typeof AuthedChannelsRoute
   '/chats': typeof AuthedChatsRoute
   '/contacts': typeof AuthedContactsRoute
@@ -180,6 +188,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/signin': typeof SigninRoute
   '/_authed/access-requests': typeof AuthedAccessRequestsRoute
+  '/_authed/archived': typeof AuthedArchivedRoute
   '/_authed/channels': typeof AuthedChannelsRoute
   '/_authed/chats': typeof AuthedChatsRoute
   '/_authed/contacts': typeof AuthedContactsRoute
@@ -203,6 +212,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signin'
     | '/access-requests'
+    | '/archived'
     | '/channels'
     | '/chats'
     | '/contacts'
@@ -224,6 +234,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signin'
     | '/access-requests'
+    | '/archived'
     | '/channels'
     | '/chats'
     | '/contacts'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/signin'
     | '/_authed/access-requests'
+    | '/_authed/archived'
     | '/_authed/channels'
     | '/_authed/chats'
     | '/_authed/contacts'
@@ -312,6 +324,13 @@ declare module '@tanstack/react-router' {
       path: '/access-requests'
       fullPath: '/access-requests'
       preLoaderRoute: typeof AuthedAccessRequestsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/archived': {
+      id: '/_authed/archived'
+      path: '/archived'
+      fullPath: '/archived'
+      preLoaderRoute: typeof AuthedArchivedRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/channels': {
@@ -429,6 +448,7 @@ const AuthedThreadsRouteWithChildren = AuthedThreadsRoute._addFileChildren(
 
 interface AuthedRouteChildren {
   AuthedAccessRequestsRoute: typeof AuthedAccessRequestsRoute
+  AuthedArchivedRoute: typeof AuthedArchivedRoute
   AuthedChannelsRoute: typeof AuthedChannelsRoute
   AuthedChatsRoute: typeof AuthedChatsRoute
   AuthedContactsRoute: typeof AuthedContactsRoute
@@ -446,6 +466,7 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccessRequestsRoute: AuthedAccessRequestsRoute,
+  AuthedArchivedRoute: AuthedArchivedRoute,
   AuthedChannelsRoute: AuthedChannelsRoute,
   AuthedChatsRoute: AuthedChatsRoute,
   AuthedContactsRoute: AuthedContactsRoute,

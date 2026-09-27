@@ -71,6 +71,19 @@ export const useChannels = () =>
     queryKey: ["channels"],
     queryFn: () => apiGet<Channel[]>("/v1/channels"),
   });
+export function useAddChannelParticipants(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (participant_refs: string[]) =>
+      apiPost<{ added_count: number }, { participant_refs: string[] }>(
+        `/v1/channels/${channelId}/participants`,
+        { participant_refs },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["channels"] });
+    },
+  });
+}
 export const useMessages = (channelId: string | undefined) =>
   useQuery({
     queryKey: ["messages", channelId],
@@ -195,8 +208,12 @@ export function useDeletePin() {
 export function useSendMessage(channelId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { body: string }) =>
-      apiPost(`/v1/channels/${channelId}/messages`, body),
+    mutationFn: (body: {
+      body: string;
+      thread_id?: string;
+      document_id?: string;
+      analysis_id?: string;
+    }) => apiPost(`/v1/channels/${channelId}/messages`, body),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["messages", channelId] }),
   });

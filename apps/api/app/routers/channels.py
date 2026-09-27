@@ -14,6 +14,7 @@ ZDR (§7 rule): messages reference document_id/analysis_id; they never
 hold document content, and no document text enters logs.
 """
 
+import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -337,6 +338,84 @@ async def mark_channel_read(
 class ChannelCreate(BaseModel):
     kind: str
     other_user_ref: str
+
+
+class ChannelParticipantsAdd(BaseModel):
+    participant_refs: list[str] = Field(min_length=1, max_length=50)
+
+
+@router.post("/channels/{channel_id}/participants", status_code=201)
+async def add_channel_participants(
+    channel_id: str,
+    body: ChannelParticipantsAdd,
+    ctx: TenantContext = Depends(get_tenant_context),  # noqa: B008
+) -> dict[str, int]:
+    """Add firm-directory members to an existing matter channel, with audit."""
+    await _resolve_channel(ctx, channel_id)
+    channel = await ctx.db.fetchrow(
+        "SELECT c.kind, c.matter_id, m.status AS matter_status"
+        " FROM channels c LEFT JOIN matters m ON m.id = c.matter_id"
+        " WHERE c.id = $1::uuid",
+        uuid.UUID(channel_id),
+    )
+    if channel is None or channel["kind"] != "MATTER":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Participants can only be added to matter channels.",
+        )
+    if channel["matter_status"] in {"CONCLUDED", "ARCHIVED"}:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Concluded matter channels are read-only.",
+        )
+
+    participant_refs = list(dict.fromkeys(ref.strip() for ref in body.participant_refs))
+    if not participant_refs or any(not ref for ref in participant_refs):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Member references are required.")
+    members = await ctx.db.fetch(
+        "SELECT user_ref FROM firm_members WHERE tenant_id = $1::uuid AND user_ref = ANY($2::text[])",
+        uuid.UUID(ctx.tenant_id),
+        participant_refs,
+    )
+    found = {row["user_ref"] for row in members}
+    if found != set(participant_refs):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Every participant must be a member of this firm.",
+        )
+
+    added = 0
+    async with ctx.db.transaction():
+        for participant_ref in participant_refs:
+            result = await ctx.db.execute(
+                "INSERT INTO channel_participants"
+                " (tenant_id, channel_id, participant_ref, participant_kind)"
+                " VALUES ($1::uuid, $2::uuid, $3, 'USER')"
+                " ON CONFLICT (channel_id, participant_ref) DO NOTHING",
+                uuid.UUID(ctx.tenant_id),
+                uuid.UUID(channel_id),
+                participant_ref,
+            )
+            if result.endswith(" 1"):
+                added += 1
+                event_hash = hashlib.sha256(
+                    f"channel_participant_added:{channel_id}:{participant_ref}".encode()
+                ).hexdigest()
+                await ctx.db.execute(
+                    "INSERT INTO query_audit (tenant_id, user_ref, question_hash, filters)"
+                    " VALUES ($1::uuid, $2, $3, $4::jsonb)",
+                    uuid.UUID(ctx.tenant_id),
+                    ctx.user_ref,
+                    event_hash,
+                    '{"event":"channel_participant_added"}',
+                )
+    log.info(
+        "channel_participants_added",
+        channel_id=channel_id,
+        matter_id=str(channel["matter_id"]),
+        added_count=added,
+    )
+    return {"added_count": added}
 
 
 @router.post("/channels", status_code=201)
