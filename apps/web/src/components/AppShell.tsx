@@ -17,6 +17,7 @@ import {
   Users,
   Vault,
   X,
+  Briefcase,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { AssistantDock } from "@/components/AssistantDock";
@@ -86,20 +87,26 @@ const PANELS: Record<string, Item[]> = {
     {
       label: "Inbox",
       detail: "Assignments and mentions",
-      icon: Home,
+      icon: Briefcase,
       to: "/home",
     },
     {
       label: "My deadlines",
       detail: "Upcoming statutory dates",
       icon: CalendarClock,
-      to: "/tracker",
+      to: "/home",
     },
     {
       label: "My matters",
       detail: "Personal workbench view",
       icon: BookOpen,
-      to: "/workbench",
+      to: "/home",
+    },
+    {
+      label: "Today",
+      detail: "Hearings, filings and reviews",
+      icon: CircleHelp,
+      to: "/home",
     },
   ],
   Workbench: [
@@ -295,12 +302,27 @@ export function AppShell({
                   (pathname === item.to || pathname.startsWith(`${item.to}/`)),
               )?.label ?? "Home");
   const [activeRail, setActiveRail] = useState(current);
+  const [homeView, setHomeView] = useState("Inbox");
   const [panelOpen, setPanelOpen] = useState(true);
   const [compact, setCompact] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState("");
   useEffect(() => setActiveRail(current), [current]);
+  useEffect(() => {
+    if (current === "Home") setHomeView("Inbox");
+  }, [current]);
+  useEffect(() => {
+    const selectHomeView = (event: Event) => {
+      const label = (event as CustomEvent<string>).detail;
+      if (["Inbox", "Today", "My deadlines", "My matters"].includes(label)) {
+        setHomeView(label);
+      }
+    };
+    window.addEventListener("redcase:home-view", selectHomeView);
+    return () =>
+      window.removeEventListener("redcase:home-view", selectHomeView);
+  }, []);
   useEffect(() => {
     const openAssistant = () => setAssistantOpen(true);
     const receiveAssistantMessage = (event: Event) => {
@@ -324,10 +346,14 @@ export function AppShell({
     };
   }, []);
   const visibleRail = RAIL.filter((item) => !item.adminOnly || firmAdmin);
+  const showPanel = panelOpen && current !== "Home";
   const activeItem =
     visibleRail.find((item) => item.label === activeRail) ?? visibleRail[0];
   const panelItems = PANELS[activeItem?.label ?? "Home"] ?? [];
   const selectedPanelItem =
+    (activeItem?.label === "Home"
+      ? panelItems.find((item) => item.label === homeView)
+      : undefined) ??
     panelItems.find((item) => item.to === pathname) ??
     panelItems.find((item) => item.to && pathname.startsWith(`${item.to}/`));
   const department = roleDepartment(identity.role, firmAdmin);
@@ -416,7 +442,7 @@ export function AppShell({
         </button>
       </aside>
 
-      {panelOpen && (
+      {showPanel && (
         <aside className="fixed inset-y-0 left-[4.5rem] z-20 hidden w-64 flex-col border-r border-sidebar-border bg-[#171a21] lg:flex">
           <div className="border-b border-sidebar-border px-5 py-6">
             <div className="font-display text-lg leading-none">
@@ -440,11 +466,21 @@ export function AppShell({
             >
               {panelItems.map((item) => {
                 const selected = item === selectedPanelItem;
-                const cls = `group flex items-start gap-3 border-l-2 px-3 py-3 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${selected ? "border-primary text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:text-foreground"}`;
+                const cls = `group flex items-start gap-3 rounded-r-lg border-l-2 px-3 py-3 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${selected ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`;
                 return item.to ? (
                   <Link
                     key={item.label}
                     to={item.to}
+                    onClick={() => {
+                      if (activeItem?.label === "Home") {
+                        setHomeView(item.label);
+                        window.dispatchEvent(
+                          new CustomEvent("redcase:home-view", {
+                            detail: item.label,
+                          }),
+                        );
+                      }
+                    }}
                     className={cls}
                     aria-current={selected ? "page" : undefined}
                   >
@@ -473,12 +509,6 @@ export function AppShell({
             </nav>
           </div>
           <div className="border-t border-sidebar-border px-5 py-4 text-xs text-muted-foreground">
-            <Link
-              to="/settings"
-              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-            >
-              <Settings2 className="size-3.5" /> Settings
-            </Link>
             <p className="mt-3 font-mono text-[9px] uppercase tracking-widest">
               {roleSubtitle}
             </p>
@@ -487,7 +517,7 @@ export function AppShell({
       )}
 
       <div
-        className={`${panelOpen ? "lg:ml-[20.5rem]" : "lg:ml-[4.5rem]"} flex min-h-screen flex-col transition-[margin] duration-200`}
+        className={`${showPanel ? "lg:ml-[20.5rem]" : "lg:ml-[4.5rem]"} flex min-h-screen flex-col transition-[margin] duration-200`}
       >
         <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 backdrop-blur-xl lg:px-8">
           <div className="flex items-center justify-between gap-4">
@@ -555,7 +585,7 @@ export function AppShell({
           {children}
         </main>
         <footer
-          className={`fixed bottom-0 right-0 z-20 flex h-[3.75rem] items-center justify-between gap-4 overflow-x-auto border-t border-border bg-sidebar/95 px-5 py-2.5 backdrop-blur-xl transition-all duration-200 lg:px-8 ${panelOpen ? "lg:left-[20.5rem]" : "lg:left-[4.5rem]"}`}
+          className={`fixed bottom-0 right-0 z-20 flex h-[3.75rem] items-center justify-between gap-4 overflow-x-auto border-t border-border bg-sidebar/95 px-5 py-2.5 backdrop-blur-xl transition-all duration-200 lg:px-8 ${showPanel ? "lg:left-[20.5rem]" : "lg:left-[4.5rem]"}`}
         >
           <nav
             aria-label="Communication task bar"
@@ -586,7 +616,6 @@ export function AppShell({
               className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
               aria-label="Toggle density"
             >
-              <Settings2 className="size-3.5" />{" "}
               {compact ? "Compact" : "Comfortable"}
             </button>
           </div>

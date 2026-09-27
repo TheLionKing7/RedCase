@@ -1,354 +1,693 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Briefcase,
-  Scale,
-  Clock,
-  BookOpenCheck,
-  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
   ChevronRight,
+  Clock3,
+  FileClock,
+  Gavel,
   Loader2,
+  Scale,
   Timer,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { CoachMarks } from "@/components/CoachMarks";
 import { useIdentity } from "@/lib/identity";
 import { useAnalyses } from "@/lib/api/workbench";
-import type { Analysis } from "@/lib/api/workbench";
-import { useDeadlineEvents } from "@/lib/api/deadlines";
-import { apiGet, apiPost } from "@/lib/api/client";
+import { useDeadlineEvents, type DeadlineEvent } from "@/lib/api/deadlines";
+import { apiGet } from "@/lib/api/client";
 import { useQuery } from "@tanstack/react-query";
-import { useActivitySessions, useClockIn, useClockOut } from "@/lib/api/activity";
-import type { ActivitySession } from "@/lib/api/activity";
-import type { DeadlineEvent } from "@/lib/api/deadlines";
+import {
+  useActivitySessions,
+  useClockIn,
+  useClockOut,
+} from "@/lib/api/activity";
+import type { ActivitySessionGroup } from "@/lib/api/activity";
 import { useCourtDiaryEntries } from "@/lib/api/court-diary";
-import { sendAssistantMessage, useCreateThread, useThreads } from "@/lib/api/collaboration";
 
-type HomePanel = "Inbox" | "Today" | "My deadlines" | "My matters" | "Time logger" | null;
-type HomeInboxItem = { id: string; label: string; detail: string; kind: "analysis" | "deadline" | "matter" };
-type HomeMatter = { id: string; matter_ref: string; status: string; progress_note: string | null };
-
-// Part 3 Slice 2 — role landing by clearance, reworked for IA §2 (2026-09-23).
-//
-// Home is a calm, uncluttered practitioner landing. The eyebrow shows the user's REAL
-// personnel identity from the firm register (members/me) — "Tosin Adebayo · Aetoes
-// Legal" — never a hardcoded "ANON" or a bare clearance swing. That identity is the
-// human's name, deliberately SEPARATE from the agent persona (unless the user authors it).
-//
-// §8.5: admin capability is an ORTHOGONAL, grantable flag (`is_firm_admin`), so
-// home is the practitioner landing for EVERYONE. The Workbench hero card preserves the
-// shortcut into the workbench; beneath it sits the Home menu (design doc §2: inbox,
-// today's schedule, my deadlines, quick time-capture).
-//
-// This compose uses EXISTING typed clients only (analyses + members) plus links into the
-// other authenticated pages — no invented endpoint.
+type HomeView = "Inbox" | "Today" | "My deadlines" | "My matters";
+type HomeMatter = {
+  id: string;
+  matter_ref: string;
+  status: string;
+  progress_note: string | null;
+};
+const AREAS = ["Research", "Workbench", "General"] as const;
 
 export const Route = createFileRoute("/_authed/home")({
   head: () => ({
     meta: [
       { title: "Home — RedCase" },
-      {
-        name: "description",
-        content:
-          "Your RedCase landing — firm command center for partners, legal workbench for practitioners.",
-      },
+      { name: "description", content: "Your RedCase workspace." },
     ],
   }),
-  component: AuthenticatedHome,
+  component: Home,
 });
 
-function AuthenticatedHome() {
-  return (
-    <>
-      <CoachMarks
-        surface="home"
-        icon={Scale}
-        steps={[
-          {
-            title: "Your morning brief",
-            body: "This is your RedCase landing — firm deadlines, recent analyses and your next priorities, all in one place after sign-in.",
-          },
-          {
-            title: "Know what's due",
-            body: "Keep an eye on overdue and upcoming statutory deadlines so nothing slips. Missed dates surface here so they can't hide.",
-          },
-          {
-            title: "Jump to a tool",
-            body: "Open the Workbench, Red-Teamer, or Vault Search from right here.",
-          },
-        ]}
-      />
-      <PractitionerLanding />
-    </>
-  );
-}
-
-function AnalysisStatus({ status }: { status: string }) {
-  if (status === "COMPLETED") {
-    return (
-      <span className="rounded-full bg-success/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-success">
-        Completed
-      </span>
-    );
-  }
-  if (status === "PENDING") {
-    return (
-      <span className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-warning">
-        Pending
-      </span>
-    );
-  }
-  return (
-    <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-      Needs review
-    </span>
-  );
-}
-
-const PACK_LABEL: Record<string, string> = {
-  ADVERSARIAL_BRIEF: "Adversarial brief",
-  SUMMONS_RESPONSE: "Summons response",
-  CONTRACT_REVIEW: "Contract review",
-  NIGERIAN_LAW_CHECK: "Nigerian law check",
-  RED_TEAM: "Red-teamer",
-};
-
-function PractitionerLanding() {
-  const analyses = useAnalyses();
+function Home() {
   const identity = useIdentity();
-
-  const eyebrow =
-    identity.role && identity.firmName
-      ? `${identity.name} · ${identity.role} · ${identity.firmName}`
-      : identity.eyebrow;
-
-  const myRecent = useMemo(() => {
-    const items = analyses.data ?? [];
-    return [...items].sort((a, b) => a.created_at.localeCompare(b.created_at)).reverse().slice(0, 4);
-  }, [analyses.data]);
-
+  const analyses = useAnalyses();
+  const deadlines = useDeadlineEvents();
+  const diary = useCourtDiaryEntries();
+  const matters = useQuery({
+    queryKey: ["matters", "my"],
+    queryFn: () => apiGet<{ matters: HomeMatter[] }>("/v1/matters/my"),
+  });
+  const [view, setView] = useState<HomeView>("Inbox");
+  const [selectedMatterId, setSelectedMatterId] = useState<string | null>(null);
+  useEffect(() => {
+    const selectView = (event: Event) => {
+      const selected = (event as CustomEvent<HomeView>).detail;
+      if (["Inbox", "Today", "My deadlines", "My matters"].includes(selected)) {
+        setView(selected);
+        setSelectedMatterId(null);
+      }
+    };
+    window.addEventListener("redcase:home-view", selectView);
+    return () => window.removeEventListener("redcase:home-view", selectView);
+  }, []);
+  const today = new Date().toISOString().slice(0, 10);
+  const openDeadlines = useMemo(
+    () =>
+      (deadlines.data ?? [])
+        .filter((event) => event.status !== "DISMISSED")
+        .sort((a, b) => a.due_date.localeCompare(b.due_date)),
+    [deadlines.data],
+  );
+  const todaysItems = useMemo(() => {
+    const due = (deadlines.data ?? [])
+      .filter((event) => event.due_date === today)
+      .map((event) => ({
+        id: event.id,
+        title: event.description,
+        kind: event.event_type,
+        when: event.due_date,
+      }));
+    const listed = (diary.data ?? [])
+      .filter(
+        (entry) =>
+          entry.starts_at.slice(0, 10) === today &&
+          entry.status === "SCHEDULED",
+      )
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        kind: entry.entry_type,
+        when: entry.starts_at,
+      }));
+    return [...due, ...listed].sort((a, b) => a.when.localeCompare(b.when));
+  }, [deadlines.data, diary.data, today]);
+  const pending =
+    analyses.isPending ||
+    deadlines.isPending ||
+    diary.isPending ||
+    matters.isPending;
+  const failed =
+    analyses.isError || deadlines.isError || diary.isError || matters.isError;
   return (
-    <AppShell
-      eyebrow={eyebrow}
-      title="Welcome"
-    >
+    <AppShell eyebrow={identity.eyebrow} title="Welcome">
       <div className="mx-auto max-w-6xl space-y-6 pb-16">
-        <section className="panel glow-gold p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
+        <section
+          className="panel glow-gold p-5 sm:p-6"
+          aria-label="Workbench and time logger"
+        >
+          <div className="flex flex-col items-stretch gap-6 xl:flex-row xl:items-center">
+            <div className="min-w-0 flex-1">
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
-                {eyebrow}
+                {identity.eyebrow}
               </div>
-              <h2 className="mt-1 text-2xl font-semibold">
+              <h2 className="mt-1 font-display text-2xl font-semibold">
                 Workbench — your matters, your authority
               </h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Run adversarial briefs, summons responses and contract reviews, then verify
-                against Nigerian law with page-pinned citations. Pick up where you left off.
+                Run adversarial briefs, summons responses and contract reviews,
+                then verify against Nigerian law with page-pinned citations.
+                Pick up where you left off.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
               <Link
                 to="/workbench"
-                className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
                 Open Workbench <ArrowUpRight className="size-4" />
               </Link>
-              <TimeLogger onOpen={() => window.dispatchEvent(new Event("redcase:open-time-panel"))} />
             </div>
+            <TimeLogger
+              matters={(matters.data?.matters ?? []).filter(
+                (matter) =>
+                  !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+                    matter.status.toUpperCase(),
+                  ),
+              )}
+            />
           </div>
         </section>
 
-        {!analyses.isPending &&
-          !analyses.isError &&
-          (myRecent.length > 0 ? (
-            <section className="panel p-6">
-              <h2 className="text-lg font-semibold">Your recent analyses</h2>
-              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-                {myRecent.map((a) => (
-                  <li key={a.analysis_id} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-4 py-3">
-                    <div>
-                      <div className="text-sm font-medium">{PACK_LABEL[a.prompt_pack] ?? a.prompt_pack}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground">
-                        {new Date(a.created_at).toLocaleDateString("en-GB")}
-                      </div>
-                    </div>
-                    <AnalysisStatus status={a.status} />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <section className="panel border-dashed border-steel/30 p-6">
-              <p className="text-sm text-muted-foreground">
-                No workbench analyses yet. Run your first from the Workbench.
-              </p>
-            </section>
-          ))}
-
-        <HomeMenu />
+        <section aria-labelledby="workspace-heading" className="space-y-4">
+          <div>
+            <h2
+              id="workspace-heading"
+              className="mt-1 font-display text-xl font-semibold"
+            >
+              Workspace
+            </h2>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[230px_minmax(0,1fr)]">
+            <nav
+              aria-label="Workspace sections"
+              className="flex gap-2 overflow-x-auto rounded-xl border border-border bg-sidebar/60 p-2 lg:flex-col lg:overflow-visible"
+            >
+              {(
+                [
+                  ["Inbox", Briefcase, "Assignments and recent work"],
+                  ["Today", CalendarClock, "Hearings, filings and reviews"],
+                  ["My deadlines", Clock3, "Upcoming dates and reminders"],
+                  ["My matters", Scale, "In-progress matters assigned to you"],
+                ] as const
+              ).map(([label, Icon, description]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setView(label)}
+                  aria-current={view === label ? "page" : undefined}
+                  className={`flex min-w-max items-center gap-3 rounded-r-lg border-l-2 px-3 py-3 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:w-full ${view === label ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`}
+                >
+                  <Icon
+                    className={`size-4 shrink-0 ${view === label ? "text-primary" : "text-steel"}`}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="hidden text-[11px] text-muted-foreground lg:block">
+                      {description}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+            <div
+              className="min-h-[360px] rounded-xl border border-border bg-background/70 p-4 sm:p-6"
+              aria-live="polite"
+            >
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-steel">
+                    Workspace
+                  </p>
+                  <h3 className="mt-1 font-display text-lg font-semibold">
+                    {view}
+                  </h3>
+                </div>
+                {view === "My deadlines" && (
+                  <Link
+                    to="/tracker"
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs font-medium transition-all duration-200 hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    Open in Tracker <ArrowUpRight className="size-3.5" />
+                  </Link>
+                )}
+              </div>
+              {pending ? (
+                <LoadingRows />
+              ) : failed ? (
+                <ErrorState />
+              ) : view === "Inbox" ? (
+                <InboxView
+                  analyses={analyses.data ?? []}
+                  deadlines={openDeadlines.slice(0, 5)}
+                  matters={matters.data?.matters ?? []}
+                />
+              ) : view === "Today" ? (
+                <TodayView items={todaysItems} />
+              ) : view === "My deadlines" ? (
+                <DeadlinesView events={openDeadlines} />
+              ) : (
+                <MattersView
+                  matters={matters.data?.matters ?? []}
+                  selectedMatterId={selectedMatterId}
+                  onSelectMatter={setSelectedMatterId}
+                  onBack={() => setSelectedMatterId(null)}
+                />
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </AppShell>
   );
 }
 
-/**
- * The practitioner's home menu — four quiet shortcuts under the hero. No header label:
- * the user knows they're on Home. Each card is a jump into a real surface; the design
- * document's Home = Inbox (assignments · today's schedule · my deadlines · quick
- * time-capture) maps onto these four.
- */
-function HomeMenu() {
-  const analyses = useAnalyses();
-  const deadlineEvents = useDeadlineEvents();
-  const matters = useQuery({ queryKey: ["matters", "my"], queryFn: () => apiGet<{ matters: HomeMatter[] }>("/v1/matters/my") });
-  const courtDiary = useCourtDiaryEntries();
-  const today = new Date().toISOString().slice(0, 10);
-  const events = deadlineEvents.data ?? [];
-  const dueToday = events.filter((event) => event.due_date === today);
-  const upcoming = events
-    .filter((event) => event.due_date >= today && event.status !== "DISMISSED")
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const [visible, setVisible] = useState({ inbox: true, today: true, deadlines: true, matters: true });
-  const [panel, setPanel] = useState<HomePanel>(null);
-  const [matterId, setMatterId] = useState<string | null>(null);
-  const panelItems: HomeInboxItem[] = [
-    ...(analyses.data ?? []).slice(0, 8).map((item) => ({ id: item.analysis_id, label: PACK_LABEL[item.prompt_pack] ?? item.prompt_pack, detail: `${item.status.toLowerCase().replace("_", " ")} · ${new Date(item.created_at).toLocaleDateString("en-GB")}`, kind: "analysis" as const })),
-    ...upcoming.slice(0, 8).map((item) => ({ id: item.id, label: item.description, detail: `Due ${item.due_date}`, kind: "deadline" as const })),
-    ...(matters.data?.matters ?? []).slice(0, 8).map((item) => ({ id: item.id, label: item.matter_ref, detail: `${item.status}${item.progress_note ? ` · ${item.progress_note}` : ""}`, kind: "matter" as const })),
-  ];
-  useEffect(() => {
-    const openTimePanel = () => setPanel("Time logger");
-    window.addEventListener("redcase:open-time-panel", openTimePanel);
-    return () => window.removeEventListener("redcase:open-time-panel", openTimePanel);
-  }, []);
-
-  return (
-    <section aria-labelledby="home-inbox-heading" className="space-y-3">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-steel">Your working day</p>
-          <h2 id="home-inbox-heading" className="mt-1 font-display text-xl font-semibold">Inbox, deadlines &amp; matters</h2>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link to="/tracker" className="hidden text-xs font-medium text-gold transition-colors hover:text-foreground sm:inline">Open tracker <ArrowUpRight className="ml-1 inline size-3.5" /></Link>
-          <details className="relative">
-            <summary className="cursor-pointer list-none rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-all duration-200 hover:border-gold/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50">Customize home</summary>
-            <div className="absolute right-0 z-10 mt-2 w-48 rounded-xl border border-border bg-sidebar p-3 shadow-lg">
-              <p className="mb-2 text-[10px] uppercase tracking-widest text-steel">Show widgets</p>
-              <div className="space-y-2">
-                {([ ["inbox", "Inbox"], ["today", "Today"], ["deadlines", "My deadlines"], ["matters", "My matters"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={visible[key]} onChange={() => setVisible((current) => ({ ...current, [key]: !current[key] }))} className="accent-gold" />{label}</label>)}
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {visible.inbox && <InboxCard icon={Briefcase} title="Inbox" detail="Assignments and recent work product" onClick={() => setPanel("Inbox")}>
-          {analyses.isPending ? <CardState>Loading recent work…</CardState> : analyses.isError ? <CardState>Recent work is temporarily unavailable.</CardState> : analyses.data?.length ? <CardState>{analyses.data.length} recent analysis{analyses.data.length === 1 ? "" : "es"} available in the Workbench.</CardState> : <CardState>No work product yet. Start from the Workbench.</CardState>}
-        </InboxCard>}
-        {visible.today && <InboxCard icon={BookOpenCheck} title="Today" detail="What needs attention today" onClick={() => setPanel("Today")}>
-          {deadlineEvents.isPending ? <CardState>Loading your schedule…</CardState> : dueToday.length ? <EventList events={dueToday} /> : <CardState>No deadlines or hearings due today.</CardState>}
-        </InboxCard>}
-        {visible.deadlines && <InboxCard icon={Clock} title="My deadlines" detail="The next statutory dates in your queue" onClick={() => setPanel("My deadlines")}>
-          {deadlineEvents.isPending ? <CardState>Loading upcoming dates…</CardState> : upcoming.length ? <EventList events={upcoming.slice(0, 3)} /> : <CardState>No upcoming deadlines found.</CardState>}
-        </InboxCard>}
-        {visible.matters && <InboxCard icon={Scale} title="My matters" detail="Your assigned matters" onClick={() => setPanel("My matters")}>
-          {matters.isPending ? <CardState>Loading assigned matters…</CardState> : matters.isError ? <CardState>Matters are temporarily unavailable.</CardState> : <CardState>{matters.data?.matters.length ?? 0} assigned matter{matters.data?.matters.length === 1 ? "" : "s"}</CardState>}
-        </InboxCard>}
-      </div>
-      <button type="button" data-open-time-panel onClick={() => setPanel("Time logger")} className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-background/60 p-4 text-left transition-all duration-200 hover:border-gold/50 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"><span className="flex size-10 items-center justify-center rounded-lg bg-gold/10 text-gold"><Timer className="size-5" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">Time logger</span><span className="block text-xs text-muted-foreground">Clock in, clock out, and review your sessions</span></span><ChevronRight className="size-4 text-muted-foreground" /></button>
-      <HomeSidePanel panel={panel} onClose={() => setPanel(null)} items={panelItems} analyses={analyses.data ?? []} deadlines={upcoming} todayEvents={dueToday} diary={courtDiary.data ?? []} matters={matters.data?.matters ?? []} loading={analyses.isPending || deadlineEvents.isPending || matters.isPending || courtDiary.isPending} matterId={matterId} onMatter={setMatterId} />
-    </section>
-  );
-}
-
-function InboxCard({ icon: Icon, title, detail, children, onClick }: { icon: typeof Scale; title: string; detail: string; children: ReactNode; onClick: () => void }) {
-  return <article className="rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md"><button type="button" onClick={onClick} aria-label={`Open ${title}`} className="flex w-full items-start gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold"><Icon className="size-4.5" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{title}</span><span className="mt-0.5 block text-[11px] text-muted-foreground">{detail}</span></span><ChevronRight className="mt-1 size-4 text-muted-foreground" /></button><div className="mt-4">{children}</div></article>;
-}
-
-function CardState({ children }: { children: React.ReactNode }) { return <p className="text-xs leading-5 text-muted-foreground">{children}</p>; }
-
-function EventList({ events }: { events: Array<{ id: string; description: string; due_date: string }> }) {
-  return <ul className="space-y-2">{events.map((event) => <li key={event.id} className="flex items-start justify-between gap-3 text-xs"><span className="min-w-0 truncate text-foreground">{event.description}</span><time className="shrink-0 font-mono text-[10px] text-gold">{event.due_date}</time></li>)}</ul>;
-}
-
-function HomeSidePanel({ panel, onClose, items, analyses, deadlines, todayEvents, diary, matters, loading, matterId, onMatter }: {
-  panel: HomePanel; onClose: () => void; items: HomeInboxItem[]; analyses: Analysis[];
-  deadlines: DeadlineEvent[]; todayEvents: DeadlineEvent[]; matters: HomeMatter[]; loading: boolean;
-  diary: Array<{ id: string; title: string; entry_type: string; starts_at: string; status: string }>;
-  matterId: string | null; onMatter: (id: string | null) => void;
-}) {
+function TimeLogger({ matters }: { matters: HomeMatter[] }) {
   const sessions = useActivitySessions();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
-  const createThread = useCreateThread();
-  const threads = useThreads();
-  const [area, setArea] = useState("General");
-  const [notice, setNotice] = useState("");
-  if (!panel) return null;
-  const isMatter = panel === "My matters" && matterId;
-  const openActivity = (fn: () => void, ok: string) => { try { fn(); setNotice(ok); } catch { setNotice("Could not update this session."); } };
-  const formatDuration = (seconds: number | null, started: string) => {
-    const elapsed = seconds ?? Math.max(0, Math.floor((Date.now() - new Date(started).getTime()) / 1000));
-    return `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`;
-  };
-  const sessionRows: ActivitySession[] = sessions.data?.sessions ?? [];
-  const renderList = (list: HomeInboxItem[]) => loading ? <LoadingRows /> : list.length ? <ul className="divide-y divide-border">{list.map((item) => <li key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center gap-3 py-4"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.label}</p><p className="mt-1 text-xs capitalize text-muted-foreground">{item.detail}</p></div><div className="flex shrink-0 flex-wrap gap-2">{item.kind === "analysis" && <><button type="button" onClick={() => void navigator.clipboard?.writeText(item.id)} className="rounded-lg border border-border px-3 py-1.5 text-xs transition-all duration-200 hover:border-gold/50">Copy reference</button>{threads.data?.length ? <details className="relative"><summary className="cursor-pointer list-none rounded-lg border border-border px-3 py-1.5 text-xs transition-all duration-200 hover:border-gold/50">Send to Assistant inbox</summary><div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-border bg-sidebar p-1 shadow-lg">{threads.data.map((thread) => <button type="button" key={thread.thread_id} onClick={() => void sendAssistantMessage(thread.thread_id, `Home inbox reference: please review SmartBrief output ${item.id} (${item.label}) and assess its reasoning and authorities.`).then(() => setNotice(`Sent ${item.label} to “${thread.title}”.`), () => setNotice("Could not send reference to Assistant; retry."))} className="block w-full rounded-md px-2 py-2 text-left text-xs transition-all duration-200 hover:bg-surface">{thread.title}</button>)}</div></details> : <button type="button" disabled={createThread.isPending} onClick={() => createThread.mutate(`Review: ${item.label}`, { onSuccess: async (thread) => { try { await sendAssistantMessage(thread.thread_id, `Please review SmartBrief output ${item.id} (${item.label}) and assess its reasoning and authorities.`); setNotice("Created an Assistant thread and sent the output reference."); } catch { setNotice("Thread created, but sending the output reference failed."); } }, onError: () => setNotice("Could not create an Assistant thread; retry.") })} className="rounded-lg border border-border px-3 py-1.5 text-xs transition-all duration-200 hover:border-gold/50 disabled:opacity-60">Send to Assistant inbox</button>}</>}{item.kind === "deadline" && <Link to="/tracker" className="rounded-lg border border-border px-3 py-1.5 text-xs transition-all duration-200 hover:border-gold/50">Open tracker</Link>}{item.kind === "matter" ? <button type="button" onClick={() => { sessionStorage.setItem("redcase:workbench-matter", item.id); window.location.assign("/workbench"); }} className="rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90">Select for Workbench upload</button> : <Link to="/workbench" className="rounded-lg bg-gold px-3 py-1.5 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90">{item.kind === "analysis" ? "Open in Workbench" : "Promote to Workbench"}</Link>}</div></li>)}</ul> : <EmptyPanel>No items need your attention right now.</EmptyPanel>;
-  return <div className="fixed inset-0 z-[65]" role="presentation"><button aria-label="Close workspace panel" className="absolute inset-0 bg-black/40" onClick={onClose} /><aside role="dialog" aria-modal="true" aria-label={panel} className="absolute inset-y-0 right-0 flex w-full max-w-2xl translate-x-0 flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200"><header className="flex items-center gap-3 border-b border-border px-5 py-4"><button type="button" onClick={isMatter ? () => onMatter(null) : onClose} className="rounded-lg p-2 transition-all duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold" aria-label="Back"><ArrowLeft className="size-4" /></button><div className="min-w-0 flex-1"><div className="font-mono text-[10px] uppercase tracking-[0.2em] text-steel">Workspace</div><h2 className="truncate text-lg font-semibold">{isMatter ? matters.find((matter) => matter.id === matterId)?.matter_ref ?? "Matter" : panel}</h2></div><button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 transition-all duration-200 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">×</button></header><div className="min-h-0 flex-1 overflow-y-auto p-5">
-    {panel === "Inbox" && renderList(items)}
-    {panel === "Today" && <div className="space-y-6"><p className="text-sm text-muted-foreground">Today's hearings, filings, research, reviews and meetings.</p>{todayEvents.length || diary.length ? <ul className="divide-y divide-border">{[...todayEvents.map((event) => ({ id: event.id, label: event.description, kind: event.event_type.replace("_", " "), at: "" })), ...diary.map((entry) => ({ id: entry.id, label: entry.title, kind: entry.entry_type.toLowerCase(), at: new Date(entry.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }))].map((item) => <li key={item.id} className="flex items-center justify-between gap-3 py-4"><span className="text-sm">{item.label}</span><span className="shrink-0 rounded-full bg-gold/10 px-2 py-1 text-[10px] font-medium capitalize text-gold">{item.at && `${item.at} · `}{item.kind}</span></li>)}</ul> : <EmptyPanel>No hearings, filings, research, reviews or meetings are scheduled today.</EmptyPanel>}</div>}
-    {panel === "My deadlines" && (loading ? <LoadingRows /> : deadlines.length ? <ul className="divide-y divide-border">{deadlines.map((event) => <li key={event.id} className="flex flex-wrap items-center gap-3 py-4"><div className="min-w-0 flex-1"><p className="text-sm font-medium">{event.description}</p><p className="mt-1 font-mono text-xs text-gold">Due {event.due_date}</p></div><button type="button" disabled={createThread.isPending} onClick={() => { setNotice(""); createThread.mutate(`Deadline reminder: ${event.description}`, { onSuccess: async (thread) => { try { await sendAssistantMessage(thread.thread_id, `Reminder requested for ${event.description}, due ${event.due_date}. Please include this in my reminders.`); setNotice("Reminder recorded in your Assistant thread."); } catch { setNotice("Assistant thread created, but the reminder message could not be sent."); } }, onError: () => setNotice("Could not create reminder thread; retry.") }); }} className="rounded-lg border border-border px-3 py-2 text-xs transition-all duration-200 hover:border-gold/50 disabled:opacity-60">{createThread.isPending ? "Recording…" : "Set reminder"}</button><Link to="/workbench" className="rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90">Open in Workbench</Link></li>)}</ul> : <EmptyPanel>No upcoming deadlines.</EmptyPanel>)}
-    {panel === "My matters" && (!matterId ? loading ? <LoadingRows /> : matters.length ? <ul className="divide-y divide-border">{matters.map((matter) => <li key={matter.id}><button type="button" onClick={() => onMatter(matter.id)} className="flex w-full items-center gap-3 py-4 text-left transition-all duration-200 hover:text-gold"><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{matter.matter_ref}</span><span className="mt-1 block text-xs text-muted-foreground">{matter.status}{matter.progress_note ? ` · ${matter.progress_note}` : ""}</span></span><ChevronRight className="size-4" /></button></li>)}</ul> : <EmptyPanel>No matters are assigned to you.</EmptyPanel> : <div className="panel space-y-4 p-5"><div><p className="font-mono text-[10px] uppercase tracking-widest text-steel">Matter overview</p><h3 className="mt-1 text-lg font-semibold">{matters.find((matter) => matter.id === matterId)?.matter_ref}</h3></div><p className="text-sm text-muted-foreground">{matters.find((matter) => matter.id === matterId)?.progress_note || "No progress note has been added."}</p><Link to="/workbench" className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90">Open matter tools <ChevronRight className="size-4" /></Link></div>)}
-    {panel === "Time logger" && <section className="space-y-5"><div className="panel space-y-4 p-5"><label className="block"><span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Where are you working?</span><input value={area} onChange={(event) => setArea(event.target.value)} maxLength={160} className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold" /></label>{sessionRows.some((session) => !session.ended_at) ? <button type="button" disabled={clockOut.isPending} onClick={() => clockOut.mutate(undefined, { onSuccess: () => setNotice("Clocked out. Session saved."), onError: () => setNotice("Could not clock out; retry.") })} className="inline-flex items-center gap-2 rounded-lg bg-destructive/15 px-4 py-2.5 text-sm font-semibold text-destructive transition-all duration-200 hover:bg-destructive/25 disabled:opacity-60"><Clock className="size-4" />{clockOut.isPending ? "Saving…" : "Clock-out"}</button> : <button type="button" disabled={clockIn.isPending || !area.trim()} onClick={() => clockIn.mutate(area.trim(), { onSuccess: () => setNotice("Clocked in. Your session has started."), onError: () => setNotice("Could not clock in; retry.") })} className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90 disabled:opacity-60"><Clock className="size-4" />{clockIn.isPending ? "Starting…" : "Clock-in"}</button>}{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}</div><div><h3 className="text-sm font-semibold">Recent sessions</h3>{sessions.isPending ? <LoadingRows /> : sessionRows.length ? <ul className="mt-3 divide-y divide-border">{sessionRows.map((session) => <li key={session.id} className="flex items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block truncate text-sm font-medium">{session.area}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">{new Date(session.started_at).toLocaleString()}</span></span><span className="shrink-0 text-right text-xs text-muted-foreground">{session.ended_at ? new Date(session.ended_at).toLocaleTimeString() : "In progress"}<span className="block font-mono text-gold">{formatDuration(session.duration, session.started_at)}</span></span></li>)}</ul> : <EmptyPanel>No sessions yet. Clock in when you start work.</EmptyPanel>}</div><p className="text-xs text-muted-foreground">Personal activity tracking is stored separately from billable time entries.</p></section>}
-    {notice && panel !== "Time logger" && <p role="status" className="mt-4 text-sm text-muted-foreground">{notice}</p>}
-  </div></aside></div>;
-}
-
-function EmptyPanel({ children }: { children: ReactNode }) { return <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{children}</div>; }
-function LoadingRows() { return <div aria-busy="true" className="space-y-3">{[0, 1, 2].map((index) => <div key={index} className="h-14 animate-pulse rounded-lg bg-surface" />)}<span className="sr-only">Loading workspace items</span></div>; }
-
-function MenuLink({
-  to,
-  icon: Icon,
-  label,
-  sub,
-}: {
-  to: string;
-  icon: typeof Scale;
-  label: string;
-  sub: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="group flex items-center gap-4 rounded-xl border border-border/70 bg-background/60 p-4 transition-all duration-200 hover:border-gold/50 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
-    >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
-        <Icon className="size-5" />
-      </div>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">{label}</span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{sub}</span>
-      </span>
-    </Link>
-  );
-}
-
-function TimeLogger({ onOpen }: { onOpen: () => void }) {
-  const sessions = useActivitySessions();
-  const clockIn = useClockIn();
-  const clockOut = useClockOut();
+  const [selection, setSelection] = useState("area:General");
   const active = sessions.data?.sessions.find((session) => !session.ended_at);
-  const [area, setArea] = useState("General");
   const busy = clockIn.isPending || clockOut.isPending;
+  const start = () => {
+    const [target_type, target_ref] = selection.split(":");
+    const selectedMatter = matters.find((matter) => matter.id === target_ref);
+    const area =
+      target_type === "matter"
+        ? (selectedMatter?.matter_ref ?? "General")
+        : target_ref;
+    if (target_type && target_ref)
+      clockIn.mutate({
+        area,
+        target_type: target_type as "matter" | "area",
+        target_ref,
+      });
+  };
+  const groups = sessions.data?.groups ?? [];
+  const fmt = (seconds: number) =>
+    `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   return (
-    <div className="min-w-[210px] rounded-xl border border-border/70 bg-background/60 p-3 transition-all duration-200 hover:border-gold/50 sm:min-w-[250px]">
-      <div className="flex items-center gap-2"><Clock className="size-4 text-gold" /><span className="min-w-0 flex-1"><span className="block text-xs font-semibold">Time logger</span><span className="block truncate text-[10px] text-muted-foreground">{active ? `Working in ${active.area}` : "Attendance session"}</span></span></div>
-      <div className="mt-2 flex gap-2"><input aria-label="Activity area" value={area} onChange={(event) => setArea(event.target.value)} maxLength={160} className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs" /><button type="button" disabled={busy || (!active && !area.trim())} onClick={() => active ? clockOut.mutate() : clockIn.mutate(area.trim())} className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 disabled:opacity-60 ${active ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : "bg-gold text-background hover:bg-gold/90"}`}>{busy ? <Loader2 className="size-3.5 animate-spin" /> : active ? "Clock-out" : "Clock-in"}</button></div>
-      <button type="button" onClick={onOpen} className="mt-2 text-[10px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">View time history <ArrowUpRight className="ml-1 inline size-3" /></button>
-      {(clockIn.isError || clockOut.isError) && <p role="alert" className="mt-2 text-[10px] text-destructive">Could not update session. Please retry.</p>}
+    <div className="w-full rounded-xl border border-border/70 bg-background/70 p-4 xl:w-[300px] xl:shrink-0">
+      <div className="flex items-center gap-2">
+        <Timer className="size-4 text-gold" />
+        <span className="text-sm font-semibold">Time logger</span>
+      </div>
+      <p className="mt-1 truncate text-[11px] text-muted-foreground">
+        {active
+          ? `Clocked in · ${active.target_label ?? active.area}`
+          : "Choose an object of work"}
+      </p>
+      <div className="mt-3 flex gap-2">
+        <label className="sr-only" htmlFor="activity-target">
+          Work target
+        </label>
+        <select
+          id="activity-target"
+          value={selection}
+          onChange={(event) => setSelection(event.target.value)}
+          disabled={Boolean(active)}
+          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        >
+          <optgroup label="Areas">
+            {AREAS.map((area) => (
+              <option key={area} value={`area:${area}`}>
+                {area}
+              </option>
+            ))}
+          </optgroup>
+          {matters.length > 0 && (
+            <optgroup label="My matters">
+              {matters.map((matter) => (
+                <option key={matter.id} value={`matter:${matter.id}`}>
+                  {matter.matter_ref}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        <button
+          type="button"
+          disabled={busy || sessions.isPending || (!active && !selection)}
+          onClick={() => (active ? clockOut.mutate() : start())}
+          className={`rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 disabled:opacity-60 ${active ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : "bg-gold text-background hover:bg-gold/90"}`}
+        >
+          {busy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : active ? (
+            "Clock-out"
+          ) : (
+            "Clock-in"
+          )}
+        </button>
+      </div>
+      {(clockIn.isError || clockOut.isError || sessions.isError) && (
+        <p role="alert" className="mt-2 text-[10px] text-destructive">
+          Could not update the time session. Please retry.
+        </p>
+      )}
+      <details className="mt-3 border-t border-border pt-2">
+        <summary className="cursor-pointer text-[11px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+          Time history by matter or area
+        </summary>
+        {sessions.isPending ? (
+          <div className="mt-3 h-8 animate-pulse rounded bg-muted/60" />
+        ) : groups.length ? (
+          <ul className="mt-2 divide-y divide-border">
+            {groups.map((group: ActivitySessionGroup) => (
+              <li
+                key={`${group.target_type}:${group.target_ref}`}
+                className="flex items-center justify-between gap-2 py-2 text-xs"
+              >
+                <span className="min-w-0 truncate">
+                  {group.target_label}
+                  <span className="ml-2 text-muted-foreground">
+                    {" · "}
+                    {group.session_count}{" "}
+                    {group.session_count === 1 ? "session" : "sessions"}
+                  </span>
+                </span>
+                <span className="shrink-0 font-mono text-gold">
+                  {fmt(group.total_duration)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            No sessions recorded yet.
+          </p>
+        )}
+      </details>
+    </div>
+  );
+}
+
+function InboxView({
+  analyses,
+  deadlines,
+  matters,
+}: {
+  analyses: Array<{
+    analysis_id: string;
+    prompt_pack: string;
+    status: string;
+    created_at: string;
+  }>;
+  deadlines: DeadlineEvent[];
+  matters: HomeMatter[];
+}) {
+  return (
+    <div className="space-y-6">
+      <section>
+        <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+          <Briefcase className="size-4 text-gold" /> Assignments and recent work
+        </h4>
+        {analyses.length || deadlines.length || matters.length ? (
+          <ul className="divide-y divide-border">
+            {analyses.slice(0, 5).map((item) => (
+              <li
+                key={item.analysis_id}
+                className="flex items-center justify-between gap-3 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {item.prompt_pack.replaceAll("_", " ")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {item.status.replaceAll("_", " ")} ·{" "}
+                    {new Date(item.created_at).toLocaleDateString("en-GB")}
+                  </span>
+                </span>
+                <span className="rounded-full bg-gold/10 px-2 py-1 text-[10px] text-gold">
+                  Analysis
+                </span>
+              </li>
+            ))}
+            {deadlines.slice(0, 3).map((item) => (
+              <li
+                key={item.id}
+                className="flex items-center justify-between gap-3 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {item.description}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Due {item.due_date}
+                  </span>
+                </span>
+                <span className="rounded-full bg-warning/10 px-2 py-1 text-[10px] text-warning">
+                  Deadline
+                </span>
+              </li>
+            ))}
+            {matters.slice(0, 3).map((matter) => (
+              <li
+                key={matter.id}
+                className="flex items-center justify-between gap-3 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">
+                    {matter.matter_ref}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {matter.status}
+                  </span>
+                </span>
+                <Link
+                  to="/workbench"
+                  onClick={() => {
+                    sessionStorage.setItem(
+                      "redcase:workbench-matter",
+                      matter.id,
+                    );
+                  }}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs transition-all duration-200 hover:border-gold/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                >
+                  Open matter
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={CheckCircle2}
+            title="Inbox is clear"
+            description="New assignments and work product will appear here."
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function TodayView({
+  items,
+}: {
+  items: Array<{ id: string; title: string; kind: string; when: string }>;
+}) {
+  return items.length ? (
+    <ul className="divide-y divide-border">
+      {items.map((item) => (
+        <li key={item.id} className="flex items-center gap-3 py-4">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-gold/10 text-gold">
+            <CalendarClock className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {item.title}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {item.kind.replaceAll("_", " ")} ·{" "}
+              {new Date(item.when).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <EmptyState
+      icon={CalendarClock}
+      title="Nothing scheduled today"
+      description="Hearings, filings, reviews and meetings due today will be listed here."
+    />
+  );
+}
+
+function DeadlinesView({ events }: { events: DeadlineEvent[] }) {
+  const [reminders, setReminders] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setReminders(
+        JSON.parse(
+          localStorage.getItem("redcase:deadline-reminders") ?? "[]",
+        ) as string[],
+      );
+    } catch {
+      setReminders([]);
+    }
+  }, []);
+  const addReminder = (id: string) => {
+    const next = [...new Set([...reminders, id])];
+    setReminders(next);
+    try {
+      localStorage.setItem("redcase:deadline-reminders", JSON.stringify(next));
+    } catch {
+      /* Browser storage may be unavailable. */
+    }
+  };
+  return events.length ? (
+    <ul className="divide-y divide-border">
+      {events.map((event) => (
+        <li key={event.id} className="flex flex-wrap items-center gap-3 py-4">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-gold/10 text-gold">
+            <FileClock className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">
+              {event.description}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {event.event_type.replaceAll("_", " ")} · Due {event.due_date} ·
+              Matter {event.matter_id.slice(0, 8)}
+            </span>
+          </span>
+          <button
+            type="button"
+            disabled={reminders.includes(event.id)}
+            onClick={() => addReminder(event.id)}
+            className="rounded-lg border border-border px-3 py-2 text-xs transition-all duration-200 hover:border-gold/60 disabled:cursor-default disabled:text-muted-foreground"
+          >
+            {reminders.includes(event.id) ? "Reminder set" : "Set reminder"}
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <EmptyState
+      icon={Clock3}
+      title="No upcoming dates"
+      description="Upcoming statutory deadlines and limitations will appear here."
+    />
+  );
+}
+
+function MattersView({
+  matters,
+  selectedMatterId,
+  onSelectMatter,
+  onBack,
+}: {
+  matters: HomeMatter[];
+  selectedMatterId: string | null;
+  onSelectMatter: (matterId: string) => void;
+  onBack: () => void;
+}) {
+  const active = matters.filter(
+    (matter) =>
+      !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
+        matter.status.toUpperCase(),
+      ),
+  );
+  const selectedMatter = active.find(
+    (matter) => matter.id === selectedMatterId,
+  );
+  if (selectedMatter) {
+    return (
+      <article className="space-y-5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1 text-xs font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+        >
+          <ChevronRight className="size-3.5 rotate-180" /> Back to My matters
+        </button>
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold">
+              <Gavel className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-display text-lg font-semibold">
+                {selectedMatter.matter_ref}
+              </h4>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Matter overview · {selectedMatter.status}
+              </p>
+            </div>
+          </div>
+          <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+            {selectedMatter.progress_note ||
+              "No progress update has been added."}
+          </p>
+          <Link
+            to="/workbench"
+            onClick={() =>
+              sessionStorage.setItem(
+                "redcase:workbench-matter",
+                selectedMatter.id,
+              )
+            }
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-xs font-semibold text-background transition-all duration-200 hover:bg-gold/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+          >
+            Open matter tools <ArrowUpRight className="size-3.5" />
+          </Link>
+        </div>
+      </article>
+    );
+  }
+  return active.length ? (
+    <ul className="divide-y divide-border">
+      {active.map((matter) => (
+        <li key={matter.id} className="flex flex-wrap items-center gap-3 py-4">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-gold/10 text-gold">
+            <Gavel className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {matter.matter_ref}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {matter.status}
+              {matter.progress_note ? ` · ${matter.progress_note}` : ""}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onSelectMatter(matter.id)}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs transition-all duration-200 hover:border-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+          >
+            View matter <ChevronRight className="size-3.5" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <EmptyState
+      icon={Scale}
+      title="No active matters assigned"
+      description="Matters assigned to you will appear here."
+    />
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof Scale;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div
+      role="status"
+      className="rounded-xl border border-dashed border-border px-5 py-12 text-center"
+    >
+      <Icon className="mx-auto size-7 text-muted-foreground" />
+      <h4 className="mt-3 text-sm font-semibold">{title}</h4>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function LoadingRows() {
+  return (
+    <div aria-busy="true" aria-label="Loading workspace" className="space-y-3">
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="h-14 animate-pulse rounded-lg bg-muted/60" />
+      ))}
+    </div>
+  );
+}
+function ErrorState() {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+    >
+      Could not load workspace information. Check your connection and try again.
     </div>
   );
 }

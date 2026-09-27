@@ -133,6 +133,65 @@ async def _count_entries_for_tenant(
     finally:
         await conn.close()
 
+
+async def _assign_matter(app_db_url: str, matter: uuid.UUID, user_ref: str) -> None:
+    conn = await asyncpg.connect(app_db_url)
+    try:
+        async with conn.transaction():
+            await conn.execute(
+                "SELECT set_config('app.tenant_id', $1, true)", SEED_TENANT_AETOES
+            )
+            await conn.execute(
+                "SELECT set_config('app.user_clearance', 'PARTNER', true)"
+            )
+            await conn.execute(
+                "SELECT set_config('app.user_ref', 'setup-partner', true)"
+            )
+            await conn.execute(
+                "UPDATE matters SET assigned_to=$1 WHERE id=$2", user_ref, matter
+            )
+    finally:
+        await conn.close()
+
+
+class TestActivitySessions:
+    def test_clock_in_matter_target_and_grouped_history(self, app_db_url: str) -> None:
+        matter = asyncio.run(_provision_matter(app_db_url, SEED_TENANT_AETOES))
+        asyncio.run(_assign_matter(app_db_url, matter, "time-user"))
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            started = client.post(
+                "/v1/activity-sessions/clock-in",
+                json={
+                    "area": "PRAC matter",
+                    "target_type": "matter",
+                    "target_ref": str(matter),
+                },
+                headers=_auth(),
+            )
+            assert started.status_code == 201
+            assert started.json()["target_ref"] == str(matter)
+            assert started.json()["target_type"] == "matter"
+            assert client.post(
+                "/v1/activity-sessions/clock-out", json={}, headers=_auth()
+            ).status_code == 200
+            history = client.get("/v1/activity-sessions", headers=_auth())
+        assert history.status_code == 200
+        assert history.json()["sessions"][0]["target_type"] == "matter"
+        assert history.json()["sessions"][0]["target_label"].startswith("PRAC-")
+        assert history.json()["groups"][0]["target_type"] == "matter"
+        assert history.json()["groups"][0]["target_ref"] == str(matter)
+        assert history.json()["groups"][0]["target_label"].startswith("PRAC-")
+        assert history.json()["groups"][0]["session_count"] == 1
+
+    def test_only_supported_area_targets_are_accepted(self, app_db_url: str) -> None:
+        with TestClient(create_app(_settings(app_db_url))) as client:
+            response = client.post(
+                "/v1/activity-sessions/clock-in",
+                json={"area": "Other", "target_type": "area", "target_ref": "Other"},
+                headers=_auth(),
+            )
+        assert response.status_code == 422
+
 class TestPostTime:
     def test_records_minutes_and_total(self, app_db_url: str) -> None:
         matter = asyncio.run(_provision_matter(app_db_url, SEED_TENANT_AETOES))
