@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -104,7 +104,6 @@ function StatusBadge({ status }: { status: Analysis["status"] }) {
 }
 
 function Workbench() {
-  const navigate = useNavigate();
   const analyses = useAnalyses();
   const identity = useIdentity();
   const membership = useMembership();
@@ -158,365 +157,576 @@ function Workbench() {
     },
   ];
 
+  const benches: Array<{
+    id: AssistantBench;
+    description: string;
+    icon: typeof LayoutDashboard;
+  }> = [
+    {
+      id: "SmartBrief",
+      description: "Draft and inspect structured legal analysis",
+      icon: LayoutDashboard,
+    },
+    {
+      id: "Red-Teamer",
+      description: "Challenge arguments and expose weaknesses",
+      icon: Swords,
+    },
+    {
+      id: "Deck",
+      description: "Track analyses by workflow state",
+      icon: Inbox,
+    },
+    {
+      id: "Researcher",
+      description: "Search permitted legal sources",
+      icon: Scale,
+    },
+    {
+      id: "Reviewer",
+      description: "Review flagged work and court dates",
+      icon: Gavel,
+    },
+  ];
+
+  const selectedAnalysis = analyses.data?.find(
+    (item) => item.analysis_id === selectedId,
+  );
+  const assistantReference =
+    selectedAnalysis?.status === "COMPLETE"
+      ? {
+          type: "analysis" as const,
+          id: selectedAnalysis.analysis_id,
+          label:
+            PACK_LABEL[selectedAnalysis.prompt_pack] ?? "SmartBrief output",
+        }
+      : undefined;
+
   return (
     <AppShell
       eyebrow={`${membership.data?.full_name ?? identity.name}${membership.data?.role ? ` · ${membership.data.role}` : ""}`}
       title="Legal Workbench"
       assistantContext={{
         bench,
-        ...(selectedId &&
-        analyses.data?.find((item) => item.analysis_id === selectedId)
-          ?.status === "COMPLETE"
-          ? {
-              reference: {
-                type: "analysis",
-                id: selectedId,
-                label:
-                  PACK_LABEL[
-                    analyses.data.find(
-                      (item) => item.analysis_id === selectedId,
-                    )!.prompt_pack
-                  ] ?? "SmartBrief output",
-              },
-            }
-          : {}),
+        ...(assistantReference ? { reference: assistantReference } : {}),
       }}
+      sidebarContent={
+        <div className="space-y-2">
+          <p className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-steel">
+            Workbench benches
+          </p>
+          <nav aria-label="Workbench benches" className="space-y-1">
+            {benches.map(({ id, description, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setBench(id);
+                  if (id !== "SmartBrief") setSelectedId(null);
+                }}
+                aria-current={bench === id ? "page" : undefined}
+                className={`group flex w-full items-start gap-3 rounded-lg border-l-2 px-3 py-3 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${bench === id ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`}
+              >
+                <Icon
+                  className={`mt-0.5 size-4 shrink-0 ${bench === id ? "text-primary" : "text-steel group-hover:text-primary"}`}
+                />
+                <span>
+                  <span className="block text-sm">{id}</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {description}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      }
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
+        >
+          <span>Workspace</span>
+          <ChevronRight className="size-3" aria-hidden="true" />
+          <span>Workbench</span>
+          <ChevronRight className="size-3" aria-hidden="true" />
+          <span aria-current="page" className="text-gold">
+            {bench}
+          </span>
+        </nav>
+        <nav
+          aria-label="Workbench benches"
+          className="flex gap-2 overflow-x-auto pb-1 lg:hidden"
+        >
+          {benches.map(({ id }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setBench(id);
+                if (id !== "SmartBrief") setSelectedId(null);
+              }}
+              aria-current={bench === id ? "page" : undefined}
+              className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${bench === id ? "border-gold/50 bg-gold/10 text-gold" : "border-border text-muted-foreground hover:border-gold/40 hover:text-foreground"}`}
+            >
+              {id}
+            </button>
+          ))}
+        </nav>
+        <div className="print-hide flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/60 p-3">
+          <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.2em] text-steel">
+            {bench} tools
+          </span>
+          {bench === "SmartBrief" ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  document
+                    .getElementById("workbench-source")
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                }
+              >
+                <Upload className="mr-1.5 size-3.5" /> Upload source
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={
+                  !selectedId || selectedAnalysis?.status !== "COMPLETE"
+                }
+                onClick={() => window.print()}
+              >
+                <Printer className="mr-1.5 size-3.5" /> Print completed output
+              </Button>
+            </>
+          ) : bench === "Deck" ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={analyses.isFetching}
+              onClick={() => void analyses.refetch()}
+            >
+              {analyses.isFetching ? (
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+              ) : (
+                <GitBranch className="mr-1.5 size-3.5" />
+              )}
+              Refresh analyses
+            </Button>
+          ) : bench === "Researcher" ? (
+            <span className="text-xs text-muted-foreground">
+              Vault Search and verified citations
+            </span>
+          ) : bench === "Reviewer" ? (
+            <span className="text-xs text-muted-foreground">
+              Review queue and court diary
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Adversarial brief review
+            </span>
+          )}
+        </div>
         <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="workbench-tools space-y-3 print-hide">
-            <div className="panel space-y-3 p-4">
-              <div>
-                <h2 className="text-sm font-semibold">Start with a source</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {matters.data?.matters.find(
-                    (matter) => matter.id === uploadMatter,
-                  )?.matter_ref
-                    ? `Selected matter: ${matters.data.matters.find((matter) => matter.id === uploadMatter)?.matter_ref}`
-                    : "Upload a PDF or DOCX to an assigned matter, then choose the appropriate review."}
-                </p>
-              </div>
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
-                <Upload className="size-4" />
-                {uploading ? "Uploading document…" : "Choose PDF or DOCX"}
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
-                  className="sr-only"
-                  disabled={uploading}
-                  onChange={async (event) => {
-                    const input = event.currentTarget;
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    if (!uploadMatter) {
-                      setUploadMessage(
-                        "Choose a matter below before uploading.",
-                      );
-                      input.value = "";
-                      return;
-                    }
-                    if (!/\.(pdf|docx)$/i.test(file.name)) {
-                      setUploadMessage("Choose a PDF or DOCX document.");
-                      input.value = "";
-                      return;
-                    }
-                    setUploading(true);
-                    setUploadMessage("");
-                    try {
-                      const result = await apiUpload<{
-                        document_id: string;
-                        duplicate?: boolean;
-                      }>(
-                        `/v1/matters/${uploadMatter}/documents?title=${encodeURIComponent(file.name)}`,
-                        file,
-                        () => undefined,
-                      );
-                      if (result.duplicate) {
-                        const matterDocuments = await apiGet<{
-                          documents: Array<{ document_id: string }>;
-                        }>(`/v1/matters/${uploadMatter}/documents`);
-                        if (
-                          !matterDocuments.documents.some(
-                            (document) =>
-                              document.document_id === result.document_id,
-                          )
-                        ) {
-                          setUploadedDocument(null);
-                          setUploadMessage(
-                            "This document already exists outside the selected matter. It was not attached or analyzed here.",
-                          );
-                          return;
-                        }
-                      }
-                      setUploadedDocument({
-                        document_id: result.document_id,
-                        matter_id: uploadMatter,
-                        title: file.name.replace(/\.(pdf|docx)$/i, ""),
-                      });
-                      setUploadMessage(
-                        result.duplicate
-                          ? "This document is already in the matter vault."
-                          : "Document uploaded and ready for analysis.",
-                      );
-                    } catch (error) {
-                      setUploadMessage(
-                        error instanceof Error
-                          ? error.message
-                          : "Upload failed.",
-                      );
-                    } finally {
-                      setUploading(false);
-                      input.value = "";
-                    }
-                  }}
-                />
-              </label>
-              {uploadedDocument && (
-                <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
-                  <p className="truncate text-xs font-medium">
-                    {uploadedDocument.title}
+          {bench !== "SmartBrief" && (
+            <aside className="workbench-tools space-y-3 print-hide">
+              {bench === "Red-Teamer" ? (
+                <div className="panel space-y-2 p-4">
+                  <h2 className="text-sm font-semibold">Red-Teamer tools</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Challenge completed arguments and ask the Assistant to test
+                    their assumptions.
                   </p>
-                  <label className="mt-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Analysis pack
-                  </label>
-                  <div className="mt-1 flex gap-2">
-                    <select
-                      value={analysisPack}
-                      onChange={(event) =>
-                        setAnalysisPack(event.target.value as PromptPack)
-                      }
-                      aria-label="Analysis pack"
-                      className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs"
-                    >
-                      <option value="ADVERSAL_BRIEF">Adversarial Brief</option>
-                      <option value="SUMMONS_RESPONSE">Summons Response</option>
-                      <option value="CONTRACT_REVIEW">Contract Review</option>
-                    </select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!assistantReference}
+                    onClick={() =>
+                      window.dispatchEvent(new Event("redcase:assistant-open"))
+                    }
+                  >
+                    Challenge selected output
+                  </Button>
+                </div>
+              ) : (
+                <div className="panel space-y-2 p-4">
+                  <h2 className="text-sm font-semibold">{bench} tools</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {bench === "Researcher"
+                      ? "Search your permitted legal sources and review verified citations."
+                      : bench === "Reviewer"
+                        ? "Review analyses flagged for human attention and upcoming court dates."
+                        : "Track analyses by workflow state and open completed output."}
+                  </p>
+                  {bench === "Deck" && (
                     <Button
                       type="button"
                       size="sm"
-                      disabled={startingAnalysis}
-                      onClick={async () => {
-                        if (!uploadedDocument) return;
-                        setStartingAnalysis(true);
-                        try {
-                          await apiPost<
-                            { analysis_id: string },
-                            { prompt_pack: PromptPack; matter_id: string }
-                          >(
-                            `/v1/documents/${uploadedDocument.document_id}/analyze`,
-                            {
-                              prompt_pack: analysisPack,
-                              matter_id: uploadedDocument.matter_id,
-                            },
-                          );
-                          await analyses.refetch();
-                          setSelectedId(null);
-                          setBench("Deck");
+                      variant="outline"
+                      className="w-full"
+                      disabled={analyses.isFetching}
+                      onClick={() => void analyses.refetch()}
+                    >
+                      Refresh analyses
+                    </Button>
+                  )}
+                </div>
+              )}
+            </aside>
+          )}
+          {bench === "SmartBrief" && (
+            <aside className="workbench-tools space-y-3 print-hide">
+              {bench === "SmartBrief" && (
+                <div id="workbench-source" className="panel space-y-3 p-4">
+                  <div>
+                    <h2 className="text-sm font-semibold">
+                      Start with a source
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {matters.data?.matters.find(
+                        (matter) => matter.id === uploadMatter,
+                      )?.matter_ref
+                        ? `Selected matter: ${matters.data.matters.find((matter) => matter.id === uploadMatter)?.matter_ref}`
+                        : "Upload a PDF or DOCX to an assigned matter, then choose the appropriate review."}
+                    </p>
+                  </div>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-gold/5 px-4 py-3 text-sm font-medium text-gold transition-all duration-200 hover:bg-gold/10 focus-within:ring-2 focus-within:ring-gold">
+                    <Upload className="size-4" />
+                    {uploading ? "Uploading document…" : "Choose PDF or DOCX"}
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                      className="sr-only"
+                      disabled={uploading}
+                      onChange={async (event) => {
+                        const input = event.currentTarget;
+                        const file = input.files?.[0];
+                        if (!file) return;
+                        if (!uploadMatter) {
                           setUploadMessage(
-                            "Analysis started. Follow its status in your Deck; completed output opens when selected.",
+                            "Choose a matter below before uploading.",
+                          );
+                          input.value = "";
+                          return;
+                        }
+                        if (!/\.(pdf|docx)$/i.test(file.name)) {
+                          setUploadMessage("Choose a PDF or DOCX document.");
+                          input.value = "";
+                          return;
+                        }
+                        setUploading(true);
+                        setUploadMessage("");
+                        try {
+                          const result = await apiUpload<{
+                            document_id: string;
+                            duplicate?: boolean;
+                          }>(
+                            `/v1/matters/${uploadMatter}/documents?title=${encodeURIComponent(file.name)}`,
+                            file,
+                            () => undefined,
+                          );
+                          if (result.duplicate) {
+                            const matterDocuments = await apiGet<{
+                              documents: Array<{ document_id: string }>;
+                            }>(`/v1/matters/${uploadMatter}/documents`);
+                            if (
+                              !matterDocuments.documents.some(
+                                (document) =>
+                                  document.document_id === result.document_id,
+                              )
+                            ) {
+                              setUploadedDocument(null);
+                              setUploadMessage(
+                                "This document already exists outside the selected matter. It was not attached or analyzed here.",
+                              );
+                              return;
+                            }
+                          }
+                          setUploadedDocument({
+                            document_id: result.document_id,
+                            matter_id: uploadMatter,
+                            title: file.name.replace(/\.(pdf|docx)$/i, ""),
+                          });
+                          setUploadMessage(
+                            result.duplicate
+                              ? "This document is already in the matter vault."
+                              : "Document uploaded and ready for analysis.",
                           );
                         } catch (error) {
                           setUploadMessage(
                             error instanceof Error
                               ? error.message
-                              : "Could not start analysis.",
+                              : "Upload failed.",
                           );
                         } finally {
-                          setStartingAnalysis(false);
+                          setUploading(false);
+                          input.value = "";
                         }
                       }}
+                    />
+                  </label>
+                  {uploadedDocument && (
+                    <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
+                      <p className="truncate text-xs font-medium">
+                        {uploadedDocument.title}
+                      </p>
+                      <label className="mt-2 block text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Analysis pack
+                      </label>
+                      <div className="mt-1 flex gap-2">
+                        <select
+                          value={analysisPack}
+                          onChange={(event) =>
+                            setAnalysisPack(event.target.value as PromptPack)
+                          }
+                          aria-label="Analysis pack"
+                          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs"
+                        >
+                          <option value="ADVERSAL_BRIEF">
+                            Adversarial Brief
+                          </option>
+                          <option value="SUMMONS_RESPONSE">
+                            Summons Response
+                          </option>
+                          <option value="CONTRACT_REVIEW">
+                            Contract Review
+                          </option>
+                        </select>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={startingAnalysis}
+                          onClick={async () => {
+                            if (!uploadedDocument) return;
+                            setStartingAnalysis(true);
+                            try {
+                              await apiPost<
+                                { analysis_id: string },
+                                { prompt_pack: PromptPack; matter_id: string }
+                              >(
+                                `/v1/documents/${uploadedDocument.document_id}/analyze`,
+                                {
+                                  prompt_pack: analysisPack,
+                                  matter_id: uploadedDocument.matter_id,
+                                },
+                              );
+                              await analyses.refetch();
+                              setSelectedId(null);
+                              setBench("Deck");
+                              setUploadMessage(
+                                "Analysis started. Follow its status in your Deck; completed output opens when selected.",
+                              );
+                            } catch (error) {
+                              setUploadMessage(
+                                error instanceof Error
+                                  ? error.message
+                                  : "Could not start analysis.",
+                              );
+                            } finally {
+                              setStartingAnalysis(false);
+                            }
+                          }}
+                        >
+                          {startingAnalysis ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <ChevronRight className="size-3" />
+                          )}
+                          {startingAnalysis ? "Starting…" : "Analyze"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {matters.data?.matters.length ? (
+                    <select
+                      aria-label="Matter for upload"
+                      value={uploadMatter}
+                      onChange={(event) => {
+                        setUploadMatter(event.target.value);
+                        setUploadedDocument(null);
+                        setUploadMessage("");
+                      }}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
                     >
-                      {startingAnalysis ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <ChevronRight className="size-3" />
-                      )}
-                      {startingAnalysis ? "Starting…" : "Analyze"}
-                    </Button>
-                  </div>
+                      <option value="">Choose matter for upload</option>
+                      {matters.data.matters.map((matter) => (
+                        <option key={matter.id} value={matter.id}>
+                          {matter.matter_ref}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Upload requires an assigned matter. PDF and DOCX files are
+                      converted to searchable text during secure ingestion.
+                    </p>
+                  )}
                 </div>
               )}
-              {matters.data?.matters.length ? (
-                <select
-                  aria-label="Matter for upload"
-                  value={uploadMatter}
-                  onChange={(event) => {
-                    setUploadMatter(event.target.value);
-                    setUploadedDocument(null);
-                    setUploadMessage("");
-                  }}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                >
-                  <option value="">Choose matter for upload</option>
-                  {matters.data.matters.map((matter) => (
-                    <option key={matter.id} value={matter.id}>
-                      {matter.matter_ref}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Upload requires an assigned matter. PDF and DOCX files are
-                  converted to searchable text during secure ingestion.
+              {uploadMessage && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {uploading ? "Uploading…" : uploadMessage}
                 </p>
               )}
-            </div>
-            {uploadMessage && (
-              <p role="status" className="text-xs text-muted-foreground">
-                {uploading ? "Uploading…" : uploadMessage}
-              </p>
-            )}
-            <div className="panel space-y-3 p-4">
-              <div className="flex items-center gap-2">
-                <Printer className="size-4 text-steel" />
-                <h2 className="text-sm font-semibold">Court copy</h2>
+              <div className="panel space-y-3 p-4">
+                <div className="flex items-center gap-2">
+                  <Printer className="size-4 text-steel" />
+                  <h2 className="text-sm font-semibold">Court copy</h2>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  disabled={
+                    !selectedId ||
+                    bench !== "SmartBrief" ||
+                    analyses.data?.find(
+                      (item) => item.analysis_id === selectedId,
+                    )?.status !== "COMPLETE"
+                  }
+                  onClick={() => window.print()}
+                >
+                  <Printer className="mr-2 size-3.5" /> Print completed analysis
+                </Button>
+                <p className="text-[10px] text-muted-foreground">
+                  {membership.data?.firm_name ?? "Your firm"} · browser print
+                  layout. Select a completed analysis first.
+                </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full"
-                disabled={
-                  !selectedId ||
-                  bench !== "SmartBrief" ||
-                  analyses.data?.find((item) => item.analysis_id === selectedId)
-                    ?.status !== "COMPLETE"
-                }
-                onClick={() => window.print()}
-              >
-                <Printer className="mr-2 size-3.5" /> Print completed analysis
-              </Button>
-              <p className="text-[10px] text-muted-foreground">
-                {membership.data?.firm_name ?? "Your firm"} · browser print
-                layout. Select a completed analysis first.
-              </p>
-            </div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-              Deck{" "}
-              <span className="normal-case tracking-normal">
-                · finished / in-progress / drafts
-              </span>
-            </div>
-            {analyses.isPending ? (
-              <div className="panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Loading your
-                workbench…
+              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
+                Deck{" "}
+                <span className="normal-case tracking-normal">
+                  · finished / in-progress / drafts
+                </span>
               </div>
-            ) : analyses.isError ? (
-              <div className="panel border-destructive/40 p-4 text-sm text-destructive">
-                Could not load analyses.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {analyses.data!.length === 0 && (
-                  <div className="panel p-4 text-sm text-muted-foreground">
-                    No analyses yet. Run an analysis from a matter or vault to
-                    see it here.
-                  </div>
-                )}
-                {analyses.data!.map((a) => (
-                  <div
-                    key={a.analysis_id}
-                    className={`panel p-3 transition-all duration-200 ${selectedId === a.analysis_id ? "glow-gold border-gold/50" : "hover:border-steel/40"}`}
-                  >
-                    <button
-                      onClick={() => setSelectedId(a.analysis_id)}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">
-                          {PACK_LABEL[a.prompt_pack] ?? a.prompt_pack}
-                        </span>
-                        <StatusBadge status={a.status} />
-                      </div>
-                      <div className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
-                        {a.analysis_id.slice(0, 8)} ·{" "}
-                        {new Date(a.created_at).toLocaleDateString("en-GB")}
-                      </div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70">
-                        doc {a.document_id.slice(0, 8)}
-                      </div>
-                    </button>
-                    <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
-                      <span className="text-[10px] text-muted-foreground">
-                        {a.status === "COMPLETE"
-                          ? "Finished"
-                          : a.status === "RUNNING"
-                            ? "In progress"
-                            : "Draft / review"}
-                      </span>
-                      <details className="relative">
-                        <summary
-                          aria-label="Deck item actions"
-                          className="list-none cursor-pointer rounded-md p-1 text-muted-foreground transition-all duration-200 hover:bg-surface hover:text-foreground"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </summary>
-                        <div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-border bg-sidebar p-1 shadow-lg">
-                          <p className="px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-steel">
-                            Send to Assistant inbox
-                          </p>
-                          {threads.data?.length ? (
-                            threads.data.map((thread) => (
-                              <button
-                                type="button"
-                                key={thread.thread_id}
-                                onClick={() => {
-                                  void sendAssistantMessage(
-                                    thread.thread_id,
-                                    `Please review the referenced SmartBrief output ${a.analysis_id}.`,
-                                    {
-                                      bench: "Deck",
-                                      reference: {
-                                        type: "analysis",
-                                        id: a.analysis_id,
-                                        label:
-                                          PACK_LABEL[a.prompt_pack] ??
-                                          "SmartBrief output",
-                                      },
-                                    },
-                                  ).then(
-                                    () =>
-                                      setUploadMessage(
-                                        `Sent reference to “${thread.title}”.`,
-                                      ),
-                                    () =>
-                                      setUploadMessage(
-                                        "Could not send output reference. Please retry.",
-                                      ),
-                                  );
-                                }}
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-all duration-200 hover:bg-surface"
-                              >
-                                <Inbox className="size-3.5" />
-                                {thread.title}
-                              </button>
-                            ))
-                          ) : (
-                            <p className="px-2 py-2 text-xs text-muted-foreground">
-                              Create a thread in the Assistant first.
-                            </p>
-                          )}
-                        </div>
-                      </details>
+              {analyses.isPending ? (
+                <div className="panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Loading your
+                  workbench…
+                </div>
+              ) : analyses.isError ? (
+                <div className="panel border-destructive/40 p-4 text-sm text-destructive">
+                  Could not load analyses.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {analyses.data!.length === 0 && (
+                    <div className="panel p-4 text-sm text-muted-foreground">
+                      No analyses yet. Run an analysis from a matter or vault to
+                      see it here.
                     </div>
-                    {a.status === "COMPLETE" && (
-                      <Link
-                        to="/channels"
-                        search={{ analysis: a.analysis_id } as never}
-                        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/30 px-3 py-2 text-xs font-medium text-gold transition-all duration-200 hover:border-gold/60 hover:bg-gold/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  )}
+                  {analyses.data!.map((a) => (
+                    <div
+                      key={a.analysis_id}
+                      className={`panel p-3 transition-all duration-200 ${selectedId === a.analysis_id ? "glow-gold border-gold/50" : "hover:border-steel/40"}`}
+                    >
+                      <button
+                        onClick={() => setSelectedId(a.analysis_id)}
+                        className="w-full text-left"
                       >
-                        <MessageSquare className="size-3.5" /> Discuss this
-                        brief
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </aside>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium">
+                            {PACK_LABEL[a.prompt_pack] ?? a.prompt_pack}
+                          </span>
+                          <StatusBadge status={a.status} />
+                        </div>
+                        <div className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
+                          {a.analysis_id.slice(0, 8)} ·{" "}
+                          {new Date(a.created_at).toLocaleDateString("en-GB")}
+                        </div>
+                        <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground/70">
+                          doc {a.document_id.slice(0, 8)}
+                        </div>
+                      </button>
+                      <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          {a.status === "COMPLETE"
+                            ? "Finished"
+                            : a.status === "RUNNING"
+                              ? "In progress"
+                              : "Draft / review"}
+                        </span>
+                        <details className="relative">
+                          <summary
+                            aria-label="Deck item actions"
+                            className="list-none cursor-pointer rounded-md p-1 text-muted-foreground transition-all duration-200 hover:bg-surface hover:text-foreground"
+                          >
+                            <MoreHorizontal className="size-4" />
+                          </summary>
+                          <div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-border bg-sidebar p-1 shadow-lg">
+                            <p className="px-2 py-1 font-mono text-[9px] uppercase tracking-widest text-steel">
+                              Send to Assistant inbox
+                            </p>
+                            {threads.data?.length ? (
+                              threads.data.map((thread) => (
+                                <button
+                                  type="button"
+                                  key={thread.thread_id}
+                                  onClick={() => {
+                                    void sendAssistantMessage(
+                                      thread.thread_id,
+                                      `Please review the referenced SmartBrief output ${a.analysis_id}.`,
+                                      {
+                                        bench: "Deck",
+                                        reference: {
+                                          type: "analysis",
+                                          id: a.analysis_id,
+                                          label:
+                                            PACK_LABEL[a.prompt_pack] ??
+                                            "SmartBrief output",
+                                        },
+                                      },
+                                    ).then(
+                                      () =>
+                                        setUploadMessage(
+                                          `Sent reference to “${thread.title}”.`,
+                                        ),
+                                      () =>
+                                        setUploadMessage(
+                                          "Could not send output reference. Please retry.",
+                                        ),
+                                    );
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-all duration-200 hover:bg-surface"
+                                >
+                                  <Inbox className="size-3.5" />
+                                  {thread.title}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="px-2 py-2 text-xs text-muted-foreground">
+                                Create a thread in the Assistant first.
+                              </p>
+                            )}
+                          </div>
+                        </details>
+                      </div>
+                      {a.status === "COMPLETE" && (
+                        <Link
+                          to="/channels"
+                          search={{ analysis: a.analysis_id } as never}
+                          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gold/30 px-3 py-2 text-xs font-medium text-gold transition-all duration-200 hover:border-gold/60 hover:bg-gold/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                        >
+                          <MessageSquare className="size-3.5" /> Discuss this
+                          brief
+                        </Link>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
+          )}
           <section className="workbench-content panel min-w-0 p-5">
             <div className="print-only mb-6 border-b border-black pb-4 text-black">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em]">
@@ -531,37 +741,6 @@ function Workbench() {
                 Printed {new Date().toLocaleDateString("en-GB")}
               </p>
             </div>
-            <nav
-              aria-label="Workbench benches"
-              className="print-hide mb-5 flex gap-2 overflow-x-auto border-b border-border pb-3"
-            >
-              {(
-                [
-                  "SmartBrief",
-                  "Red-Teamer",
-                  "Deck",
-                  "Researcher",
-                  "Reviewer",
-                ] as AssistantBench[]
-              ).map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  onClick={() => {
-                    if (item === "Red-Teamer") {
-                      void navigate({ to: "/red-teamer" });
-                      return;
-                    }
-                    setBench(item);
-                    if (item !== "SmartBrief") setSelectedId(null);
-                  }}
-                  aria-current={bench === item ? "page" : undefined}
-                  className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200 ${bench === item ? "bg-gold text-background" : "text-muted-foreground hover:bg-surface hover:text-foreground"}`}
-                >
-                  {item}
-                </button>
-              ))}
-            </nav>
             {bench === "SmartBrief" && selectedId ? (
               <div className="min-h-[60vh]">
                 <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
@@ -761,30 +940,58 @@ function BenchView({
     );
   if (bench === "Red-Teamer")
     return (
-      <div className="rounded-xl border border-border bg-background/60 p-6">
+      <section className="space-y-5">
         <div className="flex items-center gap-3">
           <Swords className="size-5 text-gold" />
-          <h2 className="text-lg font-semibold">Red-Teamer</h2>
+          <div>
+            <h2 className="text-lg font-semibold">Red-Teamer</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Battle cards show the principal vulnerabilities and counterpoints
+              from the selected brief.
+            </p>
+          </div>
         </div>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          Review strategy and challenge assumptions. Open a battle card from the
-          Red-Teamer bench, then ask the Personal Assistant to probe its
-          reasoning and counter-arguments.
-        </p>
-        <Link
-          to="/red-teamer"
-          className="mt-4 inline-flex rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90"
-        >
-          Open Red-Teamer <ChevronRight className="ml-2 size-4" />
-        </Link>
-        <button
-          type="button"
-          onClick={onAssistant}
-          className="ml-3 mt-4 inline-flex rounded-lg border border-border px-4 py-2 text-sm transition-all duration-200 hover:border-gold/50"
-        >
-          Question current output
-        </button>
-      </div>
+        {analyses.length ? (
+          <section className="space-y-2">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
+              Recent analysis available to challenge
+            </h3>
+            {analyses.slice(0, 5).map((analysis) => (
+              <article
+                key={analysis.analysis_id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-4"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                    {analysis.analysis_id.slice(0, 8)} · {analysis.status}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onReview(analysis.analysis_id)}
+                  >
+                    Open output
+                  </Button>
+                  <Button type="button" size="sm" onClick={onAssistant}>
+                    Challenge with Assistant
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+            No SmartBrief outputs are available yet. Run an analysis in the
+            SmartBrief bench, then return here to challenge its reasoning.
+          </div>
+        )}
+      </section>
     );
   if (bench === "Researcher")
     return (
@@ -964,6 +1171,102 @@ function BenchView({
         Select a Deck output to open the Overview, Arguments, Similar Cases and
         Law sections.
       </p>
+    </div>
+  );
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("Could not read the brief."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function RedteamSummary({ card }: { card: BattleCard }) {
+  return (
+    <div className="space-y-4">
+      <div className="panel border-gold/30 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {card.critic_verdict.pass ? (
+              <CheckCircle2 className="size-4 text-success" />
+            ) : (
+              <ShieldAlert className="size-4 text-warning" />
+            )}
+            <h3 className="text-sm font-semibold">Battle card</h3>
+          </div>
+          <span className="font-mono text-[10px] text-muted-foreground">
+            {new Date(card.generated_at).toLocaleDateString("en-GB")}
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Matter {card.matter_id} · source {card.source_document_id.slice(0, 8)}
+          {" · "}
+          {card.critic_verdict.pass
+            ? "Critic checks passed"
+            : "Manual review recommended"}
+        </p>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="panel space-y-3 p-5">
+          <h4 className="flex items-center gap-2 font-semibold">
+            <FileWarning className="size-4 text-warning" /> Procedural flaws
+          </h4>
+          {card.sections.procedural_flaws.length ? (
+            card.sections.procedural_flaws.map((flaw) => (
+              <article
+                key={flaw.flaw}
+                className="rounded-lg border border-border p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
+                  {flaw.flaw}
+                  <span className="font-mono text-[10px] text-warning">
+                    {flaw.severity} · {Math.round(flaw.confidence * 100)}%
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {flaw.basis}
+                </p>
+                <AuthorityChips authority={flaw.authority} />
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No procedural flaws were returned.
+            </p>
+          )}
+        </section>
+        <section className="panel space-y-3 p-5">
+          <h4 className="font-semibold">Opposing arguments</h4>
+          {card.sections.opposing_arguments.length ? (
+            card.sections.opposing_arguments.map((argument) => (
+              <article
+                key={argument.argument}
+                className="rounded-lg border border-border p-3"
+              >
+                <p className="text-sm font-medium">{argument.argument}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Our counter: {argument.our_counter}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[10px] text-steel">
+                  Strength {argument.strength}/10 · confidence{" "}
+                  {Math.round(argument.confidence * 100)}%
+                  {argument.manual_review && (
+                    <span className="text-warning">Manual review</span>
+                  )}
+                </div>
+                <AuthorityChips authority={argument.authority} />
+              </article>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No opposing arguments were returned.
+            </p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
