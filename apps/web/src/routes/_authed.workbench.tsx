@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Swords,
@@ -16,6 +16,8 @@ import {
   ChevronRight,
   Printer,
   MessageSquare,
+  Send,
+  FileWarning,
 } from "lucide-react";
 import { useIdentity } from "@/lib/identity";
 import { AnalysisSectionCard } from "@/components/assistant/AnalysisSectionCard";
@@ -35,9 +37,16 @@ import type { Analysis, PromptPack } from "@/lib/api/workbench";
 import type { AssistantBench } from "@/lib/api/assistantContext";
 import { useCourtDiaryEntries } from "@/lib/api/court-diary";
 import { useMembership } from "@/lib/api/members";
-import { sendAssistantMessage, useThreads } from "@/lib/api/collaboration";
+import {
+  sendAssistantMessage,
+  useChannels,
+  useSendMessage,
+  useThreads,
+} from "@/lib/api/collaboration";
 import { useVaultQuery } from "@/lib/api/query";
 import type { Citation, QueryResponse } from "@/lib/api/types";
+import { useBattleCard } from "@/lib/api/redteam";
+import type { BattleCard } from "@/lib/api/redteam";
 
 export const Route = createFileRoute("/_authed/workbench")({
   head: () => ({
@@ -108,6 +117,7 @@ function Workbench() {
   const identity = useIdentity();
   const membership = useMembership();
   const threads = useThreads();
+  const channels = useChannels();
   const matters = useQuery({
     queryKey: ["matters", "my"],
     queryFn: () =>
@@ -129,6 +139,42 @@ function Workbench() {
   const [startingAnalysis, setStartingAnalysis] = useState(false);
   const [analysisPack, setAnalysisPack] =
     useState<PromptPack>("ADVERSAL_BRIEF");
+  const [deckStatus, setDeckStatus] = useState("ALL");
+  const [teamChannelId, setTeamChannelId] = useState("");
+  const [deckNotice, setDeckNotice] = useState("");
+  const [opposingBrief, setOpposingBrief] = useState<File | null>(null);
+  const [redteamNotice, setRedteamNotice] = useState("");
+  const redteamFileInput = useRef<HTMLInputElement>(null);
+  const battleCard = useBattleCard();
+  const sendToTeam = useSendMessage(teamChannelId);
+  const selectedOutput = useAnalysis(selectedId);
+  const [courtCopyId, setCourtCopyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const requestedBench = sessionStorage.getItem("redcase:workbench-bench");
+    if (
+      requestedBench &&
+      ["SmartBrief", "Red-Teamer", "Deck", "Researcher", "Reviewer"].includes(
+        requestedBench,
+      )
+    ) {
+      setBench(requestedBench as AssistantBench);
+      sessionStorage.removeItem("redcase:workbench-bench");
+    }
+    const selectBench = (event: Event) => {
+      const nextBench = (event as CustomEvent<string>).detail as AssistantBench;
+      if (
+        ["SmartBrief", "Red-Teamer", "Deck", "Researcher", "Reviewer"].includes(
+          nextBench,
+        )
+      ) {
+        setBench(nextBench);
+      }
+    };
+    window.addEventListener("redcase:workbench-bench", selectBench);
+    return () =>
+      window.removeEventListener("redcase:workbench-bench", selectBench);
+  }, []);
 
   useEffect(() => {
     const requestedMatter = sessionStorage.getItem("redcase:workbench-matter");
@@ -142,6 +188,61 @@ function Workbench() {
     sessionStorage.removeItem("redcase:workbench-matter");
   }, [matters.data]);
 
+  useEffect(() => {
+    if (
+      !courtCopyId ||
+      courtCopyId !== selectedId ||
+      bench !== "SmartBrief" ||
+      selectedOutput.data?.status !== "COMPLETE"
+    )
+      return;
+    const timeout = window.setTimeout(() => {
+      window.print();
+      setCourtCopyId(null);
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [bench, courtCopyId, selectedId, selectedOutput.data?.status]);
+
+  function openCourtCopy(analysis: Analysis) {
+    if (analysis.status !== "COMPLETE") return;
+    setSelectedId(analysis.analysis_id);
+    setBench("SmartBrief");
+    setCourtCopyId(analysis.analysis_id);
+  }
+
+  function askAssistantAboutSelectedAnalysis() {
+    if (selectedAnalysis?.status !== "COMPLETE") return;
+    window.dispatchEvent(
+      new CustomEvent("redcase:assistant-message", {
+        detail: {
+          message: `Review my selected SmartBrief analysis ${selectedAnalysis.analysis_id} in the context of this opposing-brief review. Identify weaknesses, counterarguments, and authorities that need verification.`,
+        },
+      }),
+    );
+  }
+
+  async function shareSelectedWithTeam() {
+    if (!selectedAnalysis || selectedAnalysis.status !== "COMPLETE") return;
+    if (!teamChannelId) {
+      setDeckNotice("Choose a team channel before sharing this output.");
+      return;
+    }
+    try {
+      await sendToTeam.mutateAsync({
+        body: `Completed ${PACK_LABEL[selectedAnalysis.prompt_pack] ?? selectedAnalysis.prompt_pack} output · ${selectedAnalysis.analysis_id}`,
+        analysis_id: selectedAnalysis.analysis_id,
+        document_id: selectedAnalysis.document_id,
+      });
+      setDeckNotice("Completed output reference sent to the selected channel.");
+    } catch (error) {
+      setDeckNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not send output to the team.",
+      );
+    }
+  }
+
   const coachSteps: CoachStep[] = [
     {
       title: "Upload a document to begin",
@@ -154,38 +255,6 @@ function Workbench() {
     {
       title: "Verify every claim",
       body: "Check the Critic verdict, per-section confidence, and pinned authorities before you rely on anything. Nothing is invented.",
-    },
-  ];
-
-  const benches: Array<{
-    id: AssistantBench;
-    description: string;
-    icon: typeof LayoutDashboard;
-  }> = [
-    {
-      id: "SmartBrief",
-      description: "Draft and inspect structured legal analysis",
-      icon: LayoutDashboard,
-    },
-    {
-      id: "Red-Teamer",
-      description: "Challenge arguments and expose weaknesses",
-      icon: Swords,
-    },
-    {
-      id: "Deck",
-      description: "Track analyses by workflow state",
-      icon: Inbox,
-    },
-    {
-      id: "Researcher",
-      description: "Search permitted legal sources",
-      icon: Scale,
-    },
-    {
-      id: "Reviewer",
-      description: "Review flagged work and court dates",
-      icon: Gavel,
     },
   ];
 
@@ -205,42 +274,11 @@ function Workbench() {
   return (
     <AppShell
       eyebrow={`${membership.data?.full_name ?? identity.name}${membership.data?.role ? ` · ${membership.data.role}` : ""}`}
-      title="Legal Workbench"
+      title={`${bench} · Workbench`}
       assistantContext={{
         bench,
         ...(assistantReference ? { reference: assistantReference } : {}),
       }}
-      sidebarContent={
-        <div className="space-y-2">
-          <p className="px-2 font-mono text-[9px] uppercase tracking-[0.2em] text-steel">
-            Workbench benches
-          </p>
-          <nav aria-label="Workbench benches" className="space-y-1">
-            {benches.map(({ id, description, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setBench(id);
-                  if (id !== "SmartBrief") setSelectedId(null);
-                }}
-                aria-current={bench === id ? "page" : undefined}
-                className={`group flex w-full items-start gap-3 rounded-lg border-l-2 px-3 py-3 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold ${bench === id ? "border-primary bg-[#f3e8c8]/[0.08] text-[#f3e8c8]" : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-foreground"}`}
-              >
-                <Icon
-                  className={`mt-0.5 size-4 shrink-0 ${bench === id ? "text-primary" : "text-steel group-hover:text-primary"}`}
-                />
-                <span>
-                  <span className="block text-sm">{id}</span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {description}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </nav>
-        </div>
-      }
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
@@ -256,69 +294,102 @@ function Workbench() {
             {bench}
           </span>
         </nav>
-        <nav
-          aria-label="Workbench benches"
-          className="flex gap-2 overflow-x-auto pb-1 lg:hidden"
-        >
-          {benches.map(({ id }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setBench(id);
-                if (id !== "SmartBrief") setSelectedId(null);
-              }}
-              aria-current={bench === id ? "page" : undefined}
-              className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${bench === id ? "border-gold/50 bg-gold/10 text-gold" : "border-border text-muted-foreground hover:border-gold/40 hover:text-foreground"}`}
-            >
-              {id}
-            </button>
-          ))}
-        </nav>
         <div className="print-hide flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/60 p-3">
           <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.2em] text-steel">
             {bench} tools
           </span>
           {bench === "SmartBrief" ? (
+            <span className="text-xs text-muted-foreground">
+              Overview · Arguments · Similar Cases · Law — sections of the
+              selected output
+            </span>
+          ) : bench === "Deck" ? (
             <>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() =>
-                  document
-                    .getElementById("workbench-source")
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                }
+              <label className="sr-only" htmlFor="deck-status-filter">
+                Filter deck by status
+              </label>
+              <select
+                id="deck-status-filter"
+                value={deckStatus}
+                onChange={(event) => setDeckStatus(event.target.value)}
+                className="rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
               >
-                <Upload className="mr-1.5 size-3.5" /> Upload source
-              </Button>
+                <option value="ALL">All statuses</option>
+                <option value="COMPLETE">Finished</option>
+                <option value="RUNNING">In progress</option>
+                <option value="DRAFT">Drafts</option>
+                <option value="NEEDS_REVIEW">Needs review</option>
+                <option value="FAILED">Failed</option>
+              </select>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 disabled={
-                  !selectedId || selectedAnalysis?.status !== "COMPLETE"
+                  !selectedAnalysis ||
+                  selectedAnalysis.status !== "COMPLETE" ||
+                  selectedOutput.isFetching
                 }
-                onClick={() => window.print()}
+                onClick={() =>
+                  selectedAnalysis && openCourtCopy(selectedAnalysis)
+                }
               >
-                <Printer className="mr-1.5 size-3.5" /> Print completed output
+                <Printer className="mr-1.5 size-3.5" /> Court Copy
+              </Button>
+              <label className="sr-only" htmlFor="deck-team-channel">
+                Team channel
+              </label>
+              <select
+                id="deck-team-channel"
+                value={teamChannelId}
+                onChange={(event) => setTeamChannelId(event.target.value)}
+                className="min-w-36 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
+              >
+                <option value="">Choose team channel</option>
+                {(channels.data ?? []).map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                size="sm"
+                disabled={
+                  !selectedAnalysis ||
+                  selectedAnalysis.status !== "COMPLETE" ||
+                  !teamChannelId ||
+                  sendToTeam.isPending
+                }
+                onClick={() => void shareSelectedWithTeam()}
+              >
+                {sendToTeam.isPending ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <Send className="mr-1.5 size-3.5" />
+                )}
+                Send to team
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={analyses.isFetching}
+                onClick={() => void analyses.refetch()}
+              >
+                {analyses.isFetching ? (
+                  <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                ) : (
+                  <GitBranch className="mr-1.5 size-3.5" />
+                )}
+                Refresh
               </Button>
             </>
-          ) : bench === "Deck" ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={analyses.isFetching}
-              onClick={() => void analyses.refetch()}
-            >
-              {analyses.isFetching ? (
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
-              ) : (
-                <GitBranch className="mr-1.5 size-3.5" />
-              )}
-              Refresh analyses
-            </Button>
+          ) : bench === "Red-Teamer" ? (
+            <span className="text-xs text-muted-foreground">
+              Flaws · Opposing arguments · Counters · Authorities · Probe with
+              assistant
+            </span>
           ) : bench === "Researcher" ? (
             <span className="text-xs text-muted-foreground">
               Vault Search and verified citations
@@ -333,28 +404,106 @@ function Workbench() {
             </span>
           )}
         </div>
+        {bench === "Deck" && deckNotice && (
+          <p role="status" className="print-hide text-sm text-muted-foreground">
+            {deckNotice}
+          </p>
+        )}
         <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-          {bench !== "SmartBrief" && (
+          {bench !== "SmartBrief" && bench !== "Deck" && (
             <aside className="workbench-tools space-y-3 print-hide">
               {bench === "Red-Teamer" ? (
-                <div className="panel space-y-2 p-4">
-                  <h2 className="text-sm font-semibold">Red-Teamer tools</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Challenge completed arguments and ask the Assistant to test
-                    their assumptions.
-                  </p>
+                <div className="panel space-y-3 p-4">
+                  <div>
+                    <h2 className="text-sm font-semibold">Opposing brief</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Upload a PDF or DOCX to generate a battle card of flaws,
+                      arguments, counters, and authorities.
+                    </p>
+                  </div>
+                  <input
+                    ref={redteamFileInput}
+                    type="file"
+                    accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      if (file && !/\.(pdf|docx)$/i.test(file.name)) {
+                        setOpposingBrief(null);
+                        setRedteamNotice(
+                          "Choose a PDF or DOCX opposing brief.",
+                        );
+                        event.currentTarget.value = "";
+                        return;
+                      }
+                      if (file && file.size > 20 * 1024 * 1024) {
+                        setOpposingBrief(null);
+                        setRedteamNotice(
+                          "The opposing brief must be 20 MB or smaller.",
+                        );
+                        event.currentTarget.value = "";
+                        return;
+                      }
+                      setOpposingBrief(file);
+                      setRedteamNotice(
+                        file ? `${file.name} ready for review.` : "",
+                      );
+                      battleCard.reset();
+                      event.currentTarget.value = "";
+                    }}
+                  />
                   <Button
                     type="button"
-                    size="sm"
                     variant="outline"
                     className="w-full"
-                    disabled={!assistantReference}
-                    onClick={() =>
-                      window.dispatchEvent(new Event("redcase:assistant-open"))
-                    }
+                    onClick={() => redteamFileInput.current?.click()}
                   >
-                    Challenge selected output
+                    <Upload className="mr-2 size-4" />{" "}
+                    {opposingBrief?.name ?? "Choose opposing brief"}
                   </Button>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={!opposingBrief || battleCard.isPending}
+                    onClick={async () => {
+                      if (!opposingBrief) return;
+                      setRedteamNotice("");
+                      try {
+                        await battleCard.mutateAsync({
+                          document_name: opposingBrief.name,
+                          content_base64: await readFileAsBase64(opposingBrief),
+                        });
+                        setRedteamNotice(
+                          "Battle card generated. Review every finding before relying on it.",
+                        );
+                      } catch (error) {
+                        setRedteamNotice(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not analyze the opposing brief.",
+                        );
+                      }
+                    }}
+                  >
+                    {battleCard.isPending ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <Swords className="mr-2 size-4" />
+                    )}
+                    {battleCard.isPending
+                      ? "Analyzing brief…"
+                      : "Generate battle card"}
+                  </Button>
+                  {redteamNotice && (
+                    <p role="status" className="text-xs text-muted-foreground">
+                      {redteamNotice}
+                    </p>
+                  )}
+                  {battleCard.isError && (
+                    <p role="alert" className="text-xs text-destructive">
+                      {battleCard.error.message}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="panel space-y-2 p-4">
@@ -362,22 +511,8 @@ function Workbench() {
                   <p className="text-xs text-muted-foreground">
                     {bench === "Researcher"
                       ? "Search your permitted legal sources and review verified citations."
-                      : bench === "Reviewer"
-                        ? "Review analyses flagged for human attention and upcoming court dates."
-                        : "Track analyses by workflow state and open completed output."}
+                      : "Review analyses flagged for human attention and upcoming court dates."}
                   </p>
-                  {bench === "Deck" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      disabled={analyses.isFetching}
-                      onClick={() => void analyses.refetch()}
-                    >
-                      Refresh analyses
-                    </Button>
-                  )}
                 </div>
               )}
             </aside>
@@ -576,32 +711,6 @@ function Workbench() {
                   {uploading ? "Uploading…" : uploadMessage}
                 </p>
               )}
-              <div className="panel space-y-3 p-4">
-                <div className="flex items-center gap-2">
-                  <Printer className="size-4 text-steel" />
-                  <h2 className="text-sm font-semibold">Court copy</h2>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  disabled={
-                    !selectedId ||
-                    bench !== "SmartBrief" ||
-                    analyses.data?.find(
-                      (item) => item.analysis_id === selectedId,
-                    )?.status !== "COMPLETE"
-                  }
-                  onClick={() => window.print()}
-                >
-                  <Printer className="mr-2 size-3.5" /> Print completed analysis
-                </Button>
-                <p className="text-[10px] text-muted-foreground">
-                  {membership.data?.firm_name ?? "Your firm"} · browser print
-                  layout. Select a completed analysis first.
-                </p>
-              </div>
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
                 Deck{" "}
                 <span className="normal-case tracking-normal">
@@ -728,9 +837,9 @@ function Workbench() {
             </aside>
           )}
           <section className="workbench-content panel min-w-0 p-5">
-            <div className="print-only mb-6 border-b border-black pb-4 text-black">
+            <div className="print-only mb-6 border-b-2 border-black pb-4 text-black">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em]">
-                {membership.data?.firm_name ?? "RedCase"}
+                {membership.data?.firm_name ?? "RedCase"} · Legal Practitioners
               </p>
               <h1 className="mt-2 text-2xl font-semibold">
                 {selectedId
@@ -738,7 +847,10 @@ function Workbench() {
                   : "Legal analysis"}
               </h1>
               <p className="mt-1 text-sm">
-                Printed {new Date().toLocaleDateString("en-GB")}
+                Court Copy · Printed {new Date().toLocaleDateString("en-GB")}
+              </p>
+              <p className="mt-3 inline-block border border-black px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-widest">
+                Counsel review copy · Not filed
               </p>
             </div>
             {bench === "SmartBrief" && selectedId ? (
@@ -751,10 +863,66 @@ function Workbench() {
                 </div>
                 <AnalysisWorkspace id={selectedId} />
               </div>
+            ) : bench === "Red-Teamer" && battleCard.data ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      Opposing brief review
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Battle card findings are advisory; verify every authority
+                      and proposition.
+                    </p>
+                  </div>
+                  {selectedAnalysis?.status === "COMPLETE" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={askAssistantAboutSelectedAnalysis}
+                    >
+                      <MessageSquare className="mr-2 size-4" /> Ask Assistant
+                      about selected SmartBrief
+                    </Button>
+                  )}
+                </div>
+                <RedteamSummary card={battleCard.data} />
+              </div>
+            ) : bench === "Red-Teamer" ? (
+              <div className="panel flex min-h-[50vh] flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+                <FileWarning className="size-9 text-steel" />
+                <h2 className="text-lg font-semibold">
+                  Challenge the opposing case
+                </h2>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  Choose an opposing brief from the Red-Teamer panel. Its battle
+                  card will appear here alongside your selected SmartBrief
+                  analysis context.
+                </p>
+                {selectedAnalysis?.status === "COMPLETE" && (
+                  <p className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2 text-xs text-gold">
+                    Selected SmartBrief:{" "}
+                    {PACK_LABEL[selectedAnalysis.prompt_pack] ??
+                      selectedAnalysis.prompt_pack}{" "}
+                    · {selectedAnalysis.analysis_id.slice(0, 8)}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={askAssistantAboutSelectedAnalysis}
+                  disabled={selectedAnalysis?.status !== "COMPLETE"}
+                >
+                  <MessageSquare className="mr-2 size-4" /> Ask Assistant about
+                  this analysis
+                </Button>
+              </div>
             ) : (
               <BenchView
                 bench={bench}
                 analyses={analyses.data ?? []}
+                deckStatus={deckStatus}
                 diary={diary.data ?? []}
                 threads={threads.data ?? []}
                 onSendToInbox={(analysis, threadId) => {
@@ -786,14 +954,12 @@ function Workbench() {
                 }}
                 onSelect={(id) => {
                   setSelectedId(id);
-                  setBench("SmartBrief");
                 }}
                 onAssistant={() =>
                   window.dispatchEvent(new Event("redcase:assistant-open"))
                 }
                 onReview={(id) => {
                   setSelectedId(id);
-                  setBench("SmartBrief");
                 }}
               />
             )}
@@ -807,6 +973,7 @@ function Workbench() {
 function BenchView({
   bench,
   analyses,
+  deckStatus,
   diary,
   threads,
   onSelect,
@@ -816,6 +983,7 @@ function BenchView({
 }: {
   bench: string;
   analyses: Analysis[];
+  deckStatus: string;
   threads: Array<{ thread_id: string; title: string }>;
   diary: Array<{
     id: string;
@@ -833,6 +1001,10 @@ function BenchView({
   const [researchQuestion, setResearchQuestion] = useState("");
   const [researchNotice, setResearchNotice] = useState("");
   const [activeResearchQuestion, setActiveResearchQuestion] = useState("");
+  const deckAnalyses =
+    deckStatus === "ALL"
+      ? analyses
+      : analyses.filter((analysis) => analysis.status === deckStatus);
   if (bench === "Deck")
     return (
       <div className="space-y-3">
@@ -846,23 +1018,23 @@ function BenchView({
         {[
           {
             title: "Drafts",
-            rows: analyses.filter((item) => item.status === "DRAFT"),
+            rows: deckAnalyses.filter((item) => item.status === "DRAFT"),
           },
           {
             title: "In progress",
-            rows: analyses.filter((item) => item.status === "RUNNING"),
+            rows: deckAnalyses.filter((item) => item.status === "RUNNING"),
           },
           {
             title: "Ready for review",
-            rows: analyses.filter((item) => item.status === "NEEDS_REVIEW"),
+            rows: deckAnalyses.filter((item) => item.status === "NEEDS_REVIEW"),
           },
           {
             title: "Completed",
-            rows: analyses.filter((item) => item.status === "COMPLETE"),
+            rows: deckAnalyses.filter((item) => item.status === "COMPLETE"),
           },
           {
             title: "Could not complete",
-            rows: analyses.filter((item) => item.status === "FAILED"),
+            rows: deckAnalyses.filter((item) => item.status === "FAILED"),
           },
         ].map((group) => (
           <section key={group.title} className="space-y-2">

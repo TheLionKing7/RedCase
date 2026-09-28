@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Circle,
   CircleHelp,
+  Gavel,
   Home,
   Landmark,
   MessageSquare,
@@ -127,12 +128,24 @@ const PANELS: Record<string, Item[]> = {
       label: "Red-Teamer",
       detail: "Adversarial strategy review",
       icon: ShieldAlert,
-      to: "/red-teamer",
+      to: "/workbench",
     },
     {
-      label: "My analyses",
-      detail: "Recent work product",
+      label: "Deck",
+      detail: "Analysis workflow and outputs",
       icon: BookOpen,
+      to: "/workbench",
+    },
+    {
+      label: "Researcher",
+      detail: "Search permitted legal sources",
+      icon: Landmark,
+      to: "/workbench",
+    },
+    {
+      label: "Reviewer",
+      detail: "Review flagged work and court dates",
+      icon: Gavel,
       to: "/workbench",
     },
   ],
@@ -305,11 +318,14 @@ export function AppShell({
           ? "Messenger"
           : pathname.startsWith("/threads")
             ? "Messenger"
-            : (RAIL.find(
-                (item) =>
-                  item.to &&
-                  (pathname === item.to || pathname.startsWith(`${item.to}/`)),
-              )?.label ?? "Home");
+            : pathname.startsWith("/red-teamer")
+              ? "Workbench"
+              : (RAIL.find(
+                  (item) =>
+                    item.to &&
+                    (pathname === item.to ||
+                      pathname.startsWith(`${item.to}/`)),
+                )?.label ?? "Home");
   const [activeRail, setActiveRail] = useState(current);
   const [homeView, setHomeView] = useState("Inbox");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -324,7 +340,15 @@ export function AppShell({
   useEffect(() => {
     const selectHomeView = (event: Event) => {
       const label = (event as CustomEvent<string>).detail;
-      if (["Inbox", "Today", "Time logger", "My matters", "My deadlines"].includes(label)) {
+      if (
+        [
+          "Inbox",
+          "Today",
+          "Time logger",
+          "My matters",
+          "My deadlines",
+        ].includes(label)
+      ) {
         setHomeView(label);
       }
     };
@@ -359,9 +383,15 @@ export function AppShell({
   const activeItem =
     visibleRail.find((item) => item.label === activeRail) ?? visibleRail[0];
   const panelItems = PANELS[activeItem?.label ?? "Home"] ?? [];
+  const pathnameBench =
+    assistantContext?.bench ??
+    (pathname.startsWith("/red-teamer") ? "Red-Teamer" : undefined);
   const selectedPanelItem =
     (activeItem?.label === "Home"
       ? panelItems.find((item) => item.label === homeView)
+      : undefined) ??
+    (activeItem?.label === "Workbench" && pathname.startsWith("/workbench")
+      ? panelItems.find((item) => item.label === pathnameBench)
       : undefined) ??
     panelItems.find((item) => item.to === pathname) ??
     panelItems.find((item) => item.to && pathname.startsWith(`${item.to}/`));
@@ -488,6 +518,16 @@ export function AppShell({
                             detail: item.label,
                           }),
                         );
+                      } else if (activeItem?.label === "Workbench") {
+                        sessionStorage.setItem(
+                          "redcase:workbench-bench",
+                          item.label,
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent("redcase:workbench-bench", {
+                            detail: item.label,
+                          }),
+                        );
                       }
                     }}
                     className={cls}
@@ -516,7 +556,9 @@ export function AppShell({
                 );
               })}
             </nav>
-            {(activeItem?.label === "Home" || activeItem?.label === "Workbench") && sidebarContent ? (
+            {(activeItem?.label === "Home" ||
+              activeItem?.label === "Workbench") &&
+            sidebarContent ? (
               <div className="mt-5 border-t border-sidebar-border px-2 pt-5">
                 {sidebarContent}
               </div>
@@ -592,6 +634,38 @@ export function AppShell({
                 </Link>
               ))}
           </nav>
+          {pathname.startsWith("/workbench") && assistantContext && (
+            <nav
+              aria-label="Workbench benches"
+              className="mt-3 flex gap-2 overflow-x-auto border-t border-border pt-3 lg:hidden"
+            >
+              {(PANELS["Workbench"] ?? []).map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() =>
+                    (() => {
+                      sessionStorage.setItem(
+                        "redcase:workbench-bench",
+                        item.label,
+                      );
+                      window.dispatchEvent(
+                        new CustomEvent("redcase:workbench-bench", {
+                          detail: item.label,
+                        }),
+                      );
+                    })()
+                  }
+                  aria-current={
+                    assistantContext.bench === item.label ? "page" : undefined
+                  }
+                  className={`shrink-0 rounded-lg border px-3 py-2 text-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${assistantContext.bench === item.label ? "border-gold/50 bg-gold/10 text-gold" : "border-border text-muted-foreground hover:border-gold/40 hover:text-foreground"}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          )}
         </header>
         <main
           className={`flex-1 px-5 py-8 pb-24 transition-all duration-200 lg:px-8 ${compact ? "lg:py-5" : ""}`}

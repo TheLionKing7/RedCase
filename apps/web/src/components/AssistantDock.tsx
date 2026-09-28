@@ -55,10 +55,18 @@ export function AssistantDock({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const value = message.trim();
-    if (!value || !activeId || sending) return;
+    if (!value || sending) return;
     setSending(true);
     try {
-      setReply(await sendAssistantMessage(activeId, value, context));
+      let threadId = activeId;
+      if (!threadId) {
+        const thread = await create.mutateAsync(
+          `${context.bench} · ${value.slice(0, 72)}`,
+        );
+        threadId = thread.thread_id;
+        setSelectedId(threadId);
+      }
+      setReply(await sendAssistantMessage(threadId, value, context));
       await selectedThread.refetch();
       setMessage("");
     } finally {
@@ -66,7 +74,7 @@ export function AssistantDock({
     }
   };
   const startThread = () =>
-    create.mutate("Assistant dock", {
+    create.mutate(`${context.bench} · Assistant thread`, {
       onSuccess: (thread) => setSelectedId(thread.thread_id),
     });
   const contextLabel = `${context.bench}${context.reference ? ` · ${context.reference.label}` : ""}`;
@@ -269,15 +277,15 @@ export function AssistantDock({
               placeholder={
                 activeId
                   ? `Ask about ${contextLabel}…`
-                  : "Create a thread to begin"
+                  : `Ask about ${contextLabel}…`
               }
               aria-label="Assistant message"
-              disabled={!activeId || sending}
+              disabled={sending}
               className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
             />
             <Button
               type="submit"
-              disabled={!activeId || sending || !message.trim()}
+              disabled={sending || !message.trim()}
               aria-label="Send assistant message"
             >
               <Send className="size-4" />
