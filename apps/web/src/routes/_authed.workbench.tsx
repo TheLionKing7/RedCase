@@ -1216,7 +1216,11 @@ function BenchView({
                 {PACK_LABEL[selectedDeckAnalysis.prompt_pack] ??
                   selectedDeckAnalysis.prompt_pack}
               </h3>
-              <AnalysisWorkspace id={selectedDeckAnalysis.analysis_id} tab={deckTab} />
+              <AnalysisWorkspace
+                id={selectedDeckAnalysis.analysis_id}
+                tab={deckTab}
+                reviewerMode
+              />
             </>
           ) : (
             <EmptyToolState>
