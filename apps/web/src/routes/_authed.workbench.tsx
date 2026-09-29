@@ -292,20 +292,8 @@ function Workbench() {
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
-        >
-          <span>Workbench</span>
-          <ChevronRight className="size-3" aria-hidden="true" />
-          <span aria-current="page" className="text-gold">
-            {bench}
-          </span>
-        </nav>
-        <div className="print-hide flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/60 p-3">
-          <span className="mr-1 font-mono text-[9px] uppercase tracking-[0.2em] text-steel">
-            {bench} tools
-          </span>
+        <div className="print-hide sticky top-[6.25rem] z-20 -mx-5 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl lg:-mx-8 lg:px-8">
+          <span aria-hidden="true" className="px-1 font-mono text-sm text-steel">|</span>
           {bench === "SmartBrief" ? (
             <ToolMenu
               label="SmartBrief sections"
