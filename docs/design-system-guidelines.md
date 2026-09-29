@@ -109,3 +109,6 @@ Sentence case; active voice; controls say exactly what they do ("Run Query"). Th
 3. Mock data is prohibited in committed code; development uses the typed dev adapters gated on `VITE_API_DEV_ADAPTER=1`.
 4. Prompt/grounding copy (`GROUNDED_SYSTEM`) is contract text — rewording requires the 50-question battery re-run.
 5. Every visual change is verified by screenshot before commit (headless Chrome is sufficient) and must keep typecheck + eslint + build green.
+
+# Workbench Navigation System
+Input left, output right, tools atop the output frame, header static
