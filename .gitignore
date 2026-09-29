@@ -41,6 +41,13 @@ dist/
 # Build / dev artifacts
 *.log
 *.png
+scratch/
+out.txt
+build.txt
+dev.err.txt
+dev.out.txt
+web-dev.err
+pytest-version.txt
 
 !apps/web/.env.example
 
