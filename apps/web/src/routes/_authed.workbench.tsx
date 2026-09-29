@@ -1575,16 +1575,6 @@ function BenchView({
             aria-label="Contract review output"
             className="panel min-w-0 space-y-4 p-4 sm:p-5"
           >
-            <ToolMenu
-              label="Reviewer output sections"
-              items={[
-                { id: "overview", label: "Overview" },
-                { id: "arguments", label: "Clauses & risks" },
-                { id: "law", label: "Authorities" },
-              ]}
-              active={reviewerTab}
-              onSelect={(id) => onReviewerTabChange(id as ReviewerTab)}
-            />
             {activeReviewId ? (
               <AnalysisWorkspace
                 id={activeReviewId}
