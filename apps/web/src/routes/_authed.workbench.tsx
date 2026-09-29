@@ -231,6 +231,26 @@ function Workbench() {
     );
   }
 
+  function probeBattleCardWithAssistant() {
+    if (!battleCard.data) return;
+    window.dispatchEvent(
+      new CustomEvent("redcase:assistant-message", {
+        detail: {
+          message:
+            "Probe this Red-Teamer battle card: challenge its procedural flaws and opposing arguments, test the counters, and verify its authorities.",
+          context: {
+            bench: "Red-Teamer",
+            output: {
+              type: "battle_card",
+              label: `Battle card · ${battleCard.data.source_document_id.slice(0, 8)}`,
+              content: JSON.stringify(battleCard.data),
+            },
+          },
+        },
+      }),
+    );
+  }
+
   async function shareSelectedWithTeam() {
     if (!selectedAnalysis || selectedAnalysis.status !== "COMPLETE") return;
     if (!teamChannelId) {
@@ -915,7 +935,7 @@ function Workbench() {
                 <RedteamSummary
                   card={battleCard.data}
                   tab={redteamTab}
-                  onProbe={askAssistantAboutSelectedAnalysis}
+                  onProbe={probeBattleCardWithAssistant}
                 />
               </div>
             ) : bench === "Red-Teamer" ? (
