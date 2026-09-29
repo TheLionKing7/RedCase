@@ -150,6 +150,7 @@ function Workbench() {
   const [analysisPack, setAnalysisPack] =
     useState<PromptPack>("ADVERSAL_BRIEF");
   const [deckStatus, setDeckStatus] = useState("ALL");
+  const [deckTab, setDeckTab] = useState<WorkbenchTab>("overview");
   const [teamChannelId, setTeamChannelId] = useState("");
   const [deckNotice, setDeckNotice] = useState("");
   const [opposingBrief, setOpposingBrief] = useState<File | null>(null);
@@ -328,6 +329,17 @@ function Workbench() {
             />
           ) : bench === "Deck" ? (
             <>
+              <ToolMenu
+                label="Deck output sections"
+                items={[
+                  { id: "overview", label: "Overview" },
+                  { id: "arguments", label: "Arguments" },
+                  { id: "similar", label: "Similar Cases" },
+                  { id: "law", label: "Law" },
+                ]}
+                active={deckTab}
+                onSelect={(id) => setDeckTab(id as WorkbenchTab)}
+              />
               <label className="sr-only" htmlFor="deck-status-filter">
                 Filter deck by status
               </label>
@@ -972,6 +984,8 @@ function Workbench() {
                 bench={bench}
                 analyses={analyses.data ?? []}
                 deckStatus={deckStatus}
+                selectedId={selectedId}
+                deckTab={deckTab}
                 researchTab={researchTab}
                 reviewerTab={reviewerTab}
                 reviewerSpecialty={persona.data?.reviewer_specialty ?? null}
@@ -1028,6 +1042,8 @@ function BenchView({
   bench,
   analyses,
   deckStatus,
+  selectedId,
+  deckTab,
   researchTab,
   reviewerTab,
   reviewerSpecialty,
@@ -1043,6 +1059,8 @@ function BenchView({
   bench: string;
   analyses: Analysis[];
   deckStatus: string;
+  selectedId: string | null;
+  deckTab: WorkbenchTab;
   researchTab: ResearchTab;
   reviewerTab: ReviewerTab;
   reviewerSpecialty: string | null;
@@ -1074,6 +1092,8 @@ function BenchView({
     deckStatus === "ALL"
       ? analyses
       : analyses.filter((analysis) => analysis.status === deckStatus);
+  const selectedDeckAnalysis =
+    analyses.find((analysis) => analysis.analysis_id === selectedId) ?? null;
   const reviewQueue = analyses.filter(
     (analysis) => analysis.prompt_pack === "CONTRACT_REVIEW",
   );
@@ -1185,6 +1205,21 @@ function BenchView({
             ))}
           </section>
         ))}
+        <section aria-label="Selected deck output" className="panel space-y-4 p-4 sm:p-5">
+          {selectedDeckAnalysis ? (
+            <>
+              <h3 className="text-sm font-semibold">
+                {PACK_LABEL[selectedDeckAnalysis.prompt_pack] ??
+                  selectedDeckAnalysis.prompt_pack}
+              </h3>
+              <AnalysisWorkspace id={selectedDeckAnalysis.analysis_id} tab={deckTab} />
+            </>
+          ) : (
+            <EmptyToolState>
+              Choose a Deck item to inspect its output sections.
+            </EmptyToolState>
+          )}
+        </section>
       </div>
     );
   if (bench === "Red-Teamer")
