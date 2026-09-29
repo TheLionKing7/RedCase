@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Swords,
@@ -47,6 +47,8 @@ import { useVaultQuery } from "@/lib/api/query";
 import type { Citation, QueryResponse } from "@/lib/api/types";
 import { useBattleCard } from "@/lib/api/redteam";
 import type { BattleCard } from "@/lib/api/redteam";
+import { usePersona } from "@/lib/api/persona";
+import { COURT_LEVELS } from "@/lib/court-filters";
 
 export const Route = createFileRoute("/_authed/workbench")({
   head: () => ({
@@ -69,6 +71,9 @@ export const Route = createFileRoute("/_authed/workbench")({
 });
 
 type WorkbenchTab = "overview" | "arguments" | "similar" | "law";
+type RedteamTab = "flaws" | "opposing" | "counters" | "authorities" | "probe";
+type ResearchTab = "report" | "authorities" | "passages";
+type ReviewerTab = "overview" | "arguments" | "law";
 
 const PACK_LABEL: Record<string, string> = {
   ADVERSAL_BRIEF: "Adversarial Brief",
@@ -126,8 +131,13 @@ function Workbench() {
       ),
   });
   const diary = useCourtDiaryEntries();
+  const persona = usePersona();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [bench, setBench] = useState<AssistantBench>("SmartBrief");
+  const [smartBriefTab, setSmartBriefTab] = useState<WorkbenchTab>("overview");
+  const [redteamTab, setRedteamTab] = useState<RedteamTab>("flaws");
+  const [researchTab, setResearchTab] = useState<ResearchTab>("report");
+  const [reviewerTab, setReviewerTab] = useState<ReviewerTab>("overview");
   const [uploadMatter, setUploadMatter] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -274,7 +284,7 @@ function Workbench() {
   return (
     <AppShell
       eyebrow={`${membership.data?.full_name ?? identity.name}${membership.data?.role ? ` · ${membership.data.role}` : ""}`}
-      title={`${bench} · Workbench`}
+      title="Workbench"
       assistantContext={{
         bench,
         ...(assistantReference ? { reference: assistantReference } : {}),
@@ -286,8 +296,6 @@ function Workbench() {
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
         >
-          <span>Workspace</span>
-          <ChevronRight className="size-3" aria-hidden="true" />
           <span>Workbench</span>
           <ChevronRight className="size-3" aria-hidden="true" />
           <span aria-current="page" className="text-gold">
@@ -299,10 +307,17 @@ function Workbench() {
             {bench} tools
           </span>
           {bench === "SmartBrief" ? (
-            <span className="text-xs text-muted-foreground">
-              Overview · Arguments · Similar Cases · Law — sections of the
-              selected output
-            </span>
+            <ToolMenu
+              label="SmartBrief sections"
+              items={[
+                { id: "overview", label: "Overview" },
+                { id: "arguments", label: "Arguments" },
+                { id: "similar", label: "Similar Cases" },
+                { id: "law", label: "Law" },
+              ]}
+              active={smartBriefTab}
+              onSelect={(id) => setSmartBriefTab(id as WorkbenchTab)}
+            />
           ) : bench === "Deck" ? (
             <>
               <label className="sr-only" htmlFor="deck-status-filter">
@@ -386,18 +401,41 @@ function Workbench() {
               </Button>
             </>
           ) : bench === "Red-Teamer" ? (
-            <span className="text-xs text-muted-foreground">
-              Flaws · Opposing arguments · Counters · Authorities · Probe with
-              assistant
-            </span>
+            <ToolMenu
+              label="Red-Teamer sections"
+              items={[
+                { id: "flaws", label: "Flaws" },
+                { id: "opposing", label: "Opposing arguments" },
+                { id: "counters", label: "Counters" },
+                { id: "authorities", label: "Authorities" },
+                { id: "probe", label: "Probe with assistant" },
+              ]}
+              active={redteamTab}
+              onSelect={(id) => setRedteamTab(id as RedteamTab)}
+            />
           ) : bench === "Researcher" ? (
-            <span className="text-xs text-muted-foreground">
-              Vault Search and verified citations
-            </span>
+            <ToolMenu
+              label="Researcher report"
+              items={[
+                { id: "report", label: "Report" },
+                { id: "authorities", label: "Authorities" },
+                { id: "passages", label: "Passages" },
+              ]}
+              active={researchTab}
+              onSelect={(id) => setResearchTab(id as ResearchTab)}
+              action={{ label: "Export", onClick: () => window.print() }}
+            />
           ) : bench === "Reviewer" ? (
-            <span className="text-xs text-muted-foreground">
-              Review queue and court diary
-            </span>
+            <ToolMenu
+              label="Reviewer sections"
+              items={[
+                { id: "overview", label: "Overview" },
+                { id: "arguments", label: "Clauses & risks" },
+                { id: "law", label: "Authorities" },
+              ]}
+              active={reviewerTab}
+              onSelect={(id) => setReviewerTab(id as ReviewerTab)}
+            />
           ) : (
             <span className="text-xs text-muted-foreground">
               Adversarial brief review
@@ -509,9 +547,8 @@ function Workbench() {
                 <div className="panel space-y-2 p-4">
                   <h2 className="text-sm font-semibold">{bench} tools</h2>
                   <p className="text-xs text-muted-foreground">
-                    {bench === "Researcher"
-                      ? "Search your permitted legal sources and review verified citations."
-                      : "Review analyses flagged for human attention and upcoming court dates."}
+                    Use the bench tools above to search or review existing
+                    output.
                   </p>
                 </div>
               )}
@@ -861,7 +898,7 @@ function Workbench() {
                     SmartBrief output
                   </span>
                 </div>
-                <AnalysisWorkspace id={selectedId} />
+                <AnalysisWorkspace id={selectedId} tab={smartBriefTab} />
               </div>
             ) : bench === "Red-Teamer" && battleCard.data ? (
               <div className="space-y-4">
@@ -887,7 +924,11 @@ function Workbench() {
                     </Button>
                   )}
                 </div>
-                <RedteamSummary card={battleCard.data} />
+                <RedteamSummary
+                  card={battleCard.data}
+                  tab={redteamTab}
+                  onProbe={askAssistantAboutSelectedAnalysis}
+                />
               </div>
             ) : bench === "Red-Teamer" ? (
               <div className="panel flex min-h-[50vh] flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -923,6 +964,11 @@ function Workbench() {
                 bench={bench}
                 analyses={analyses.data ?? []}
                 deckStatus={deckStatus}
+                researchTab={researchTab}
+                reviewerTab={reviewerTab}
+                reviewerSpecialty={persona.data?.reviewer_specialty ?? null}
+                onResearchTabChange={setResearchTab}
+                onReviewerTabChange={setReviewerTab}
                 diary={diary.data ?? []}
                 threads={threads.data ?? []}
                 onSendToInbox={(analysis, threadId) => {
@@ -974,6 +1020,11 @@ function BenchView({
   bench,
   analyses,
   deckStatus,
+  researchTab,
+  reviewerTab,
+  reviewerSpecialty,
+  onResearchTabChange,
+  onReviewerTabChange,
   diary,
   threads,
   onSelect,
@@ -984,6 +1035,11 @@ function BenchView({
   bench: string;
   analyses: Analysis[];
   deckStatus: string;
+  researchTab: ResearchTab;
+  reviewerTab: ReviewerTab;
+  reviewerSpecialty: string | null;
+  onResearchTabChange: (tab: ResearchTab) => void;
+  onReviewerTabChange: (tab: ReviewerTab) => void;
   threads: Array<{ thread_id: string; title: string }>;
   diary: Array<{
     id: string;
@@ -1001,10 +1057,23 @@ function BenchView({
   const [researchQuestion, setResearchQuestion] = useState("");
   const [researchNotice, setResearchNotice] = useState("");
   const [activeResearchQuestion, setActiveResearchQuestion] = useState("");
+  const [researchCourt, setResearchCourt] = useState("");
+  const [researchYearFrom, setResearchYearFrom] = useState<number | "">("");
+  const [researchYearTo, setResearchYearTo] = useState<number | "">("");
+  const [researchRatio, setResearchRatio] = useState("");
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const deckAnalyses =
     deckStatus === "ALL"
       ? analyses
       : analyses.filter((analysis) => analysis.status === deckStatus);
+  const reviewQueue = analyses.filter(
+    (analysis) => analysis.prompt_pack === "CONTRACT_REVIEW",
+  );
+  const activeReviewId =
+    selectedReviewId &&
+    reviewQueue.some((analysis) => analysis.analysis_id === selectedReviewId)
+      ? selectedReviewId
+      : (reviewQueue[0]?.analysis_id ?? null);
   if (bench === "Deck")
     return (
       <div className="space-y-3">
@@ -1064,7 +1133,7 @@ function BenchView({
                       {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
                     </span>
                     <span className="mt-1 block truncate font-mono text-[10px] text-muted-foreground">
-                      {analysis.analysis_id.slice(0, 8)} ·{" "}
+                      {analysis.analysis_id.slice(0, 8)} ┬╖{" "}
                       {new Date(analysis.created_at).toLocaleDateString(
                         "en-GB",
                       )}
@@ -1138,7 +1207,7 @@ function BenchView({
                     {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
                   </p>
                   <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                    {analysis.analysis_id.slice(0, 8)} · {analysis.status}
+                    {analysis.analysis_id.slice(0, 8)} ┬╖ {analysis.status}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1167,172 +1236,329 @@ function BenchView({
     );
   if (bench === "Researcher")
     return (
-      <div className="space-y-4 rounded-xl border border-border bg-background/60 p-5 sm:p-6">
+      <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Scale className="size-5 text-gold" />
-          <h2 className="text-lg font-semibold">Researcher</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Research is Vault Search in context: ask a legal question and review
-          the returned answer and verified, page-pinned citations. The
-          underlying query endpoint determines accessible sources.
-        </p>
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const question = researchQuestion.trim();
-            if (question.length < 10 || research.isPending) return;
-            setResearchNotice("");
-            setActiveResearchQuestion(question);
-            research.mutate(
-              { question },
-              {
-                onError: () =>
-                  setResearchNotice(
-                    "Research could not be completed. Check the connection and try again.",
-                  ),
-              },
-            );
-          }}
-        >
-          <label
-            htmlFor="workbench-research"
-            className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
-          >
-            Legal research question
-          </label>
-          <textarea
-            id="workbench-research"
-            value={researchQuestion}
-            onChange={(event) => setResearchQuestion(event.target.value)}
-            minLength={10}
-            maxLength={2000}
-            rows={3}
-            placeholder="e.g. What is the effect of a defective originating process on jurisdiction?"
-            className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="submit"
-              disabled={
-                researchQuestion.trim().length < 10 || research.isPending
-              }
-            >
-              <Scale className="mr-2 size-4" />
-              {research.isPending ? "Searching…" : "Search authorities"}
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              Minimum 10 characters · verified citations only
-            </span>
+          <div>
+            <h2 className="text-lg font-semibold">Researcher</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Search the existing Vault index and inspect grounded, page-pinned
+              results.
+            </p>
           </div>
-        </form>
-        {researchNotice && (
-          <p role="alert" className="text-sm text-destructive">
-            {researchNotice}
-          </p>
-        )}
-        {research.isError && (
-          <p
-            role="alert"
-            className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive"
+        </div>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.6fr)]">
+          <section
+            aria-label="Research inputs"
+            className="panel space-y-4 p-4 sm:p-5"
           >
-            {research.error instanceof Error
-              ? research.error.message
-              : "Research failed."}
-          </p>
-        )}
-        {research.data && (
-          <ResearchResults
-            question={activeResearchQuestion}
-            answer={research.data.answer}
-            refusal={research.data.refusal}
-            citations={research.data.citations}
-            onAssistant={onAssistant}
-          />
-        )}
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const question = researchQuestion.trim();
+                if (question.length < 10 || research.isPending) return;
+                setResearchNotice("");
+                setActiveResearchQuestion(question);
+                research.mutate(
+                  {
+                    question,
+                    court_level: researchCourt || null,
+                    year_from: researchYearFrom || null,
+                    year_to: researchYearTo || null,
+                    ratio_decidendi: researchRatio || null,
+                  },
+                  {
+                    onError: () =>
+                      setResearchNotice(
+                        "Research could not be completed. Check the connection and try again.",
+                      ),
+                  },
+                );
+              }}
+            >
+              <label
+                htmlFor="workbench-research"
+                className="block font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
+              >
+                Legal research question
+              </label>
+              <textarea
+                id="workbench-research"
+                value={researchQuestion}
+                onChange={(event) => setResearchQuestion(event.target.value)}
+                minLength={10}
+                maxLength={2000}
+                rows={3}
+                placeholder="e.g. What is the effect of a defective originating process on jurisdiction?"
+                className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-gold"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  <span className="font-mono uppercase tracking-widest">
+                    Court
+                  </span>
+                  <select
+                    value={researchCourt}
+                    onChange={(event) => setResearchCourt(event.target.value)}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  >
+                    {COURT_LEVELS.map((court) => (
+                      <option
+                        key={`${court.label}:${court.value}`}
+                        value={court.value}
+                      >
+                        {court.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  <span className="font-mono uppercase tracking-widest">
+                    Ratio / topic
+                  </span>
+                  <input
+                    value={researchRatio}
+                    onChange={(event) => setResearchRatio(event.target.value)}
+                    maxLength={200}
+                    placeholder="Optional legal principle"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  />
+                </label>
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  <span className="font-mono uppercase tracking-widest">
+                    From year
+                  </span>
+                  <input
+                    type="number"
+                    min={1960}
+                    max={2026}
+                    value={researchYearFrom}
+                    onChange={(event) =>
+                      setResearchYearFrom(
+                        event.target.value ? Number(event.target.value) : "",
+                      )
+                    }
+                    placeholder="1960"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  />
+                </label>
+                <label className="space-y-1.5 text-xs text-muted-foreground">
+                  <span className="font-mono uppercase tracking-widest">
+                    To year
+                  </span>
+                  <input
+                    type="number"
+                    min={1960}
+                    max={2026}
+                    value={researchYearTo}
+                    onChange={(event) =>
+                      setResearchYearTo(
+                        event.target.value ? Number(event.target.value) : "",
+                      )
+                    }
+                    placeholder="2026"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="submit"
+                  disabled={
+                    researchQuestion.trim().length < 10 || research.isPending
+                  }
+                >
+                  <Scale className="mr-2 size-4" />
+                  {research.isPending ? "SearchingΓÇª" : "Search authorities"}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Minimum 10 characters ┬╖ verified citations only
+                </span>
+              </div>
+            </form>
+          </section>
+          <section
+            aria-label="Research results"
+            className="panel min-w-0 space-y-4 p-4 sm:p-5"
+          >
+            <ToolMenu
+              label="Research output sections"
+              items={[
+                { id: "report", label: "Report" },
+                { id: "authorities", label: "Authorities" },
+                { id: "passages", label: "Passages" },
+              ]}
+              active={researchTab}
+              onSelect={(id) => onResearchTabChange(id as ResearchTab)}
+            />
+            {research.isPending && (
+              <div
+                className="flex items-center gap-2 rounded-xl border border-border p-5 text-sm text-muted-foreground"
+                role="status"
+              >
+                <Loader2 className="size-4 animate-spin" /> Searching the Vault…
+              </div>
+            )}
+            {researchNotice && (
+              <p role="alert" className="text-sm text-destructive">
+                {researchNotice}
+              </p>
+            )}
+            {research.isError && (
+              <p
+                role="alert"
+                className="rounded-lg border border-destructive/40 p-3 text-sm text-destructive"
+              >
+                {research.error instanceof Error
+                  ? research.error.message
+                  : "Research failed."}
+              </p>
+            )}
+            {research.data && (
+              <ResearchResults
+                question={activeResearchQuestion}
+                answer={research.data.answer}
+                refusal={research.data.refusal}
+                citations={research.data.citations}
+                tab={researchTab}
+                authorityLimit={research.data.citations.length}
+                onAssistant={onAssistant}
+              />
+            )}
+            {!research.data && !research.isPending && !research.isError && (
+              <EmptyToolState>
+                Submit a legal question to review the research report and
+                citations here.
+              </EmptyToolState>
+            )}
+          </section>
+        </div>
       </div>
     );
   if (bench === "Reviewer")
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Reviewer</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Review analyses flagged for human attention alongside upcoming court
-            diary items.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Select a contract review to inspect its existing analysis sections
+            and supporting authorities.
           </p>
+          {reviewerSpecialty && (
+            <p className="mt-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2 text-xs text-muted-foreground">
+              Review focus · {reviewerSpecialty}
+            </p>
+          )}
         </div>
-        <section className="space-y-2">
-          <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
-            Analysis review queue
-          </h3>
-          {analyses.filter((analysis) => analysis.status === "NEEDS_REVIEW")
-            .length ? (
-            analyses
-              .filter((analysis) => analysis.status === "NEEDS_REVIEW")
-              .map((analysis) => (
-                <article
-                  key={analysis.analysis_id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 p-4"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                      {PACK_LABEL[analysis.prompt_pack] ?? analysis.prompt_pack}
-                    </p>
-                    <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                      {analysis.analysis_id.slice(0, 8)} ·{" "}
-                      {new Date(analysis.created_at).toLocaleDateString(
-                        "en-GB",
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={analysis.status} />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onReview(analysis.analysis_id)}
-                    >
-                      Review output
-                    </Button>
-                  </div>
-                </article>
-              ))
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-              No analyses are currently flagged for manual review.
-            </div>
-          )}
-        </section>
-        <section className="space-y-2">
-          <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
-            Hearings &amp; court diary
-          </h3>
-          {diary.length ? (
-            diary.map((entry) => (
-              <article
-                key={entry.id}
-                className="rounded-xl border border-border p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{entry.title}</span>
-                  <span className="text-[10px] uppercase text-gold">
-                    {entry.entry_type}
-                  </span>
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.6fr)]">
+          <section
+            aria-label="Contract review queue"
+            className="panel space-y-4 p-4 sm:p-5"
+          >
+            <div className="space-y-3">
+              <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
+                Contract review deck
+              </h3>
+              {reviewQueue.length ? (
+                reviewQueue.map((analysis) => (
+                  <article
+                    key={analysis.analysis_id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 p-4"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {PACK_LABEL[analysis.prompt_pack] ??
+                          analysis.prompt_pack}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                        {analysis.analysis_id.slice(0, 8)} ┬╖{" "}
+                        {new Date(analysis.created_at).toLocaleDateString(
+                          "en-GB",
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={analysis.status} />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedReviewId(analysis.analysis_id);
+                          onSelect(analysis.analysis_id);
+                        }}
+                      >
+                        Open review
+                      </Button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+                  No contract reviews are available yet. Run Contract Review
+                  from SmartBrief, then return here to inspect its output.
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {new Date(entry.starts_at).toLocaleString()} · {entry.status}
-                </p>
-              </article>
-            ))
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              No court diary entries available.
+              )}
             </div>
-          )}
-        </section>
+            <section className="space-y-2 border-t border-border pt-4">
+              <h3 className="font-mono text-[10px] uppercase tracking-widest text-steel">
+                Hearings &amp; court diary
+              </h3>
+              {diary.length ? (
+                diary.map((entry) => (
+                  <article
+                    key={entry.id}
+                    className="rounded-xl border border-border p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium">{entry.title}</span>
+                      <span className="text-[10px] uppercase text-gold">
+                        {entry.entry_type}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(entry.starts_at).toLocaleString()} ┬╖{" "}
+                      {entry.status}
+                    </p>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                  No court diary entries available.
+                </div>
+              )}
+            </section>
+          </section>
+          <section
+            aria-label="Contract review output"
+            className="panel min-w-0 space-y-4 p-4 sm:p-5"
+          >
+            <ToolMenu
+              label="Reviewer output sections"
+              items={[
+                { id: "overview", label: "Overview" },
+                { id: "arguments", label: "Clauses & risks" },
+                { id: "law", label: "Authorities" },
+              ]}
+              active={reviewerTab}
+              onSelect={(id) => onReviewerTabChange(id as ReviewerTab)}
+            />
+            {activeReviewId ? (
+              <AnalysisWorkspace
+                id={activeReviewId}
+                tab={reviewerTab}
+                reviewerMode
+              />
+            ) : (
+              <EmptyToolState>
+                Choose an item in the review queue to inspect its available
+                analysis output. Reviewer sections reflect fields returned by
+                that analysis; no additional fields are inferred.
+              </EmptyToolState>
+            )}
+          </section>
+        </div>
       </div>
     );
   return (
@@ -1356,7 +1582,66 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-function RedteamSummary({ card }: { card: BattleCard }) {
+function ToolMenu({
+  label,
+  items,
+  active,
+  onSelect,
+  action,
+}: {
+  label: string;
+  items: Array<{ id: string; label: string }>;
+  active: string;
+  onSelect: (id: string) => void;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <nav
+      aria-label={label}
+      className="flex min-w-0 flex-wrap items-center gap-1"
+    >
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          aria-current={active === item.id ? "page" : undefined}
+          onClick={() => onSelect(item.id)}
+          className={`rounded-lg border px-3 py-2 text-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${active === item.id ? "border-gold/50 bg-gold/10 text-gold" : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"}`}
+        >
+          {item.label}
+        </button>
+      ))}
+      {action && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={action.onClick}
+        >
+          {action.label}
+        </Button>
+      )}
+    </nav>
+  );
+}
+
+function RedteamSummary({
+  card,
+  tab,
+  onProbe,
+}: {
+  card: BattleCard;
+  tab: RedteamTab;
+  onProbe: () => void;
+}) {
+  const flaws = card.sections.procedural_flaws;
+  const opposing = card.sections.opposing_arguments;
+  const authorities = Array.from(
+    new Set([
+      ...flaws.flatMap((item) => item.authority),
+      ...opposing.flatMap((item) => item.authority),
+    ]),
+  );
   return (
     <div className="space-y-4">
       <div className="panel border-gold/30 p-5">
@@ -1381,7 +1666,7 @@ function RedteamSummary({ card }: { card: BattleCard }) {
             : "Manual review recommended"}
         </p>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      {tab === "flaws" && (
         <section className="panel space-y-3 p-5">
           <h4 className="flex items-center gap-2 font-semibold">
             <FileWarning className="size-4 text-warning" /> Procedural flaws
@@ -1410,6 +1695,8 @@ function RedteamSummary({ card }: { card: BattleCard }) {
             </p>
           )}
         </section>
+      )}
+      {tab === "opposing" && (
         <section className="panel space-y-3 p-5">
           <h4 className="font-semibold">Opposing arguments</h4>
           {card.sections.opposing_arguments.length ? (
@@ -1438,8 +1725,64 @@ function RedteamSummary({ card }: { card: BattleCard }) {
             </p>
           )}
         </section>
-      </div>
+      )}
+      {tab === "counters" && (
+        <section className="panel space-y-3 p-5">
+          <h4 className="font-semibold">Counters</h4>
+          {opposing.length ? (
+            opposing.map((argument) => (
+              <article
+                key={argument.argument}
+                className="rounded-lg border border-border p-3"
+              >
+                <p className="text-xs text-muted-foreground">
+                  Response to: {argument.argument}
+                </p>
+                <p className="mt-2 text-sm">
+                  {argument.our_counter || "No counter returned."}
+                </p>
+                <AuthorityChips authority={argument.authority} />
+              </article>
+            ))
+          ) : (
+            <EmptyToolState>Battle card returned no counters.</EmptyToolState>
+          )}
+        </section>
+      )}
+      {tab === "authorities" && (
+        <section className="panel space-y-3 p-5">
+          <h4 className="font-semibold">Authorities</h4>
+          {authorities.length ? (
+            <AuthorityChips authority={authorities} />
+          ) : (
+            <EmptyToolState>
+              No authorities were returned in this battle card.
+            </EmptyToolState>
+          )}
+        </section>
+      )}
+      {tab === "probe" && (
+        <section className="panel space-y-3 p-5">
+          <h4 className="font-semibold">Probe this battle card</h4>
+          <p className="text-sm text-muted-foreground">
+            Ask the cross-bench Assistant to probe the returned flaws,
+            counterarguments, and authorities.
+          </p>
+          <Button type="button" onClick={onProbe}>
+            <MessageSquare className="mr-2 size-4" />
+            Probe with Assistant
+          </Button>
+        </section>
+      )}
     </div>
+  );
+}
+
+function EmptyToolState({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+      {children}
+    </p>
   );
 }
 
@@ -1448,38 +1791,114 @@ function ResearchResults({
   answer,
   refusal,
   citations,
+  tab,
+  authorityLimit,
   onAssistant,
 }: {
   question: string;
   answer: string;
   refusal: boolean;
   citations: Citation[];
+  tab: ResearchTab;
+  authorityLimit: number;
   onAssistant: () => void;
 }) {
+  const visibleCitations = citations.slice(0, authorityLimit);
   return (
-    <section
-      aria-live="polite"
-      className="space-y-3 border-t border-border pt-4"
-    >
-      <div
-        className={`rounded-xl border p-4 ${refusal ? "border-warning/40 bg-warning/5" : "border-border bg-background"}`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Research answer</h3>
-          <span
-            className={`font-mono text-[10px] uppercase tracking-widest ${refusal ? "text-warning" : "text-success"}`}
-          >
-            {refusal ? "Verification refused" : "Grounded response"}
-          </span>
-        </div>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{answer}</p>
-        {refusal && (
-          <p className="mt-3 text-xs text-warning">
-            Do not rely on this as a verified answer. Refine the question or
-            consult the source material.
+    <section aria-live="polite" className="min-w-0 space-y-3">
+      {tab === "report" ? (
+        <>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-steel">
+            Question · {question}
           </p>
-        )}
-      </div>
+          <div
+            className={`rounded-xl border p-4 ${refusal ? "border-warning/40 bg-warning/5" : "border-border bg-background"}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Research answer</h3>
+              <span
+                className={`font-mono text-[10px] uppercase tracking-widest ${refusal ? "text-warning" : "text-success"}`}
+              >
+                {refusal ? "Verification refused" : "Grounded response"}
+              </span>
+            </div>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+              {answer}
+            </p>
+            {refusal && (
+              <p className="mt-3 text-xs text-warning">
+                Do not rely on this as a verified answer. Refine the question or
+                consult the source material.
+              </p>
+            )}
+          </div>
+        </>
+      ) : tab === "authorities" ? (
+        <div>
+          <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-steel">
+            Authorities ({visibleCitations.length})
+          </h3>
+          {visibleCitations.length ? (
+            <div className="space-y-2">
+              {visibleCitations.map((citation) => (
+                <article
+                  key={`${citation.document_id}:${citation.page_start}:${citation.citation}`}
+                  className="rounded-xl border border-border p-3"
+                >
+                  <h4 className="text-sm font-medium">{citation.case_title}</h4>
+                  <p className="mt-1 font-mono text-xs text-gold">
+                    {citation.citation}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {citation.court_level} · {citation.year} ·{" "}
+                    {citation.verified ? "Verified" : "Unverified"}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyToolState>
+              No authorities returned for this research.
+            </EmptyToolState>
+          )}
+        </div>
+      ) : (
+        <div>
+          <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-steel">
+            Pinned passages
+          </h3>
+          {visibleCitations.length ? (
+            <div className="space-y-2">
+              {visibleCitations.map((citation) => (
+                <article
+                  key={`${citation.document_id}:${citation.page_start}:${citation.citation}`}
+                  className="rounded-xl border border-border p-3"
+                >
+                  <h4 className="text-sm font-medium">{citation.case_title}</h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Page {citation.page_start}–{citation.page_end}
+                    {citation.paragraph_refs.length
+                      ? ` · ¶ ${citation.paragraph_refs.join(", ¶ ")}`
+                      : ""}
+                  </p>
+                  {citation.source_pdf_url && (
+                    <a
+                      href={citation.source_pdf_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex text-xs underline hover:text-gold"
+                    >
+                      Open source PDF
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyToolState>No source passages were returned.</EmptyToolState>
+          )}
+        </div>
+      )}
       <div>
         <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-steel">
           Sources ({citations.length})
@@ -1588,9 +2007,18 @@ function ReviewFlag({ manual }: { manual?: boolean }) {
   );
 }
 
-function AnalysisWorkspace({ id }: { id: string }) {
+function AnalysisWorkspace({
+  id,
+  tab: selectedTab,
+  reviewerMode = false,
+}: {
+  id: string;
+  tab?: WorkbenchTab;
+  reviewerMode?: boolean;
+}) {
   const analysis = useAnalysis(id);
-  const [tab, setTab] = useState<WorkbenchTab>("overview");
+  const [localTab, setLocalTab] = useState<WorkbenchTab>("overview");
+  const tab = selectedTab ?? localTab;
 
   if (analysis.isPending) {
     return (
@@ -1614,29 +2042,31 @@ function AnalysisWorkspace({ id }: { id: string }) {
 
   return (
     <div className="space-y-4">
-      <nav
-        aria-label="Analysis sections"
-        className="flex gap-2 overflow-x-auto border-b border-border"
-      >
-        {(
-          [
-            { id: "overview", label: "Overview" },
-            { id: "arguments", label: "Arguments" },
-            { id: "similar", label: "Similar Cases" },
-            { id: "law", label: "Law" },
-          ] as const
-        ).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={tab === item.id ? "page" : undefined}
-            onClick={() => setTab(item.id)}
-            className={`shrink-0 border-b-2 px-3 py-2 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${tab === item.id ? "border-gold text-gold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {!reviewerMode && (
+        <nav
+          aria-label="Analysis sections"
+          className="flex gap-2 overflow-x-auto border-b border-border"
+        >
+          {(
+            [
+              { id: "overview", label: "Overview" },
+              { id: "arguments", label: "Arguments" },
+              { id: "similar", label: "Similar Cases" },
+              { id: "law", label: "Law" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={tab === item.id ? "page" : undefined}
+              onClick={() => setLocalTab(item.id)}
+              className={`shrink-0 border-b-2 px-3 py-2 text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold ${tab === item.id ? "border-gold text-gold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      )}
       <div
         role="tabpanel"
         aria-label={

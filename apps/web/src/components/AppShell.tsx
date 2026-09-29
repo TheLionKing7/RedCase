@@ -582,7 +582,7 @@ export function AppShell({
                 {eyebrow}
               </div>
               <h1 className="mt-1 truncate text-2xl font-semibold lg:text-3xl">
-                {title}
+                {pathname.startsWith("/workbench") ? "Workbench" : title}
               </h1>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
