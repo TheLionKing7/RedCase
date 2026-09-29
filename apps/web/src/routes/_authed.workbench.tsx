@@ -1433,16 +1433,6 @@ function BenchView({
             aria-label="Research results"
             className="panel min-w-0 space-y-4 p-4 sm:p-5"
           >
-            <ToolMenu
-              label="Research output sections"
-              items={[
-                { id: "report", label: "Report" },
-                { id: "authorities", label: "Authorities" },
-                { id: "passages", label: "Passages" },
-              ]}
-              active={researchTab}
-              onSelect={(id) => onResearchTabChange(id as ResearchTab)}
-            />
             {research.isPending && (
               <div
                 className="flex items-center gap-2 rounded-xl border border-border p-5 text-sm text-muted-foreground"
