@@ -918,7 +918,11 @@ function Workbench() {
                     SmartBrief output
                   </span>
                 </div>
-                <AnalysisWorkspace id={selectedId} tab={smartBriefTab} />
+                <AnalysisWorkspace
+                  id={selectedId}
+                  tab={smartBriefTab}
+                  reviewerMode
+                />
               </div>
             ) : bench === "Red-Teamer" && battleCard.data ? (
               <div className="space-y-4">
