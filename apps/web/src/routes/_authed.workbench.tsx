@@ -313,7 +313,7 @@ function Workbench() {
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
-        <div className="print-hide sticky top-0 z-20 -mx-5 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl lg:-mx-8 lg:px-8">
+        <div className="print-hide sticky top-[6.25rem] z-20 -mx-5 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl lg:-mx-8 lg:px-8">
           <span className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-foreground">{bench}</span>
           <span aria-hidden="true" className="px-1 font-mono text-sm text-steel">|</span>
           {bench === "SmartBrief" ? (
