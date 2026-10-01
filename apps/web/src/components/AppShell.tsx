@@ -10,6 +10,7 @@ import {
   Home,
   Landmark,
   MessageSquare,
+  Microscope,
   Settings2,
   Search,
   ShieldAlert,
@@ -21,7 +22,7 @@ import {
   X,
   Briefcase,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AssistantDock } from "@/components/AssistantDock";
 import { ChromeTour, replayChromeTour } from "@/components/ChromeTour";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -145,7 +146,7 @@ const PANELS: Record<string, Item[]> = {
     {
       label: "Reviewer",
       detail: "Review flagged work and court dates",
-      icon: Gavel,
+    icon: Microscope,
       to: "/workbench",
     },
   ],
@@ -333,7 +334,25 @@ export function AppShell({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState("");
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerRef = useRef<HTMLElement>(null);
+  const [pendingAssistantContext, setPendingAssistantContext] = useState<
+    AssistantContext | undefined
+  >();
   useEffect(() => setActiveRail(current), [current]);
+  useEffect(() => {
+    if (!pathname.startsWith("/workbench")) return;
+    const header = headerRef.current;
+    if (!header) return;
+
+    const updateHeaderHeight = () =>
+      setHeaderHeight(header.getBoundingClientRect().height);
+    updateHeaderHeight();
+
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [pathname]);
   useEffect(() => {
     if (current === "Home") setHomeView("Inbox");
   }, [current]);
@@ -359,9 +378,15 @@ export function AppShell({
   useEffect(() => {
     const openAssistant = () => setAssistantOpen(true);
     const receiveAssistantMessage = (event: Event) => {
-      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          message?: string;
+          context?: AssistantContext;
+        }>
+      ).detail;
       if (detail?.message) {
         setPendingAssistantMessage(detail.message);
+        setPendingAssistantContext(detail.context);
         setAssistantOpen(true);
       }
     };
@@ -574,8 +599,16 @@ export function AppShell({
 
       <div
         className={`${showPanel ? "lg:ml-[20.5rem]" : "lg:ml-[4.5rem]"} flex min-h-screen flex-col transition-[margin] duration-200`}
+        style={
+          pathname.startsWith("/workbench")
+            ? ({ "--workbench-header-height": `${headerHeight}px` } as CSSProperties)
+            : undefined
+        }
       >
-        <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 backdrop-blur-xl lg:px-8">
+        <header
+          className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-4 backdrop-blur-xl lg:px-8"
+          ref={pathname.startsWith("/workbench") ? headerRef : undefined}
+        >
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-steel">
@@ -723,6 +756,8 @@ export function AppShell({
         persistent
         initialMessage={pendingAssistantMessage}
         onMessageChange={() => setPendingAssistantMessage("")}
+        initialContext={pendingAssistantContext}
+        onContextChange={() => setPendingAssistantContext(undefined)}
       />
     </div>
   );

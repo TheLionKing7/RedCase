@@ -73,7 +73,13 @@ export const Route = createFileRoute("/_authed/workbench")({
 type WorkbenchTab = "overview" | "arguments" | "similar" | "law";
 type RedteamTab = "flaws" | "opposing" | "counters" | "authorities" | "probe";
 type ResearchTab = "report" | "authorities" | "passages";
-type ReviewerTab = "overview" | "arguments" | "law";
+type ReviewerTab =
+  | "clauses"
+  | "missing"
+  | "obligations"
+  | "defined_terms"
+  | "negotiation";
+type ResearchMode = "legal" | "general";
 
 const PACK_LABEL: Record<string, string> = {
   ADVERSAL_BRIEF: "Adversarial Brief",
@@ -137,7 +143,7 @@ function Workbench() {
   const [smartBriefTab, setSmartBriefTab] = useState<WorkbenchTab>("overview");
   const [redteamTab, setRedteamTab] = useState<RedteamTab>("flaws");
   const [researchTab, setResearchTab] = useState<ResearchTab>("report");
-  const [reviewerTab, setReviewerTab] = useState<ReviewerTab>("overview");
+  const [reviewerTab, setReviewerTab] = useState<ReviewerTab>("clauses");
   const [uploadMatter, setUploadMatter] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -160,6 +166,25 @@ function Workbench() {
   const sendToTeam = useSendMessage(teamChannelId);
   const selectedOutput = useAnalysis(selectedId);
   const [courtCopyId, setCourtCopyId] = useState<string | null>(null);
+  const [researchMode, setResearchMode] = useState<ResearchMode>("legal");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [researchNotice, setResearchNotice] = useState("");
+  const [activeResearchQuestion, setActiveResearchQuestion] = useState("");
+  const [researchCourt, setResearchCourt] = useState("");
+  const [researchYearFrom, setResearchYearFrom] = useState<number | "">("");
+  const [researchYearTo, setResearchYearTo] = useState<number | "">("");
+  const [researchRatio, setResearchRatio] = useState("");
+  const research = useVaultQuery<QueryResponse>();
+  const [reviewerLink, setReviewerLink] = useState("");
+  const [reviewerUploadMessage, setReviewerUploadMessage] = useState("");
+  const [reviewerUploading, setReviewerUploading] = useState(false);
+  const [reviewerDocument, setReviewerDocument] = useState<{
+    document_id: string;
+    matter_id: string;
+    title: string;
+  } | null>(null);
+  const [scrutinizing, setScrutinizing] = useState(false);
+  const reviewerFileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const requestedBench = sessionStorage.getItem("redcase:workbench-bench");
@@ -203,7 +228,7 @@ function Workbench() {
     if (
       !courtCopyId ||
       courtCopyId !== selectedId ||
-      bench !== "SmartBrief" ||
+      bench !== "Deck" ||
       selectedOutput.data?.status !== "COMPLETE"
     )
       return;
@@ -217,7 +242,7 @@ function Workbench() {
   function openCourtCopy(analysis: Analysis) {
     if (analysis.status !== "COMPLETE") return;
     setSelectedId(analysis.analysis_id);
-    setBench("SmartBrief");
+    setBench("Deck");
     setCourtCopyId(analysis.analysis_id);
   }
 
@@ -301,10 +326,26 @@ function Workbench() {
             PACK_LABEL[selectedAnalysis.prompt_pack] ?? "SmartBrief output",
         }
       : undefined;
+  const partnerEyebrow = membership.isPending
+    ? "Loading partner…"
+    : membership.data?.full_name
+      ? `${membership.data.full_name}${membership.data.role ? ` · ${membership.data.role}` : ""}`
+      : identity.name && identity.name.toLowerCase() !== "counsel"
+        ? `${identity.name}${identity.role ? ` · ${identity.role}` : ""}`
+        : "Partner";
+  const reviewQueue = (analyses.data ?? []).filter(
+    (analysis) => analysis.prompt_pack === "CONTRACT_REVIEW",
+  );
+  const deckAnalyses =
+    deckStatus === "ALL"
+      ? (analyses.data ?? [])
+      : (analyses.data ?? []).filter(
+          (analysis) => analysis.status === deckStatus,
+        );
 
   return (
     <AppShell
-      eyebrow={`${membership.data?.full_name ?? identity.name}${membership.data?.role ? ` · ${membership.data.role}` : ""}`}
+      eyebrow={partnerEyebrow}
       title="Workbench"
       assistantContext={{
         bench,
@@ -313,9 +354,13 @@ function Workbench() {
     >
       <CoachMarks surface="workbench" steps={coachSteps} />
       <div className="workbench-print mx-auto max-w-7xl space-y-6 pb-28">
-        <div className="print-hide sticky top-[6.25rem] z-20 -mx-5 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl lg:-mx-8 lg:px-8">
-          <span className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-foreground">{bench}</span>
-          <span aria-hidden="true" className="px-1 font-mono text-sm text-steel">|</span>
+        <div className="print-hide sticky -mt-8 z-20 -mx-5 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl lg:-mx-8 lg:px-8" style={{ top: "var(--workbench-header-height, 5.5rem)" }}>
+          <span className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-foreground">
+            {bench}
+          </span>
+          <span aria-hidden="true" className="px-1 font-mono text-sm text-steel">
+            |
+          </span>
           {bench === "SmartBrief" ? (
             <ToolMenu
               label="SmartBrief sections"
@@ -432,7 +477,11 @@ function Workbench() {
                 { id: "probe", label: "Probe with assistant" },
               ]}
               active={redteamTab}
-              onSelect={(id) => setRedteamTab(id as RedteamTab)}
+              onSelect={(id) => {
+                const next = id as RedteamTab;
+                setRedteamTab(next);
+                if (next === "probe") probeBattleCardWithAssistant();
+              }}
             />
           ) : bench === "Researcher" ? (
             <ToolMenu
@@ -450,9 +499,11 @@ function Workbench() {
             <ToolMenu
               label="Reviewer sections"
               items={[
-                { id: "overview", label: "Overview" },
-                { id: "arguments", label: "Clauses & risks" },
-                { id: "law", label: "Authorities" },
+                { id: "clauses", label: "Clauses & risks" },
+                { id: "missing", label: "Missing" },
+                { id: "obligations", label: "Obligations" },
+                { id: "defined_terms", label: "Defined terms" },
+                { id: "negotiation", label: "Negotiation" },
               ]}
               active={reviewerTab}
               onSelect={(id) => setReviewerTab(id as ReviewerTab)}
