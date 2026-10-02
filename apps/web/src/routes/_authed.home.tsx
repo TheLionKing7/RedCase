@@ -9,9 +9,7 @@ import {
   Clock3,
   FileClock,
   Gavel,
-  Loader2,
   Scale,
-  Timer,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useIdentity } from "@/lib/identity";
@@ -19,12 +17,6 @@ import { useAnalyses } from "@/lib/api/workbench";
 import { useDeadlineEvents, type DeadlineEvent } from "@/lib/api/deadlines";
 import { apiGet } from "@/lib/api/client";
 import { useQuery } from "@tanstack/react-query";
-import {
-  useActivitySessions,
-  useClockIn,
-  useClockOut,
-} from "@/lib/api/activity";
-import type { ActivitySessionGroup } from "@/lib/api/activity";
 import { useCourtDiaryEntries } from "@/lib/api/court-diary";
 
 type HomeView = "Inbox" | "Today" | "My deadlines" | "My matters";
@@ -34,7 +26,6 @@ type HomeMatter = {
   status: string;
   progress_note: string | null;
 };
-const AREAS = ["Research", "Workbench", "General"] as const;
 
 export const Route = createFileRoute("/_authed/home")({
   head: () => ({
@@ -65,16 +56,9 @@ function Home() {
         setSelectedMatterId(null);
       }
     };
-    const focusTimeLogger = () => {
-      document
-        .getElementById("home-time-logger")
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    };
     window.addEventListener("redcase:home-view", selectView);
-    window.addEventListener("redcase:home-time-logger", focusTimeLogger);
     return () => {
       window.removeEventListener("redcase:home-view", selectView);
-      window.removeEventListener("redcase:home-time-logger", focusTimeLogger);
     };
   }, []);
   const today = new Date().toISOString().slice(0, 10);
@@ -116,43 +100,30 @@ function Home() {
   const failed =
     analyses.isError || deadlines.isError || diary.isError || matters.isError;
   return (
-    <AppShell
-      eyebrow={identity.eyebrow}
-      title="Welcome"
-    >
+    <AppShell eyebrow={identity.eyebrow} title="Welcome">
       <div className="mx-auto max-w-6xl space-y-6 pb-16">
         <section
           className="panel glow-gold p-5 sm:p-6"
-          aria-label="Workbench and time logger"
+          aria-label="Workbench shortcut"
         >
-          <div className="flex flex-col items-stretch gap-6 xl:flex-row xl:items-center">
-            <div className="min-w-0 flex-1">
-              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
-                {identity.eyebrow}
-              </div>
-              <h2 className="mt-1 font-display text-2xl font-semibold">
-                Workbench — your matters, your authority
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Run adversarial briefs, summons responses and contract reviews,
-                then verify against Nigerian law with page-pinned citations.
-                Pick up where you left off.
-              </p>
-              <Link
-                to="/workbench"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
-              >
-                Open Workbench <ArrowUpRight className="size-4" />
-              </Link>
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">
+              {identity.eyebrow}
             </div>
-            <TimeLogger
-              matters={(matters.data?.matters ?? []).filter(
-                (matter) =>
-                  !["CLOSED", "COMPLETED", "ARCHIVED"].includes(
-                    matter.status.toUpperCase(),
-                  ),
-              )}
-            />
+            <h2 className="mt-1 font-display text-2xl font-semibold">
+              Workbench — your matters, your authority
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Run adversarial briefs, summons responses and contract reviews,
+              then verify against Nigerian law with page-pinned citations. Pick
+              up where you left off.
+            </p>
+            <Link
+              to="/workbench"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-background transition-all duration-200 hover:bg-gold/90 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+            >
+              Open Workbench <ArrowUpRight className="size-4" />
+            </Link>
           </div>
         </section>
 
@@ -251,136 +222,6 @@ function Home() {
         </section>
       </div>
     </AppShell>
-  );
-}
-
-function TimeLogger({
-  matters,
-}: {
-  matters: HomeMatter[];
-}) {
-  const sessions = useActivitySessions();
-  const clockIn = useClockIn();
-  const clockOut = useClockOut();
-  const [selection, setSelection] = useState("area:General");
-  const active = sessions.data?.sessions.find((session) => !session.ended_at);
-  const busy = clockIn.isPending || clockOut.isPending;
-  const start = () => {
-    const [target_type, target_ref] = selection.split(":");
-    const selectedMatter = matters.find((matter) => matter.id === target_ref);
-    const area =
-      target_type === "matter"
-        ? (selectedMatter?.matter_ref ?? "General")
-        : target_ref;
-    if (target_type && target_ref)
-      clockIn.mutate({
-        area,
-        target_type: target_type as "matter" | "area",
-        target_ref,
-      });
-  };
-  const groups = sessions.data?.groups ?? [];
-  const fmt = (seconds: number) =>
-    `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-  return (
-    <div
-      id="home-time-logger"
-      className="w-full rounded-xl border border-border/70 bg-background/70 p-4 xl:w-[300px] xl:shrink-0"
-    >
-      <div className="flex items-center gap-2">
-        <Timer className="size-4 text-gold" />
-        <span className="text-sm font-semibold">Time logger</span>
-      </div>
-      <p className="mt-1 truncate text-[11px] text-muted-foreground">
-        {active
-          ? `Clocked in · ${active.target_label ?? active.area}`
-          : "Choose an object of work"}
-      </p>
-      <div className="mt-3 flex gap-2">
-        <label
-          className="sr-only"
-          htmlFor="activity-target-hero"
-        >
-          Work target
-        </label>
-        <select
-          id="activity-target-hero"
-          value={selection}
-          onChange={(event) => setSelection(event.target.value)}
-          disabled={Boolean(active)}
-          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-        >
-          <optgroup label="Areas">
-            {AREAS.map((area) => (
-              <option key={area} value={`area:${area}`}>
-                {area}
-              </option>
-            ))}
-          </optgroup>
-          {matters.length > 0 && (
-            <optgroup label="My matters">
-              {matters.map((matter) => (
-                <option key={matter.id} value={`matter:${matter.id}`}>
-                  {matter.matter_ref}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-        <button
-          type="button"
-          disabled={busy || sessions.isPending || (!active && !selection)}
-          onClick={() => (active ? clockOut.mutate() : start())}
-          className={`rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200 disabled:opacity-60 ${active ? "bg-destructive/15 text-destructive hover:bg-destructive/25" : "bg-gold text-background hover:bg-gold/90"}`}
-        >
-          {busy ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : active ? (
-            "Clock-out"
-          ) : (
-            "Clock-in"
-          )}
-        </button>
-      </div>
-      {(clockIn.isError || clockOut.isError || sessions.isError) && (
-        <p role="alert" className="mt-2 text-[10px] text-destructive">
-          Could not update the time session. Please retry.
-        </p>
-      )}
-      <details className="mt-3 border-t border-border pt-2">
-        <summary className="cursor-pointer text-[11px] font-medium text-gold transition-all duration-200 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold">
-          Time history by matter or area
-        </summary>
-        {sessions.isPending ? (
-          <div className="mt-3 h-8 animate-pulse rounded bg-muted/60" />
-        ) : groups.length ? (
-          <ul className="mt-2 divide-y divide-border">
-            {groups.map((group: ActivitySessionGroup) => (
-              <li
-                key={`${group.target_type}:${group.target_ref}`}
-                className="flex items-center justify-between gap-2 py-2 text-xs"
-              >
-                <span className="min-w-0 truncate">
-                  {group.target_label}
-                  <span className="ml-2 text-muted-foreground">
-                    {" · "}
-                    {group.session_count}{" "}
-                    {group.session_count === 1 ? "session" : "sessions"}
-                  </span>
-                </span>
-                <span className="shrink-0 font-mono text-gold">
-                  {fmt(group.total_duration)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            No sessions recorded yet.
-          </p>
-        )}
-      </details>
-    </div>
   );
 }
 

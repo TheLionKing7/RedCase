@@ -16,19 +16,31 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
+  Loader2,
   Timer,
   Users,
   Vault,
   X,
   Briefcase,
 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { AssistantDock } from "@/components/AssistantDock";
 import { ChromeTour, replayChromeTour } from "@/components/ChromeTour";
 import { CommandPalette } from "@/components/CommandPalette";
 import { getFirmAdmin } from "@/lib/auth/supabase";
 import { useIdentity } from "@/lib/identity";
 import { useDirectUnreadCount } from "@/lib/api/collaboration";
+import {
+  useActivitySessions,
+  useClockIn,
+  useClockOut,
+} from "@/lib/api/activity";
 import type { AssistantContext } from "@/lib/api/assistantContext";
 
 type Route =
@@ -146,7 +158,7 @@ const PANELS: Record<string, Item[]> = {
     {
       label: "Reviewer",
       detail: "Review flagged work and court dates",
-    icon: Microscope,
+      icon: Microscope,
       to: "/workbench",
     },
   ],
@@ -272,6 +284,50 @@ function DirectUnreadBadge() {
       to="/chats"
       unread={Math.min(unread.data?.unread_count ?? 0, 99)}
     />
+  );
+}
+
+function HeaderTimeClock() {
+  const sessions = useActivitySessions();
+  const clockIn = useClockIn();
+  const clockOut = useClockOut();
+  const active = sessions.data?.sessions.find((session) => !session.ended_at);
+  const busy = clockIn.isPending || clockOut.isPending;
+  const label = active ? "Clock out" : "Clock in";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={busy || sessions.isPending}
+        onClick={() =>
+          active
+            ? clockOut.mutate()
+            : clockIn.mutate({
+                area: "General",
+                target_type: "area",
+                target_ref: "General",
+              })
+        }
+        aria-label={
+          active ? "Clock out of current session" : "Clock in to General"
+        }
+        title={active ? "Clock out" : "Clock in to General"}
+        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-60 ${active ? "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20" : "border-gold/40 bg-gold/10 text-gold hover:bg-gold/20"}`}
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Timer className="size-4" />
+        )}
+        <span className="hidden sm:inline">{busy ? "Updating�" : label}</span>
+      </button>
+      {(sessions.isError || clockIn.isError || clockOut.isError) && (
+        <span role="alert" className="sr-only">
+          Could not update the time session. Please retry.
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -517,7 +573,9 @@ export function AppShell({
               Aetoes Legal · {department}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-5">
+          <div
+            className={`flex-1 overflow-y-auto px-3 py-5 ${activeItem?.label === "Home" || activeItem?.label === "Workbench" ? "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : ""}`}
+          >
             <div className="px-3 font-mono text-[9px] uppercase tracking-[0.22em] text-steel">
               {activeItem?.label}
             </div>
@@ -601,7 +659,9 @@ export function AppShell({
         className={`${showPanel ? "lg:ml-[20.5rem]" : "lg:ml-[4.5rem]"} flex min-h-screen flex-col transition-[margin] duration-200`}
         style={
           pathname.startsWith("/workbench")
-            ? ({ "--workbench-header-height": `${headerHeight}px` } as CSSProperties)
+            ? ({
+                "--workbench-header-height": `${headerHeight}px`,
+              } as CSSProperties)
             : undefined
         }
       >
@@ -631,6 +691,7 @@ export function AppShell({
                   ⌘K
                 </kbd>
               </button>
+              {current === "Home" && <HeaderTimeClock />}
               <button
                 type="button"
                 className="rounded-lg p-2 transition-all duration-200 hover:bg-surface hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
